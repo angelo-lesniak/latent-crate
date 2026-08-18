@@ -1,0 +1,15 @@
+.git
+.github
+.env
+.idea
+.vscode
+data
+local
+reports
+build/*
+!build/custom-node-requirements
+!build/custom-node-requirements/**
+docs
+tests
+**/__pycache__/
+**/*.py[cod]

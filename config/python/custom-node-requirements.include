@@ -1,0 +1,4 @@
+# One custom_nodes-relative glob per line. Exact top-level requirements.txt
+# files are captured automatically. Add runtime-specific alternatives here,
+# for example:
+# ComfyUI-Example/requirements-cuda.txt

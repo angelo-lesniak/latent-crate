@@ -1,0 +1,15 @@
+services:
+  comfy:
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    group_add:
+      - "${HOST_MODEL_GID:-1000}"
+  node-deps-snapshot:
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+  node-set:
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+  node-set-status:
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+  frontend-fetch:
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+  frontend-build:
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"

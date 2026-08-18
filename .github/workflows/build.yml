@@ -1,0 +1,191 @@
+name: image-build
+
+on:
+  schedule:
+    - cron: "23 4 * * 1"
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: Version profile
+        required: true
+        default: current
+        type: choice
+        options:
+          - current
+          - edge
+      variant:
+        description: Image and frontend variant
+        required: true
+        default: release
+        type: choice
+        options:
+          - release
+          - release-sage
+          - frontend-git
+          - frontend-git-sage
+      frontend_repository:
+        description: Public HTTPS frontend Git URL (Git variants only)
+        required: false
+        default: https://github.com/Comfy-Org/ComfyUI_frontend.git
+        type: string
+      frontend_ref:
+        description: Frontend commit, branch, tag, or pull-request reference (Git variants only)
+        required: false
+        default: main
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: image-build-${{ github.ref }}-${{ inputs.profile || 'current' }}-${{ inputs.variant || 'release' }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    # CUDA and Sage are compiled by NVCC without a physical GPU. Override this
+    # repository variable with a larger or self-hosted CPU runner when the
+    # standard runner cannot hold the CUDA bases, BuildKit cache, and loaded image.
+    runs-on: ${{ vars.LATENTCRATE_BUILD_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 180
+    env:
+      PROFILE: "${{ inputs.profile || 'current' }}"
+      VARIANT: "${{ inputs.variant || 'release' }}"
+      FRONTEND_REPOSITORY: "${{ inputs.frontend_repository || 'https://github.com/Comfy-Org/ComfyUI_frontend.git' }}"
+      FRONTEND_REF: "${{ inputs.frontend_ref || 'main' }}"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Prepare pinned build inputs
+        id: prepare
+        shell: bash
+        run: |
+          set -a
+          source "versions/${PROFILE}.env"
+          set +a
+          while IFS= read -r line; do
+            [[ -n "$line" && "$line" != \#* ]] || continue
+            printf '%s\n' "$line" >> "$GITHUB_ENV"
+          done < "versions/${PROFILE}.env"
+
+          # The variant -> Dockerfile target/image tag mapping and the Git
+          # reference resolution (validation, ls-remote, tag peeling, and the
+          # hardened Git invocation) live in scripts/resolve-frontend.sh,
+          # shared with lib/latentcrate/frontend.sh.
+          target=$(bash scripts/resolve-frontend.sh target "$VARIANT")
+          tag=$(bash scripts/resolve-frontend.sh tag "$PROFILE" "$VARIANT")
+
+          frontend_git_url=
+          frontend_git_ref=
+          frontend_git_requested_ref=
+          if [[ "$VARIANT" == frontend-git* ]]; then
+            frontend_git_url=$FRONTEND_REPOSITORY
+            frontend_git_requested_ref=$FRONTEND_REF
+            frontend_git_ref=$(bash scripts/resolve-frontend.sh ref \
+              "$FRONTEND_REPOSITORY" "$FRONTEND_REF")
+          fi
+
+          {
+            printf 'FRONTEND_GIT_URL=%s\n' "$frontend_git_url"
+            printf 'FRONTEND_GIT_REF=%s\n' "$frontend_git_ref"
+            printf 'FRONTEND_GIT_REQUESTED_REF=%s\n' "$frontend_git_requested_ref"
+            custom_node_cache_key=$(bash scripts/custom-node-cache-key.sh \
+              "$PYTORCH_DEVEL_IMAGE" "$PYTORCH_RUNTIME_IMAGE" "$COMFYUI_REF" \
+              "$TORCHCODEC_VERSION" "$TORCHCODEC_INDEX_URL" \
+              "$CUSTOM_NODE_CUDA_ARCH_LIST")
+            printf 'CUSTOM_NODE_CACHE_KEY=%s\n' "$custom_node_cache_key"
+          } >> "$GITHUB_ENV"
+          printf 'target=%s\n' "$target" >> "$GITHUB_OUTPUT"
+          printf 'tag=%s\n' "$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build selected target with reusable cache
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: services/comfy/Dockerfile
+          target: "${{ steps.prepare.outputs.target }}"
+          tags: "latentcrate/comfy:${{ steps.prepare.outputs.tag }}"
+          build-args: |
+            PYTORCH_DEVEL_IMAGE=${{ env.PYTORCH_DEVEL_IMAGE }}
+            PYTORCH_RUNTIME_IMAGE=${{ env.PYTORCH_RUNTIME_IMAGE }}
+            COMFYUI_REF=${{ env.COMFYUI_REF }}
+            COMFYUI_FRONTEND_REF=${{ env.COMFYUI_FRONTEND_REF }}
+            COMFY_FRONTEND_DIST_SHA256=${{ env.COMFY_FRONTEND_DIST_SHA256 }}
+            FFMPEG_REF=${{ env.FFMPEG_REF }}
+            NV_CODEC_HEADERS_REF=${{ env.NV_CODEC_HEADERS_REF }}
+            SVT_AV1_REF=${{ env.SVT_AV1_REF }}
+            SAGEATTENTION_REF=${{ env.SAGEATTENTION_REF }}
+            SAGE_CUDA_ARCH_LIST=${{ env.SAGE_CUDA_ARCH_LIST }}
+            SAGE_BUILD_JOBS=${{ env.SAGE_BUILD_JOBS }}
+            CUSTOM_NODE_CUDA_ARCH_LIST=${{ env.CUSTOM_NODE_CUDA_ARCH_LIST }}
+            CUSTOM_NODE_CACHE_KEY=${{ env.CUSTOM_NODE_CACHE_KEY }}
+            CUDA_NPP_VERSION=${{ env.CUDA_NPP_VERSION }}
+            TORCHCODEC_VERSION=${{ env.TORCHCODEC_VERSION }}
+            TORCHCODEC_INDEX_URL=${{ env.TORCHCODEC_INDEX_URL }}
+            FRONTEND_NODE_IMAGE=${{ env.FRONTEND_NODE_IMAGE }}
+            FRONTEND_PNPM_VERSION=${{ env.FRONTEND_PNPM_VERSION }}
+            FRONTEND_GIT_URL=${{ env.FRONTEND_GIT_URL }}
+            FRONTEND_GIT_REF=${{ env.FRONTEND_GIT_REF }}
+            FRONTEND_GIT_REQUESTED_REF=${{ env.FRONTEND_GIT_REQUESTED_REF }}
+          cache-from: "type=gha,scope=latentcrate-${{ env.PROFILE }}"
+          cache-to: "type=gha,scope=latentcrate-${{ env.PROFILE }},mode=max,ignore-error=true,timeout=30m"
+
+  scheduled-edge:
+    if: github.event_name == 'schedule'
+    runs-on: ${{ vars.LATENTCRATE_BUILD_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 180
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Load edge build inputs
+        shell: bash
+        run: |
+          set -a
+          source versions/edge.env
+          set +a
+          while IFS= read -r line; do
+            [[ -n "$line" && "$line" != \#* ]] || continue
+            printf '%s\n' "$line" >> "$GITHUB_ENV"
+          done < versions/edge.env
+          custom_node_cache_key=$(bash scripts/custom-node-cache-key.sh \
+            "$PYTORCH_DEVEL_IMAGE" "$PYTORCH_RUNTIME_IMAGE" "$COMFYUI_REF" \
+            "$TORCHCODEC_VERSION" "$TORCHCODEC_INDEX_URL" \
+            "$CUSTOM_NODE_CUDA_ARCH_LIST")
+          printf 'CUSTOM_NODE_CACHE_KEY=%s\n' "$custom_node_cache_key" >> "$GITHUB_ENV"
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build edge release target with reusable cache
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: services/comfy/Dockerfile
+          target: runtime
+          tags: latentcrate/comfy:edge
+          build-args: |
+            PYTORCH_DEVEL_IMAGE=${{ env.PYTORCH_DEVEL_IMAGE }}
+            PYTORCH_RUNTIME_IMAGE=${{ env.PYTORCH_RUNTIME_IMAGE }}
+            COMFYUI_REF=${{ env.COMFYUI_REF }}
+            COMFYUI_FRONTEND_REF=${{ env.COMFYUI_FRONTEND_REF }}
+            COMFY_FRONTEND_DIST_SHA256=${{ env.COMFY_FRONTEND_DIST_SHA256 }}
+            FFMPEG_REF=${{ env.FFMPEG_REF }}
+            NV_CODEC_HEADERS_REF=${{ env.NV_CODEC_HEADERS_REF }}
+            SVT_AV1_REF=${{ env.SVT_AV1_REF }}
+            SAGEATTENTION_REF=${{ env.SAGEATTENTION_REF }}
+            SAGE_CUDA_ARCH_LIST=${{ env.SAGE_CUDA_ARCH_LIST }}
+            SAGE_BUILD_JOBS=${{ env.SAGE_BUILD_JOBS }}
+            CUSTOM_NODE_CUDA_ARCH_LIST=${{ env.CUSTOM_NODE_CUDA_ARCH_LIST }}
+            CUSTOM_NODE_CACHE_KEY=${{ env.CUSTOM_NODE_CACHE_KEY }}
+            CUDA_NPP_VERSION=${{ env.CUDA_NPP_VERSION }}
+            TORCHCODEC_VERSION=${{ env.TORCHCODEC_VERSION }}
+            TORCHCODEC_INDEX_URL=${{ env.TORCHCODEC_INDEX_URL }}
+            FRONTEND_NODE_IMAGE=${{ env.FRONTEND_NODE_IMAGE }}
+            FRONTEND_PNPM_VERSION=${{ env.FRONTEND_PNPM_VERSION }}
+          cache-from: type=gha,scope=latentcrate-edge
+          cache-to: type=gha,scope=latentcrate-edge,mode=max,ignore-error=true,timeout=30m

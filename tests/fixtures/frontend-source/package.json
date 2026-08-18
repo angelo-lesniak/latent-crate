@@ -1,0 +1,8 @@
+{
+  "name": "latentcrate-frontend-fixture",
+  "private": true,
+  "packageManager": "pnpm@11.13.1",
+  "scripts": {
+    "build": "node build.mjs"
+  }
+}

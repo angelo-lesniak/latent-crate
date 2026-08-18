@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Fake uname for tests/doctor.sh so the suite runs identically on any host OS.
+set -uo pipefail
+
+case "${1:-}" in
+  -s) printf '%s\n' "${FAKE_UNAME_S:-Linux}" ;;
+  -m) printf '%s\n' "${FAKE_UNAME_M:-x86_64}" ;;
+  *) printf '%s\n' "${FAKE_UNAME_S:-Linux}" ;;
+esac

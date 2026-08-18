@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Fake Docker engine for tests/doctor.sh, controlled through FAKE_DOCKER_* variables.
+set -uo pipefail
+
+case "${1:-}" in
+  --version)
+    printf 'Docker version 27.0.0-fake\n'
+    ;;
+  info)
+    if [[ "${FAKE_DOCKER_INFO_FAIL:-false}" == true ]]; then
+      exit 1
+    fi
+    if [[ "${2:-}" == -f || "${2:-}" == --format ]]; then
+      case "${3:-}" in
+        *DockerRootDir*) printf '%s\n' "${FAKE_DOCKER_ROOT_DIR:-/}" ;;
+        *CDISpecDirs*) printf '%s\n' "${FAKE_DOCKER_CDI_DIRS:-}" ;;
+        *) exit 1 ;;
+      esac
+    else
+      printf 'fake docker info\n'
+    fi
+    ;;
+  compose)
+    if [[ "${2:-}" == version ]]; then
+      printf 'Docker Compose version fake\n'
+    else
+      exit 1
+    fi
+    ;;
+  *)
+    exit 1
+    ;;
+esac

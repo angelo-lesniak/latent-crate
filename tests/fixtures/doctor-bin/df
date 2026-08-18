@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Fake df for tests/doctor.sh; reports FAKE_DF_FREE_KB as the available space
+# (default 100 GB) regardless of the queried path.
+set -uo pipefail
+
+printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\n'
+printf 'fake 999999999 1 %s 1%% /fake\n' "${FAKE_DF_FREE_KB:-104857600}"

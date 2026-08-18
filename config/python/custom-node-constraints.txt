@@ -1,0 +1,5 @@
+# Optional project-specific constraints for third-party node dependencies.
+#
+# LatentCrate automatically constrains the Torch, Triton, and NumPy versions
+# already present in the selected PyTorch image. Add reviewed constraints here
+# only when two third-party nodes otherwise resolve incompatible versions.

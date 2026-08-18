@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# Fake git for tests/resolve-frontend.sh. It records how the resolver invoked
+# it (hardening environment plus the full argument vector) and answers
+# ls-remote according to FAKE_GIT_MODE:
+#   branch        one refs/heads line
+#   annotated-tag a tag-object line plus its peeled ^{} line
+#   none          an empty listing (reference not found)
+#   fail          a nonzero exit (network or repository error)
+set -uo pipefail
+
+record() {
+  [[ -n "${FAKE_GIT_RECORD_FILE:-}" ]] || return 0
+  {
+    local missing=
+    [[ "${GIT_TERMINAL_PROMPT:-}" == 0 ]] || missing+=" GIT_TERMINAL_PROMPT"
+    [[ "${GIT_ASKPASS:-}" == /bin/false ]] || missing+=" GIT_ASKPASS"
+    [[ "${GIT_CONFIG_NOSYSTEM:-}" == 1 ]] || missing+=" GIT_CONFIG_NOSYSTEM"
+    [[ "${GIT_CONFIG_GLOBAL:-}" == /dev/null ]] || missing+=" GIT_CONFIG_GLOBAL"
+    if [[ -z "$missing" ]]; then
+      printf 'env=ok\n'
+    else
+      printf 'env=missing:%s\n' "$missing"
+    fi
+    printf '%s\n' "$@"
+  } > "$FAKE_GIT_RECORD_FILE"
+}
+
+record "$@"
+
+case "${FAKE_GIT_MODE:-fail}" in
+  branch)
+    printf '1111111111111111111111111111111111111111\trefs/heads/%s\n' \
+      "${FAKE_GIT_REF:-main}"
+    ;;
+  annotated-tag)
+    printf '2222222222222222222222222222222222222222\trefs/tags/%s\n' \
+      "${FAKE_GIT_REF:-v1.0.0}"
+    printf '3333333333333333333333333333333333333333\trefs/tags/%s^{}\n' \
+      "${FAKE_GIT_REF:-v1.0.0}"
+    ;;
+  none)
+    ;;
+  fail)
+    printf 'fake git: simulated ls-remote failure\n' >&2
+    exit 128
+    ;;
+  *)
+    printf 'fake git: unknown FAKE_GIT_MODE=%s\n' "${FAKE_GIT_MODE:-}" >&2
+    exit 1
+    ;;
+esac

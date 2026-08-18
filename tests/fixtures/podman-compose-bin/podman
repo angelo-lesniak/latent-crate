@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+# podman-compose performs a real network existence probe even in dry-run mode.
+# All other engine calls are deliberately empty: the compatibility test checks
+# Compose parsing, service resolution, and container-argument generation only.
+if [[ "${1:-}" == network && "${2:-}" == exists ]]; then
+  exit 0
+fi
+if [[ "${1:-}" == ps ]]; then
+  printf '[]\n'
+fi
+exit 0

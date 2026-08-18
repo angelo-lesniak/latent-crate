@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Fake nvidia-ctk for tests/doctor.sh; prints the configured CDI device list.
+set -uo pipefail
+
+if [[ "${1:-}" == cdi && "${2:-}" == list ]]; then
+  printf '%s\n' "${FAKE_CDI_DEVICES:-nvidia.com/gpu=all}"
+else
+  exit 1
+fi

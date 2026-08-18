@@ -1,0 +1,406 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+# The wrapper relies on bash 4.3+ features (exec {FD}>, name references,
+# ${var,,}). macOS ships bash 3.2, which fails in confusing ways.
+if ((BASH_VERSINFO[0] < 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] < 3))); then
+  printf 'LatentCrate: bash %s is too old; bash 4.3 or newer is required. Run LatentCrate inside WSL2 or native Linux.\n' \
+    "$BASH_VERSION" >&2
+  exit 1
+fi
+
+PROJECT_ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+readonly PROJECT_ROOT
+
+# Load only fixed, repository-relative implementation modules.
+# shellcheck source=lib/latentcrate/core.sh
+source "$PROJECT_ROOT/lib/latentcrate/core.sh"
+# shellcheck source=lib/latentcrate/frontend.sh
+source "$PROJECT_ROOT/lib/latentcrate/frontend.sh"
+# shellcheck source=lib/latentcrate/node-deps.sh
+source "$PROJECT_ROOT/lib/latentcrate/node-deps.sh"
+# shellcheck source=lib/latentcrate/nodes.sh
+source "$PROJECT_ROOT/lib/latentcrate/nodes.sh"
+# shellcheck source=lib/latentcrate/runtime.sh
+source "$PROJECT_ROOT/lib/latentcrate/runtime.sh"
+
+usage() {
+  cat <<'EOF'
+LatentCrate - pinned ComfyUI containers for Docker and Podman
+
+Usage:
+  bin/latentcrate init [--node-set name] [profile]
+      Create .env and the host data directories; optionally install a node set.
+  bin/latentcrate doctor [profile] [--allow-no-gpu] [--sage|--no-sage]
+      Check the host (engine, GPU, directories, ports) before building.
+  bin/latentcrate up [profile] [--sage|--no-sage] [--detach] [--use-saved-node-deps] [frontend option]
+      Build the image if needed and start ComfyUI.
+  bin/latentcrate build [profile] [--sage|--no-sage] [--use-saved-node-deps] [frontend option]
+      Build the image without starting ComfyUI.
+  bin/latentcrate down [profile]
+      Stop and remove the ComfyUI container.
+  bin/latentcrate config [profile] [--sage|--no-sage] [frontend option]
+      Print the resolved Compose configuration.
+  bin/latentcrate status [profile]
+      Show the ComfyUI container status.
+  bin/latentcrate wait [profile] [--timeout seconds]
+      Block until the running container reports healthy.
+  bin/latentcrate logs [profile]
+      Follow the ComfyUI container logs.
+  bin/latentcrate shell [profile]
+      Open a bash shell in the running container.
+  bin/latentcrate smoke-gpu [profile] [--sage|--no-sage] [frontend option]
+      Run the GPU verification suite in the running container and save a report.
+  bin/latentcrate node-deps snapshot [profile]
+      Capture custom-node Python dependencies for the next image build.
+  bin/latentcrate node-deps clear
+      Reset the saved custom-node dependency snapshot.
+  bin/latentcrate nodes list
+      List the available custom-node sets with their descriptions.
+  bin/latentcrate nodes install <set> [profile]
+      Install a pinned custom-node set (stop ComfyUI first).
+  bin/latentcrate nodes sync <set> [profile]
+      Install the set, replacing clean checkouts pinned at other commits.
+  bin/latentcrate nodes status <set> [profile]
+      Report how the managed third-party nodes compare to the set.
+  bin/latentcrate versions
+      Show the pinned components for each version profile.
+
+Frontend options:
+  --frontend-release
+  --frontend-git <https-url> <commit-branch-tag-or-pr-reference>
+  --frontend-source <absolute-or-relative-source-directory>  (up/config/smoke-gpu)
+  --frontend-dist <absolute-or-relative-dist-directory>  (up/config/smoke-gpu)
+
+Version profiles are files below versions/ without the .env suffix. Set
+CONTAINER_ENGINE=docker or CONTAINER_ENGINE=podman to override detection.
+The Sage-capable image is the default. Use --no-sage for the smaller base image.
+Node dependencies refresh by default. Use --use-saved-node-deps to reuse the
+last saved dependency snapshot.
+EOF
+}
+
+set_default_sage_variant() {
+  local value=${LATENTCRATE_SAGE:-true}
+  case "${value,,}" in
+    1|true|yes|on) SAGE=true ;;
+    0|false|no|off) SAGE=false ;;
+    *) die 'LATENTCRATE_SAGE must be true or false' ;;
+  esac
+}
+
+parse_variant_options() {
+  local command=$1
+  shift
+  local profile_seen=false
+  local frontend_seen=false
+
+  PROFILE=current
+  set_default_sage_variant
+  DETACH=false
+  REFRESH_NODE_DEPS=true
+
+  while (($# > 0)); do
+    case "$1" in
+      --sage)
+        SAGE=true
+        ;;
+      --no-sage)
+        SAGE=false
+        ;;
+      --detach|-d)
+        [[ "$command" == up ]] || die "$1 is only valid with up"
+        DETACH=true
+        ;;
+      --use-saved-node-deps)
+        [[ "$command" == up || "$command" == build ]] \
+          || die '--use-saved-node-deps is only valid with up or build'
+        REFRESH_NODE_DEPS=false
+        ;;
+      --frontend-release)
+        [[ "$frontend_seen" == false ]] || die 'only one frontend option may be supplied'
+        frontend_seen=true
+        export COMFY_FRONTEND_MODE=release
+        ;;
+      --frontend-git)
+        [[ "$frontend_seen" == false ]] || die 'only one frontend option may be supplied'
+        (($# >= 3)) \
+          || die '--frontend-git requires a repository URL and a commit, branch, tag, or pull-request reference'
+        frontend_seen=true
+        export COMFY_FRONTEND_MODE=git
+        export FRONTEND_GIT_URL=$2
+        export FRONTEND_GIT_REF=$3
+        unset FRONTEND_GIT_REQUESTED_REF || true
+        shift 2
+        ;;
+      --frontend-source)
+        [[ "$command" == up || "$command" == config || "$command" == smoke-gpu ]] \
+          || die '--frontend-source is only valid with up, config, or smoke-gpu'
+        [[ "$frontend_seen" == false ]] || die 'only one frontend option may be supplied'
+        (($# >= 2)) || die '--frontend-source requires a directory'
+        frontend_seen=true
+        export COMFY_FRONTEND_MODE=source
+        export COMFY_FRONTEND_SOURCE_DIR=$2
+        shift
+        ;;
+      --frontend-dist)
+        [[ "$command" == up || "$command" == config || "$command" == smoke-gpu ]] \
+          || die '--frontend-dist is only valid with up, config, or smoke-gpu'
+        [[ "$frontend_seen" == false ]] || die 'only one frontend option may be supplied'
+        (($# >= 2)) || die '--frontend-dist requires a directory'
+        frontend_seen=true
+        export COMFY_FRONTEND_MODE=dist
+        export COMFY_FRONTEND_DIST_DIR=$2
+        shift
+        ;;
+      --*) die "unknown option for $command: $1" ;;
+      *)
+        [[ "$profile_seen" == false ]] || die "multiple version profiles supplied: $PROFILE and $1"
+        profile_file "$1" >/dev/null
+        PROFILE=$1
+        profile_seen=true
+        ;;
+    esac
+    shift
+  done
+}
+
+parse_profile_only() {
+  PROFILE=${1:-current}
+  (($# <= 1)) || die 'this command accepts at most one version profile'
+  [[ "$PROFILE" != --* ]] || die "unknown option: $PROFILE"
+  profile_file "$PROFILE" >/dev/null
+}
+
+main() {
+  local command=${1:-help}
+  local engine timeout allow_no_gpu min_driver profile_seen node_set
+  local -a up_args
+  shift || true
+
+  cd "$PROJECT_ROOT"
+  INCLUDE_FRONTEND_OVERLAY=false
+  FRONTEND_SOURCE_BUILD=false
+
+  case "$command" in
+    help|-h|--help)
+      (($# == 0)) || die 'help accepts no arguments'
+      usage
+      return
+      ;;
+    versions)
+      (($# == 0)) || die 'versions accepts no arguments'
+      for file in "$PROJECT_ROOT"/versions/*.env; do
+        printf '\n== %s ==\n' "$(basename "$file" .env)"
+        sed '/^[[:space:]]*#/d; /^[[:space:]]*$/d' "$file"
+      done
+      return
+      ;;
+  esac
+
+  # Every remaining command needs a Linux userland (flock, Compose bind
+  # mounts, CDI devices). LATENTCRATE_SKIP_PLATFORM_CHECK=1 is an escape
+  # hatch for the engine-free test suites on macOS or Windows dev machines.
+  if ! is_true "${LATENTCRATE_SKIP_PLATFORM_CHECK:-false}"; then
+    [[ "$(uname -s 2>/dev/null)" == Linux ]] \
+      || die 'LatentCrate must run inside WSL2 or native Linux. Git Bash and PowerShell are not supported.'
+  fi
+
+  load_local_env
+
+  case "$command" in
+    init)
+      node_set=
+      PROFILE=current
+      profile_seen=false
+      while (($# > 0)); do
+        case "$1" in
+          --node-set)
+            (($# >= 2)) || die '--node-set requires a set name'
+            [[ -z "$node_set" ]] || die 'init accepts at most one --node-set option'
+            node_set=$2
+            node_set_file "$node_set" >/dev/null
+            shift
+            ;;
+          --*) die "unknown init option: $1" ;;
+          *)
+            [[ "$profile_seen" == false ]] || die 'init accepts at most one version profile'
+            PROFILE=$1
+            profile_file "$PROFILE" >/dev/null
+            profile_seen=true
+            ;;
+        esac
+        shift
+      done
+      init_project
+      [[ -z "$node_set" ]] || run_node_set install "$node_set" "$PROFILE"
+      ;;
+    doctor)
+      PROFILE=current
+      allow_no_gpu=false
+      profile_seen=false
+      set_default_sage_variant
+      while (($# > 0)); do
+        case "$1" in
+          --allow-no-gpu) allow_no_gpu=true ;;
+          --sage) SAGE=true ;;
+          --no-sage) SAGE=false ;;
+          --*) die "unknown doctor option: $1" ;;
+          *)
+            [[ "$profile_seen" == false ]] || die 'doctor accepts at most one version profile'
+            PROFILE=$1
+            profile_file "$PROFILE" >/dev/null
+            profile_seen=true
+            ;;
+        esac
+        shift
+      done
+      min_driver=${CUDA_MIN_DRIVER_MAJOR:-$(profile_value "$PROFILE" CUDA_MIN_DRIVER_MAJOR)}
+      bash "$PROJECT_ROOT/scripts/doctor.sh" \
+        --engine "${CONTAINER_ENGINE:-}" \
+        --allow-no-gpu "$allow_no_gpu" \
+        --min-driver-major "${min_driver:-580}" \
+        --custom-node-arch-list "${CUSTOM_NODE_CUDA_ARCH_LIST:-$(profile_value "$PROFILE" CUSTOM_NODE_CUDA_ARCH_LIST)}" \
+        --sage-arch-list "${SAGE_CUDA_ARCH_LIST:-$(profile_value "$PROFILE" SAGE_CUDA_ARCH_LIST)}" \
+        --sage "$SAGE"
+      ;;
+    up)
+      parse_variant_options up "$@"
+      configure_variant "$PROFILE" "$SAGE"
+      validate_bind_address
+      prepare_host_directories
+      engine=$(detect_engine)
+      if [[ "$FRONTEND_SOURCE_BUILD" == true ]]; then
+        build_local_frontend "$engine" "$PROFILE"
+      fi
+      [[ "${COMFY_FRONTEND_MODE}" == dist ]] && INCLUDE_FRONTEND_OVERLAY=true
+      if [[ "$REFRESH_NODE_DEPS" == true ]]; then
+        run_refreshed_build "$engine" "$PROFILE" \
+          'custom-node dependency build failed; restored the last buildable snapshot'
+      else
+        run_cached_build "$engine" "$PROFILE"
+      fi
+      # Every up builds an image first. Recreate unconditionally so Compose
+      # cannot keep a container that still points at the previous image ID.
+      up_args=(up --no-build --force-recreate)
+      if [[ "$DETACH" == true ]]; then
+        compose "$engine" "$PROFILE" "${up_args[@]}" --detach comfy
+        printf 'Run: bash bin/latentcrate wait %s\n' "$PROFILE"
+      else
+        compose "$engine" "$PROFILE" "${up_args[@]}" comfy
+      fi
+      ;;
+    build)
+      parse_variant_options build "$@"
+      configure_variant "$PROFILE" "$SAGE"
+      [[ "$COMFY_FRONTEND_MODE" != dist ]] \
+        || die 'build supports release and Git frontends; use up for --frontend-source or --frontend-dist'
+      engine=$(detect_engine)
+      if [[ "$REFRESH_NODE_DEPS" == true ]]; then
+        run_refreshed_build "$engine" "$PROFILE" 'image build failed'
+      else
+        run_cached_build "$engine" "$PROFILE"
+      fi
+      ;;
+    down)
+      parse_profile_only "$@"
+      engine=$(detect_engine)
+      compose "$engine" "$PROFILE" down
+      ;;
+    config)
+      parse_variant_options config "$@"
+      configure_variant "$PROFILE" "$SAGE"
+      [[ "${COMFY_FRONTEND_MODE}" == dist ]] && INCLUDE_FRONTEND_OVERLAY=true
+      engine=$(detect_engine)
+      compose "$engine" "$PROFILE" config
+      ;;
+    status)
+      parse_profile_only "$@"
+      engine=$(detect_engine)
+      compose "$engine" "$PROFILE" ps
+      ;;
+    wait)
+      PROFILE=current
+      timeout=180
+      profile_seen=false
+      while (($# > 0)); do
+        case "$1" in
+          --timeout)
+            (($# >= 2)) || die '--timeout requires seconds'
+            timeout=$2
+            [[ "$timeout" =~ ^[1-9][0-9]*$ ]] || die '--timeout must be a positive integer'
+            shift
+            ;;
+          --*) die "unknown wait option: $1" ;;
+          *)
+            [[ "$profile_seen" == false ]] || die 'wait accepts at most one version profile'
+            PROFILE=$1
+            profile_file "$PROFILE" >/dev/null
+            profile_seen=true
+            ;;
+        esac
+        shift
+      done
+      engine=$(detect_engine)
+      wait_until_healthy "$engine" "$PROFILE" "$timeout"
+      ;;
+    logs)
+      parse_profile_only "$@"
+      engine=$(detect_engine)
+      compose "$engine" "$PROFILE" logs --follow comfy
+      ;;
+    shell)
+      parse_profile_only "$@"
+      engine=$(detect_engine)
+      compose "$engine" "$PROFILE" exec comfy bash
+      ;;
+    smoke-gpu)
+      parse_variant_options smoke-gpu "$@"
+      configure_variant "$PROFILE" "$SAGE"
+      engine=$(detect_engine)
+      run_gpu_smoke "$engine" "$PROFILE" "$SAGE"
+      ;;
+    node-deps)
+      case "${1:-}" in
+        snapshot)
+          (($# <= 2)) || die 'node-deps snapshot accepts at most one version profile'
+          acquire_node_dependency_lock
+          trap 'release_node_dependency_lock' EXIT
+          snapshot_node_dependencies "${2:-current}"
+          release_node_dependency_lock
+          trap - EXIT
+          ;;
+        clear)
+          (($# == 1)) || die 'node-deps clear accepts no additional arguments'
+          acquire_node_dependency_lock
+          trap 'release_node_dependency_lock' EXIT
+          clear_node_dependencies
+          release_node_dependency_lock
+          trap - EXIT
+          ;;
+        *) die 'usage: bin/latentcrate node-deps snapshot [profile] | node-deps clear' ;;
+      esac
+      ;;
+    nodes)
+      case "${1:-}" in
+        list)
+          (($# == 1)) || die 'nodes list accepts no additional arguments'
+          list_node_sets
+          ;;
+        install|sync|status)
+          (($# >= 2 && $# <= 3)) \
+            || die "nodes ${1:-install} requires a set name and accepts an optional version profile"
+          run_node_set "$1" "$2" "${3:-current}"
+          ;;
+        *) die 'usage: bin/latentcrate nodes list | nodes install <set> [profile] | nodes sync <set> [profile] | nodes status <set> [profile]' ;;
+      esac
+      ;;
+    *)
+      printf 'LatentCrate: unknown command: %s\n' "$command" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+}
+
+main "$@"

@@ -1,0 +1,3 @@
+# One lowercase host name per line. VCS dependency pins and node-set repositories
+# are limited to these reviewed public Git hosts.
+github.com

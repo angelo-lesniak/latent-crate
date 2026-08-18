@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+case "${1:-}" in
+  -n|-u) exit 0 ;;
+  *) exit 0 ;;
+esac

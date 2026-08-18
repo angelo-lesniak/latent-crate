@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Fake flock so the doctor's required-tool probe succeeds on hosts without it.
+exit 0

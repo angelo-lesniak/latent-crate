@@ -1,0 +1,46 @@
+latentcrate_models:
+  base_path: /models
+  is_default: true
+  checkpoints: checkpoints/
+  classifiers: classifiers/
+  clip: clip/
+  text_encoders: |
+    text_encoders/
+    clip/
+  clip_vision: clip_vision/
+  configs: configs/
+  controlnet: controlnet/
+  diffusers: diffusers/
+  diffusion_models: |
+    diffusion_models/
+    unet/
+  embeddings: embeddings/
+  gligen: gligen/
+  hypernetworks: hypernetworks/
+  loras: loras/
+  photomaker: photomaker/
+  style_models: style_models/
+  unet: unet/
+  upscale_models: upscale_models/
+  vae: vae/
+  vae_approx: vae_approx/
+  animatediff_models: animatediff_models/
+  animatediff_motion_lora: animatediff_motion_lora/
+  animatediff_video_formats: animatediff_video_formats/
+  ipadapter: ipadapter/
+  liveportrait: liveportrait/
+  insightface: insightface/
+  layerstyle: layerstyle/
+  LLM: LLM/
+  Joy_caption: Joy_caption/
+  sams: sams/
+  blip: blip/
+  CogVideo: CogVideo/
+  xlabs: xlabs/
+  instantid: instantid/
+  audio_encoders: audio_encoders/
+  model_patches: model_patches/
+
+latentcrate_local_nodes:
+  base_path: /local
+  custom_nodes: custom_nodes/

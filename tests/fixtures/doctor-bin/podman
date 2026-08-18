@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Fake Podman engine for tests/doctor.sh, controlled through FAKE_PODMAN_* variables.
+set -uo pipefail
+
+case "${1:-}" in
+  --version)
+    printf 'podman version 5.2.0-fake\n'
+    ;;
+  info)
+    if [[ "${FAKE_PODMAN_INFO_FAIL:-false}" == true ]]; then
+      exit 1
+    fi
+    if [[ "${2:-}" == --format ]]; then
+      case "${3:-}" in
+        *Rootless*) printf '%s\n' "${FAKE_PODMAN_ROOTLESS:-true}" ;;
+        *OCIRuntime*) printf '%s\n' "${FAKE_PODMAN_RUNTIME:-crun}" ;;
+        *GraphRoot*) printf '%s\n' "${FAKE_PODMAN_GRAPH_ROOT:-/}" ;;
+        *) exit 1 ;;
+      esac
+    else
+      printf 'fake podman info\n'
+    fi
+    ;;
+  compose)
+    if [[ "${2:-}" == version ]]; then
+      printf 'podman compose version fake\n'
+    else
+      exit 1
+    fi
+    ;;
+  *)
+    exit 1
+    ;;
+esac

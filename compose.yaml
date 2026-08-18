@@ -1,0 +1,281 @@
+name: "${COMPOSE_PROJECT_NAME:-latentcrate}"
+
+# Shared configuration for the node-set and node-set-status services. The
+# services below merge this block and override only their real differences:
+# networking, the writability of the /nodes mount, and the command.
+x-node-set-common: &node-set-common
+  profiles: ["tools"]
+  image: "${LATENTCRATE_TOOLS_IMAGE:-latentcrate/tools}:${LATENTCRATE_TOOLS_TAG:-current}-node-set"
+  build:
+    context: .
+    dockerfile: services/tools/Dockerfile
+    target: node-set-tool
+    args:
+      TOOL_PYTHON_IMAGE: "${TOOL_PYTHON_IMAGE:?select a version profile}"
+      FRONTEND_NODE_IMAGE: "${FRONTEND_NODE_IMAGE:?select a version profile}"
+  read_only: true
+  pids_limit: 128
+  cap_drop: ["ALL"]
+  security_opt:
+    - no-new-privileges:true
+  environment:
+    PYTHONDONTWRITEBYTECODE: "1"
+
+x-node-set-mounts:
+  manifest: &node-set-manifest-mount
+    type: bind
+    source: "${NODE_SET_FILE:-./config/custom-nodes/sets/latent-nodepack.toml}"
+    target: /config/node-set.toml
+    read_only: true
+  allowed-git-hosts: &node-set-allowed-git-hosts-mount
+    type: bind
+    source: ./config/custom-nodes/allowed-git-hosts.txt
+    target: /config/allowed-git-hosts.txt
+    read_only: true
+  tmp: &node-set-tmp-mount
+    type: tmpfs
+    target: /tmp
+
+services:
+  comfy:
+    image: "${LATENTCRATE_IMAGE:-latentcrate/comfy}:${LATENTCRATE_TAG:-current-sage}"
+    build:
+      context: .
+      dockerfile: services/comfy/Dockerfile
+      target: "${COMFY_BUILD_TARGET:-runtime-sage}"
+      args:
+        PYTORCH_DEVEL_IMAGE: "${PYTORCH_DEVEL_IMAGE:?select a version profile}"
+        PYTORCH_RUNTIME_IMAGE: "${PYTORCH_RUNTIME_IMAGE:?select a version profile}"
+        COMFYUI_REF: "${COMFYUI_REF:?select a version profile}"
+        COMFYUI_FRONTEND_REF: "${COMFYUI_FRONTEND_REF:?select a version profile}"
+        COMFY_FRONTEND_DIST_SHA256: "${COMFY_FRONTEND_DIST_SHA256:-}"
+        FFMPEG_REF: "${FFMPEG_REF:?select a version profile}"
+        NV_CODEC_HEADERS_REF: "${NV_CODEC_HEADERS_REF:?select a version profile}"
+        SVT_AV1_REF: "${SVT_AV1_REF:?select a version profile}"
+        SAGEATTENTION_REF: "${SAGEATTENTION_REF:?select a version profile}"
+        SAGE_CUDA_ARCH_LIST: "${SAGE_CUDA_ARCH_LIST:?select a version profile}"
+        SAGE_BUILD_JOBS: "${SAGE_BUILD_JOBS:?select a version profile}"
+        CUSTOM_NODE_CUDA_ARCH_LIST: "${CUSTOM_NODE_CUDA_ARCH_LIST:?select a version profile}"
+        CUSTOM_NODE_CACHE_KEY: "${CUSTOM_NODE_CACHE_KEY:?use bin/latentcrate to prepare build inputs}"
+        CUDA_NPP_VERSION: "${CUDA_NPP_VERSION:?select a version profile}"
+        TORCHCODEC_VERSION: "${TORCHCODEC_VERSION}"
+        TORCHCODEC_INDEX_URL: "${TORCHCODEC_INDEX_URL:?select a version profile}"
+        FRONTEND_NODE_IMAGE: "${FRONTEND_NODE_IMAGE:?select a version profile}"
+        FRONTEND_PNPM_VERSION: "${FRONTEND_PNPM_VERSION:?select a version profile}"
+        FRONTEND_GIT_URL: "${FRONTEND_GIT_URL:-}"
+        FRONTEND_GIT_REF: "${FRONTEND_GIT_REF:-}"
+        FRONTEND_GIT_REQUESTED_REF: "${FRONTEND_GIT_REQUESTED_REF:-}"
+    init: true
+    read_only: true
+    restart: "${RESTART_POLICY:-no}"
+    stop_grace_period: "${STOP_GRACE_PERIOD:-30s}"
+    shm_size: "${COMFY_SHM_SIZE:-8gb}"
+    pids_limit: "${COMFY_PIDS_LIMIT:-2048}"
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - "/tmp:rw,nosuid,nodev,mode=1777,size=${COMFY_TMPFS_SIZE:-1g}"
+    ports:
+      # Container port 8188 must match the --port in services/comfy/entrypoint.sh
+      # and the probe URL in services/comfy/healthcheck.py.
+      - "${COMFY_BIND_ADDRESS:-127.0.0.1}:${COMFY_PORT:-4207}:8188"
+    devices:
+      - "${GPU_DEVICE:-nvidia.com/gpu=all}"
+    volumes:
+      - type: bind
+        source: "${COMFY_DATA_DIR:-./data/comfy}"
+        target: /data
+      - type: bind
+        source: "${COMFY_MODELS_DIR:-./data/models}"
+        target: /models
+      - type: bind
+        source: "${COMFY_CACHE_DIR:-./data/cache}"
+        target: /cache
+      - type: bind
+        source: "${COMFY_LOCAL_NODES_DIR:-./local/custom_nodes}"
+        target: /local/custom_nodes
+        read_only: true
+    environment:
+      COMFY_ENABLE_MANAGER: "${COMFY_ENABLE_MANAGER:-true}"
+      COMFY_FRONTEND_MODE: "${COMFY_FRONTEND_MODE:-release}"
+      COMFY_GLOBAL_SAGE: "${COMFY_GLOBAL_SAGE:-false}"
+      COMFY_DISABLE_API_NODES: "${COMFY_DISABLE_API_NODES:-false}"
+      COMFY_DISABLE_METADATA: "${COMFY_DISABLE_METADATA:-false}"
+      COMFYUI_EXTRA_ARGS: "${COMFYUI_EXTRA_ARGS:-}"
+      NVIDIA_DRIVER_CAPABILITIES: "${NVIDIA_DRIVER_CAPABILITIES:-compute,utility,video}"
+      UMASK: "${UMASK:-0002}"
+    healthcheck:
+      test: ["CMD", "python", "/usr/local/bin/latentcrate-healthcheck.py"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
+
+  node-deps-snapshot:
+    profiles: ["tools"]
+    image: "${LATENTCRATE_TOOLS_IMAGE:-latentcrate/tools}:${LATENTCRATE_TOOLS_TAG:-current}-node-deps"
+    build:
+      context: .
+      dockerfile: services/tools/Dockerfile
+      target: node-deps-tool
+      args:
+        TOOL_PYTHON_IMAGE: "${TOOL_PYTHON_IMAGE:?select a version profile}"
+        FRONTEND_NODE_IMAGE: "${FRONTEND_NODE_IMAGE:?select a version profile}"
+    network_mode: none
+    read_only: true
+    pids_limit: 128
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
+    command:
+      - --source
+      - /input/managed
+      - --source
+      - /input/local
+      - --destination
+      - /output/custom-node-requirements
+      - --include-file
+      - /config/custom-node-requirements.include
+      - --vcs-pins
+      - /config/vcs-pins.toml
+      - --package-replacements
+      - /config/custom-node-package-replacements.toml
+      - --allowed-git-hosts
+      - /config/allowed-git-hosts.txt
+    volumes:
+      - type: bind
+        source: "${NODE_DEPS_SOURCE_DIR:-./data/comfy/custom_nodes}"
+        target: /input/managed
+        read_only: true
+      - type: bind
+        source: "${NODE_DEPS_LOCAL_SOURCE_DIR:-./local/custom_nodes}"
+        target: /input/local
+        read_only: true
+      - type: bind
+        source: "${NODE_DEPS_OUTPUT_DIR:-./build}"
+        target: /output
+      - type: bind
+        source: ./config/python/custom-node-requirements.include
+        target: /config/custom-node-requirements.include
+        read_only: true
+      - type: bind
+        source: ./config/custom-nodes/vcs-pins.toml
+        target: /config/vcs-pins.toml
+        read_only: true
+      - type: bind
+        source: ./config/python/custom-node-package-replacements.toml
+        target: /config/custom-node-package-replacements.toml
+        read_only: true
+      - type: bind
+        source: ./config/custom-nodes/allowed-git-hosts.txt
+        target: /config/allowed-git-hosts.txt
+        read_only: true
+      - type: tmpfs
+        target: /tmp
+
+  node-set:
+    <<: *node-set-common
+    command:
+      - "${NODE_SET_ACTION:-status}"
+      - --manifest
+      - /config/node-set.toml
+      - --target
+      - /nodes
+      - --allowed-git-hosts
+      - /config/allowed-git-hosts.txt
+    volumes:
+      - *node-set-manifest-mount
+      - type: bind
+        source: "${NODE_SET_TARGET_DIR:-./data/comfy/custom_nodes}"
+        target: /nodes
+      - *node-set-allowed-git-hosts-mount
+      - *node-set-tmp-mount
+
+  node-set-status:
+    <<: *node-set-common
+    network_mode: none
+    command:
+      - status
+      - --manifest
+      - /config/node-set.toml
+      - --target
+      - /nodes
+      - --allowed-git-hosts
+      - /config/allowed-git-hosts.txt
+    volumes:
+      - *node-set-manifest-mount
+      - type: bind
+        source: "${NODE_SET_TARGET_DIR:-./data/comfy/custom_nodes}"
+        target: /nodes
+        read_only: true
+      - *node-set-allowed-git-hosts-mount
+      - *node-set-tmp-mount
+
+  frontend-fetch:
+    profiles: ["tools"]
+    image: "${LATENTCRATE_TOOLS_IMAGE:-latentcrate/tools}:${LATENTCRATE_TOOLS_TAG:-current}-frontend"
+    build:
+      context: .
+      dockerfile: services/tools/Dockerfile
+      target: frontend-local-tool
+      args:
+        TOOL_PYTHON_IMAGE: "${TOOL_PYTHON_IMAGE:?select a version profile}"
+        FRONTEND_NODE_IMAGE: "${FRONTEND_NODE_IMAGE:?select a version profile}"
+        FRONTEND_PNPM_VERSION: "${FRONTEND_PNPM_VERSION:?select a version profile}"
+    read_only: true
+    pids_limit: 256
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    command: ["fetch"]
+    volumes:
+      - type: bind
+        source: "${FRONTEND_SOURCE_DIR:-.}"
+        target: /source
+        read_only: true
+      - type: bind
+        source: "${FRONTEND_PNPM_CACHE_DIR:-./data/cache/frontend-pnpm}"
+        target: /pnpm/store
+      - type: bind
+        source: "${FRONTEND_WORK_DIR:-./data/cache/frontend-work/default}"
+        target: /work
+      - type: tmpfs
+        target: /tmp
+
+  frontend-build:
+    profiles: ["tools"]
+    image: "${LATENTCRATE_TOOLS_IMAGE:-latentcrate/tools}:${LATENTCRATE_TOOLS_TAG:-current}-frontend"
+    build:
+      context: .
+      dockerfile: services/tools/Dockerfile
+      target: frontend-local-tool
+      args:
+        TOOL_PYTHON_IMAGE: "${TOOL_PYTHON_IMAGE:?select a version profile}"
+        FRONTEND_NODE_IMAGE: "${FRONTEND_NODE_IMAGE:?select a version profile}"
+        FRONTEND_PNPM_VERSION: "${FRONTEND_PNPM_VERSION:?select a version profile}"
+    network_mode: none
+    read_only: true
+    pids_limit: 512
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    command: ["build"]
+    volumes:
+      - type: bind
+        source: "${FRONTEND_SOURCE_DIR:-.}"
+        target: /source
+        read_only: true
+      - type: bind
+        source: "${FRONTEND_OUTPUT_DIR:-./data/cache/frontend-builds/default}"
+        target: /output
+      - type: bind
+        source: "${FRONTEND_PNPM_CACHE_DIR:-./data/cache/frontend-pnpm}"
+        target: /pnpm/store
+      - type: bind
+        source: "${FRONTEND_WORK_DIR:-./data/cache/frontend-work/default}"
+        target: /work
+      - type: tmpfs
+        target: /tmp

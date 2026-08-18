@@ -1,0 +1,25 @@
+version = 1
+
+# The included third-party nodes use ComfyUI's browser interface rather than
+# OpenCV desktop windows. MediaPipe nevertheless declares opencv-contrib-python
+# by package name. Use that full variant as the single cv2 provider so pip sees
+# MediaPipe's dependency as satisfied and multiple wheels do not overwrite the
+# same cv2 package tree.
+
+[[replacement]]
+from = "opencv-python"
+to = "opencv-contrib-python"
+drop_extras = []
+reason = "Use one full OpenCV distribution that also satisfies MediaPipe."
+
+[[replacement]]
+from = "opencv-python-headless"
+to = "opencv-contrib-python"
+drop_extras = ["ffmpeg"]
+reason = "Use one full OpenCV distribution; the source package's unsupported ffmpeg extra is not carried over."
+
+[[replacement]]
+from = "opencv-contrib-python-headless"
+to = "opencv-contrib-python"
+drop_extras = []
+reason = "Use one full OpenCV distribution that also satisfies MediaPipe."

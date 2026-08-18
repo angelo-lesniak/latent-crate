@@ -1,0 +1,10 @@
+# Compatibility constraints for packages already present in the pinned runtime.
+#
+# PyTorch 2.11's NVIDIA tooling includes spin, whose Click requirement excludes
+# 8.3.0 and all 8.4 releases. Keep ComfyUI Manager and custom-node resolution
+# inside the compatible range so `pip check` remains clean.
+click>=8,<8.4,!=8.3.0
+
+# Requests 2.x emits a runtime compatibility warning with Chardet 6 and newer;
+# ComfyUI Manager accepts the maintained 5.x series.
+chardet>=5,<6

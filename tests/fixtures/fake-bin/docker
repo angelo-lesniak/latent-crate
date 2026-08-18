@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+case "${1:-}" in
+  info)
+    printf 'fake Docker engine\n'
+    ;;
+  compose)
+    shift
+    if [[ "${1:-}" == version ]]; then
+      printf 'Docker Compose version fake\n'
+    else
+      [[ " $* " != *' ps comfy '* ]] \
+        || { printf 'fake Compose provider: ps does not accept a service argument\n' >&2; exit 1; }
+      for tool_service in node-set node-set-status node-deps-snapshot frontend-fetch frontend-build; do
+        if [[ " $* " == *" build $tool_service "* \
+            || " $* " == *" run "*" $tool_service "* ]]; then
+          [[ " $* " == *' --profile tools '* ]] \
+            || { printf 'fake Compose provider: missing tools profile for %s\n' "$tool_service" >&2; exit 1; }
+        fi
+      done
+      printf 'target=%s mode=%s args=' \
+        "${COMFY_BUILD_TARGET:-unset}" "${COMFY_FRONTEND_MODE:-unset}"
+      printf ' %q' "$@"
+      printf '\n'
+    fi
+    ;;
+  ps)
+    [[ " $* " == *' --quiet '* ]] \
+      || { printf 'fake docker: ps requires --quiet\n' >&2; exit 1; }
+    [[ " $* " == *' --filter label=com.docker.compose.project=latentcrate '* ]] \
+      || { printf 'fake docker: missing Compose project filter\n' >&2; exit 1; }
+    [[ " $* " == *' --filter label=com.docker.compose.service=comfy '* ]] \
+      || { printf 'fake docker: missing Compose service filter\n' >&2; exit 1; }
+    if [[ "${FAKE_DOCKER_COMFY_RUNNING:-false}" == true ]]; then
+      printf 'fake-comfy-container\n'
+    fi
+    ;;
+  *)
+    printf 'fake docker: unsupported invocation: %s\n' "$*" >&2
+    exit 1
+    ;;
+esac

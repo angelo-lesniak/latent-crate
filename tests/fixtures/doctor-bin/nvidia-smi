@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Fake nvidia-smi for tests/doctor.sh, controlled through FAKE_* variables.
+set -uo pipefail
+
+if [[ "${FAKE_NVIDIA_SMI_FAIL:-false}" == true ]]; then
+  exit 1
+fi
+
+driver=${FAKE_DRIVER_VERSION:-580.65.06}
+capability=${FAKE_COMPUTE_CAP:-12.0}
+
+case "$*" in
+  *--query-gpu=name,driver_version,compute_cap*)
+    printf '%s, %s, %s\n' "${FAKE_GPU_NAME:-Fake RTX}" "$driver" "$capability"
+    ;;
+  *--query-gpu=driver_version*)
+    printf '%s\n' "$driver"
+    ;;
+  *--query-gpu=index,uuid,compute_cap*)
+    printf '0, GPU-00000000-0000-0000-0000-00000000fake, %s\n' "$capability"
+    ;;
+  *--query-gpu=compute_cap*)
+    printf '%s\n' "$capability"
+    ;;
+  *)
+    exit 1
+    ;;
+esac

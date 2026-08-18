@@ -1,0 +1,10 @@
+services:
+  comfy:
+    environment:
+      COMFY_FRONTEND_MODE: dist
+      COMFY_FRONTEND_ROOT: /opt/latentcrate-frontend-dist
+    volumes:
+      - type: bind
+        source: "${COMFY_FRONTEND_DIST_DIR:?set COMFY_FRONTEND_DIST_DIR}"
+        target: /opt/latentcrate-frontend-dist
+        read_only: true

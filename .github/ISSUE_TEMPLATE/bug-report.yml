@@ -1,0 +1,56 @@
+name: Bug report
+description: Report a reproducible LatentCrate problem
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Do not include credentials, private model paths, or vulnerability
+        details. Use GitHub private vulnerability reporting for security issues.
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Include the command, expected result, and actual result.
+    validations:
+      required: true
+  - type: input
+    id: profile
+    attributes:
+      label: Version profile and frontend mode
+      placeholder: current, release
+    validations:
+      required: true
+  - type: dropdown
+    id: engine
+    attributes:
+      label: Container engine
+      options:
+        - Docker Compose
+        - Rootless Podman Compose
+        - Other / configuration only
+    validations:
+      required: true
+  - type: textarea
+    id: host
+    attributes:
+      label: Host and GPU details
+      description: Include OS, engine/Compose, NVIDIA driver, GPU, and nvidia-ctk versions when relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Sanitized logs
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I removed credentials and private paths from this report.
+          required: true
+        - label: I ran `bash bin/latentcrate doctor` when the problem involves a Linux container host.
+          required: false

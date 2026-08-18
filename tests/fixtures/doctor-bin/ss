@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Fake ss for tests/doctor.sh; reports a listener only when FAKE_SS_PORT_BUSY=true.
+set -uo pipefail
+
+if [[ "${FAKE_SS_PORT_BUSY:-false}" == true ]]; then
+  printf 'LISTEN 0 128 0.0.0.0:4207 0.0.0.0:*\n'
+fi

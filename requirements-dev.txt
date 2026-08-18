@@ -1,0 +1,9 @@
+# Python dependencies for the contributor test gate (tests/static.sh).
+# PyYAML: tests/check-project.py parses compose.yaml and the CI workflows.
+# packaging: scripts/snapshot-node-deps.py parses requirement specifiers when
+# the tests run it outside the pinned helper container.
+# podman-compose: tests every Compose variant against the supported standalone
+# provider even when the contributor machine has no running Podman engine.
+PyYAML==6.0.3
+packaging==25.0
+podman-compose==1.6.0
