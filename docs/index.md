@@ -13,6 +13,7 @@ every page before using LatentCrate.
 ## Everyday tasks
 
 - [CLI reference](cli.md): every `bin/latentcrate` command and flag.
+- [Model sets](model-sets.md): pinned files for selected official workflows.
 - [Configuration](configuration.md): `.env` settings and version profiles.
 - [Storage layout](storage.md): models, user data, caches, and local nodes.
 - [GPU and container-engine support](gpu-support.md): CDI, CUDA architectures,

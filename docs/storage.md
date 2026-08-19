@@ -77,6 +77,11 @@ machine-specific mount changes local and review them before each project
 update. Linux symlinks are expected under WSL2; Windows junction behavior is
 not part of the supported storage contract.
 
+The model-set downloader applies the same rule and also needs write access to
+its destination. For an external symlink target, add the bind to `model-set`
+and a read-only copy to `model-set-status`, then list the container target in
+`MODEL_SET_EXTRA_WRITE_ROOTS`. See [Model sets](model-sets.md#existing-files-failures-and-storage).
+
 `/data` and `/cache` must be writable by `HOST_UID:HOST_GID`. `/models` must be
 readable and may be mounted read-only through a local Compose change when model
 downloads are not needed.
@@ -123,8 +128,8 @@ and its Compose network. It does not remove:
 
 LatentCrate builds local images named `latentcrate/comfy` (the runtime, one tag
 per profile and variant, for example `current-sage`) and `latentcrate/tools`
-(small helpers with tags such as `current-node-deps`, `current-node-set`, and
-`current-frontend`). List and remove them:
+(small helpers with tags such as `current-node-deps`, `current-node-set`,
+`current-model-set`, and `current-frontend`). List and remove them:
 
 ```bash
 docker image ls 'latentcrate/*'

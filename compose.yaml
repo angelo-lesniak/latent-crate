@@ -36,6 +36,40 @@ x-node-set-mounts:
     type: tmpfs
     target: /tmp
 
+# Model downloads use a dedicated, short-lived helper. The Hugging Face token
+# is piped to its stdin by bin/latentcrate and is never stored in Compose
+# configuration, an image layer, or a container environment variable.
+x-model-set-common: &model-set-common
+  profiles: ["tools"]
+  image: "${LATENTCRATE_TOOLS_IMAGE:-latentcrate/tools}:${LATENTCRATE_TOOLS_TAG:-current}-model-set"
+  build:
+    context: .
+    dockerfile: services/tools/Dockerfile
+    target: model-set-tool
+    args:
+      TOOL_PYTHON_IMAGE: "${TOOL_PYTHON_IMAGE:?select a version profile}"
+      FRONTEND_NODE_IMAGE: "${FRONTEND_NODE_IMAGE:?select a version profile}"
+  read_only: true
+  pids_limit: 128
+  cap_drop: ["ALL"]
+  security_opt:
+    - no-new-privileges:true
+  environment:
+    MODEL_SET_EXTRA_WRITE_ROOTS: "${MODEL_SET_EXTRA_WRITE_ROOTS:-}"
+  volumes:
+    - type: bind
+      source: ./config/model-sets
+      target: /config/model-sets
+      read_only: true
+    - type: bind
+      source: "${COMFY_MODELS_DIR:-./data/models}"
+      target: /models
+    - type: bind
+      source: "${COMFY_CACHE_DIR:-./data/cache}/huggingface"
+      target: /cache
+    - type: tmpfs
+      target: /tmp
+
 services:
   comfy:
     image: "${LATENTCRATE_IMAGE:-latentcrate/comfy}:${LATENTCRATE_TAG:-current-sage}"
@@ -56,7 +90,9 @@ services:
         SAGE_CUDA_ARCH_LIST: "${SAGE_CUDA_ARCH_LIST:?select a version profile}"
         SAGE_BUILD_JOBS: "${SAGE_BUILD_JOBS:?select a version profile}"
         CUSTOM_NODE_CUDA_ARCH_LIST: "${CUSTOM_NODE_CUDA_ARCH_LIST:?select a version profile}"
-        CUSTOM_NODE_CACHE_KEY: "${CUSTOM_NODE_CACHE_KEY:?use bin/latentcrate to prepare build inputs}"
+        # Only ComfyUI image builds use this value. Helper commands and
+        # read-only lifecycle commands render with the inert fallback.
+        CUSTOM_NODE_CACHE_KEY: "${CUSTOM_NODE_CACHE_KEY:-not-used}"
         CUDA_NPP_VERSION: "${CUDA_NPP_VERSION:?select a version profile}"
         TORCHCODEC_VERSION: "${TORCHCODEC_VERSION}"
         TORCHCODEC_INDEX_URL: "${TORCHCODEC_INDEX_URL:?select a version profile}"
@@ -213,6 +249,24 @@ services:
         read_only: true
       - *node-set-allowed-git-hosts-mount
       - *node-set-tmp-mount
+
+  model-set:
+    <<: *model-set-common
+
+  model-set-status:
+    <<: *model-set-common
+    network_mode: none
+    volumes:
+      - type: bind
+        source: ./config/model-sets
+        target: /config/model-sets
+        read_only: true
+      - type: bind
+        source: "${COMFY_MODELS_DIR:-./data/models}"
+        target: /models
+        read_only: true
+      - type: tmpfs
+        target: /tmp
 
   frontend-fetch:
     profiles: ["tools"]

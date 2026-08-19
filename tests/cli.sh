@@ -18,6 +18,8 @@ unset \
   FRONTEND_PNPM_CACHE_DIR \
   FRONTEND_SOURCE_DIR \
   FRONTEND_WORK_DIR \
+  HF_TOKEN \
+  LATENTCRATE_HF_TOKEN_VALUE \
   FAKE_DOCKER_COMFY_RUNNING
 fake_bin="$PROJECT_ROOT/tests/fixtures/fake-bin"
 chmod +x "$fake_bin/docker" "$fake_bin/flock"
@@ -46,6 +48,9 @@ bash bin/latentcrate --help >/dev/null
 bash bin/latentcrate versions >/dev/null
 node_sets=$(bash bin/latentcrate nodes list)
 [[ "$node_sets" == *latent-nodepack* ]]
+model_sets=$(bash bin/latentcrate models list)
+[[ "$model_sets" == *flux2-klein-9b-distilled* ]]
+[[ "$model_sets" == *minimax-h3-r2v* ]]
 
 mkdir -p "$PROJECT_ROOT/data/comfy/custom_nodes"
 node_set_install=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
@@ -65,6 +70,21 @@ status_output=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
 [[ "$status_output" == *' ps'* ]]
 [[ "$status_output" != *' ps comfy'* ]]
 
+status_output=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
+  LATENTCRATE_HF_TOKEN_VALUE=caller-supplied-secret \
+  bash bin/latentcrate status current)
+[[ "$status_output" == *' ps'* ]]
+
+model_status=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
+  bash bin/latentcrate models status --profile edge krea2-t2i-int8)
+[[ "$model_status" == *'build model-set-status'* ]]
+[[ "$model_status" == *'run --rm --no-deps -T model-set-status status krea2-t2i-int8'* ]]
+
+model_fetch=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker HF_TOKEN=secret-fixture \
+  bash bin/latentcrate models fetch flux2-klein-9b-distilled minimax-h3-r2v)
+[[ "$model_fetch" == *'build model-set'* ]]
+[[ "$model_fetch" == *'model-set fetch --token-stdin flux2-klein-9b-distilled minimax-h3-r2v'* ]]
+
 expect_failure 'only valid with up, config, or smoke-gpu' build current --frontend-dist tests/fixtures/frontend-dist
 expect_failure 'only valid with up, config, or smoke-gpu' build current --frontend-source tests/fixtures/frontend-source
 expect_failure 'must use HTTPS' build current --frontend-git git@example.invalid:fork/frontend.git main
@@ -75,6 +95,8 @@ expect_failure 'missing or unreadable' config current --frontend-dist tests/fixt
 expect_failure 'does not exist' config current --frontend-source tests/fixtures/missing-source
 expect_failure 'only valid with up or build' config current --use-saved-node-deps
 expect_failure 'unknown option for up: --refresh-node-deps' up current --refresh-node-deps
+expect_failure 'only valid with up' build current --model-set krea2-t2i-int8
+expect_failure 'all cannot be combined' models status all krea2-t2i-int8
 
 if remote_output=$(COMFY_BIND_ADDRESS=0.0.0.0 \
     bash bin/latentcrate up current --detach 2>&1); then
@@ -136,5 +158,11 @@ local_up=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
   bash bin/latentcrate up current --use-saved-node-deps \
     --frontend-dist tests/fixtures/frontend-dist --detach)
 [[ "$local_up" == *'--force-recreate'* ]]
+
+model_up=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
+  bash bin/latentcrate up current --use-saved-node-deps \
+    --model-set krea2-t2i-int8 --model-set krea2-style-reference-int8 --detach)
+[[ "$model_up" == *'model-set fetch --token-stdin krea2-t2i-int8 krea2-style-reference-int8'* ]]
+[[ "$model_up" == *'up --no-build --force-recreate --detach comfy'* ]]
 
 printf 'LatentCrate CLI parser checks passed.\n'

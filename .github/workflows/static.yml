@@ -34,3 +34,37 @@ jobs:
             docker run --rm --interactive hadolint/hadolint:v2.12.0 \
               hadolint --failure-threshold warning - < "$dockerfile"
           done
+
+      - name: Build and verify the model-set helper
+        run: |
+          set -Eeuo pipefail
+          set -a
+          source versions/current.env
+          set +a
+          docker build \
+            --target model-set-tool \
+            --build-arg "TOOL_PYTHON_IMAGE=${TOOL_PYTHON_IMAGE}" \
+            --build-arg "FRONTEND_NODE_IMAGE=${FRONTEND_NODE_IMAGE}" \
+            --tag latentcrate/model-set-test \
+            --file services/tools/Dockerfile \
+            .
+          mkdir -p build/model-set-ci/models build/model-set-ci/cache
+          model_tool=(
+            --rm
+            --read-only
+            --user "$(id -u):$(id -g)"
+            --cap-drop ALL
+            --security-opt no-new-privileges
+            --tmpfs /tmp:rw,nosuid,nodev,mode=1777
+            --volume "$PWD/tests/fixtures/model-sets:/config/model-sets:ro"
+          )
+          printf '' | docker run --interactive "${model_tool[@]}" \
+            --volume "$PWD/build/model-set-ci/models:/models" \
+            --volume "$PWD/build/model-set-ci/cache:/cache" \
+            latentcrate/model-set-test \
+            fetch --token-stdin hf-smoke
+          docker run "${model_tool[@]}" \
+            --network none \
+            --volume "$PWD/build/model-set-ci/models:/models:ro" \
+            latentcrate/model-set-test \
+            status hf-smoke

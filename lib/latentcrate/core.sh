@@ -18,6 +18,8 @@ is_true() {
 load_local_env() {
   local name
   local -A existing_environment=()
+  [[ ! -L "$PROJECT_ROOT/.env" ]] \
+    || die "refusing symbolic link for local settings: $PROJECT_ROOT/.env"
   while IFS= read -r name; do
     existing_environment["$name"]=${!name}
   done < <(compgen -e)
@@ -210,9 +212,6 @@ compose() {
   local engine=$1
   local profile=$2
   shift 2
-  if [[ -z "${CUSTOM_NODE_CACHE_KEY:-}" ]]; then
-    prepare_custom_node_cache_key "$profile"
-  fi
   local files=(
     --file compose.yaml
     --file "compose.${engine}.yaml"
@@ -265,6 +264,9 @@ init_project() {
   else
     printf 'Keeping existing %s\n' "$PROJECT_ROOT/.env"
   fi
+
+  chmod 0600 "$PROJECT_ROOT/.env" \
+    || die "could not restrict access to $PROJECT_ROOT/.env"
 
   load_local_env
   prepare_host_directories

@@ -80,6 +80,16 @@ bash bin/latentcrate up current --detach
 - For a mutable Git reference or local source tree, change the frontend and
   confirm the next `up` serves the new build.
 
+### Model sets
+
+- Run `models status` for the set before and after `models fetch`.
+- Test an interrupted download and confirm the next fetch resumes and publishes
+  only the verified file.
+- For a gated set, confirm the wrapper accepts `HF_TOKEN` through `.env` without
+  placing it in container inspection output or logs.
+- Open the linked official workflow, select the documented model variant when
+  needed, and run a small result.
+
 ### Storage, permissions, privacy, or container engines
 
 - Create data through ComfyUI and confirm the host UID, GID, and mounted model

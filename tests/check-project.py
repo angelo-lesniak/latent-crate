@@ -61,6 +61,7 @@ CLI_MODULES = (
     "lib/latentcrate/frontend.sh",
     "lib/latentcrate/node-deps.sh",
     "lib/latentcrate/nodes.sh",
+    "lib/latentcrate/models.sh",
     "lib/latentcrate/runtime.sh",
 )
 MARKDOWN_LINK_RE = re.compile(r"\[[^\]]*\]\((?P<target>[^)]+)\)")
@@ -168,6 +169,7 @@ def read_cli_sources() -> str:
         "prepare_frontend_mode()",
         "snapshot_node_dependencies()",
         "run_node_set()",
+        "run_model_sets()",
         "run_gpu_smoke()",
     ):
         if implementation in entrypoint:
@@ -661,12 +663,21 @@ def check_tools_image_targets() -> None:
         fail("third-party node dependency snapshots must have a containerized tool target (node-deps-tool)")
     if "node-set-tool" not in tools_dockerfile:
         fail("custom-node sets must use their containerized installer (node-set-tool)")
+    if "model-set-tool" not in tools_dockerfile:
+        fail("model sets must use their containerized downloader (model-set-tool)")
+    if not (ROOT / "scripts" / "verify-model-set-metadata.py").is_file():
+        fail("model-set maintainers need the remote metadata verifier")
 
     compose = compose_document()
     for service_name in ("frontend-fetch", "frontend-build"):
         work_mount = find_mount(compose_service(compose, service_name), "/work")
         if work_mount is None or work_mount.get("type") != "bind" or not work_mount.get("source"):
             fail(f"{service_name} must use an explicit host-cache work mount for podman-compose")
+    static_workflow = load_yaml(".github/workflows/static.yml")
+    workflow_text = "\n".join(walk_strings(static_workflow))
+    for model_tool_contract in ("--target model-set-tool", "fetch --token-stdin hf-smoke", "status hf-smoke"):
+        if model_tool_contract not in workflow_text:
+            fail(f"static CI must build and run the model-set helper: {model_tool_contract}")
 
 
 def check_node_deps_snapshot_service() -> None:
@@ -720,6 +731,84 @@ def check_node_set_services_hardened() -> None:
         fail("node-set status must inspect /nodes read-only; status must never modify installed nodes")
 
 
+def check_model_set_services_hardened() -> None:
+    """Model fetching must use a hardened networked helper, while status is
+    offline and read-only. Tokens must not be part of Compose configuration."""
+    compose = compose_document()
+    fetch = compose_service(compose, "model-set")
+    status = compose_service(compose, "model-set-status")
+    require_service_hardening("model-set", fetch)
+    require_service_hardening("model-set-status", status, network_none=True)
+    for name, service in (("model-set", fetch), ("model-set-status", status)):
+        manifests = find_mount(service, "/config/model-sets")
+        if manifests is None or manifests.get("read_only") is not True:
+            fail(f"service {name} must receive model-set manifests read-only")
+        models = find_mount(service, "/models")
+        if models is None:
+            fail(f"service {name} must mount the shared models directory")
+    if find_mount(fetch, "/models").get("read_only") is True:
+        fail("model-set fetch needs a writable /models mount")
+    fetch_cache = find_mount(fetch, "/cache")
+    if fetch_cache is None or not str(fetch_cache.get("source", "")).endswith("/huggingface"):
+        fail("model-set fetch must receive only the Hugging Face sub-cache")
+    if find_mount(status, "/models").get("read_only") is not True:
+        fail("model-set status must inspect /models read-only")
+    if find_mount(status, "/cache") is not None:
+        fail("model-set status must not receive the download cache")
+    if "HF_TOKEN" in read_text("compose.yaml"):
+        fail("HF_TOKEN must be piped to the download helper, never placed in Compose configuration")
+    docker_services = load_yaml("compose.docker.yaml").get("services", {})
+    podman_services = load_yaml("compose.podman.yaml").get("services", {})
+    for name in ("model-set", "model-set-status"):
+        if "${HOST_MODEL_GID:-1000}" not in docker_services.get(name, {}).get("group_add", []):
+            fail(f"Docker service {name} must receive the model-storage group")
+        if "keep-groups" not in podman_services.get(name, {}).get("group_add", []):
+            fail(f"Podman service {name} must preserve supplementary model-storage groups")
+
+
+def check_model_set_manifests_pinned() -> None:
+    """Every shipped model file and workflow reference must be immutable and
+    carry enough metadata for size and SHA-256 verification."""
+    manifest_paths = sorted((ROOT / "config" / "model-sets").glob("*.toml"))
+    if not manifest_paths:
+        fail("at least one model-set manifest is required")
+    for path in manifest_paths:
+        document = tomllib.loads(path.read_text(encoding="utf-8"))
+        workflows = document.get("workflow_urls")
+        if not isinstance(workflows, list) or not workflows:
+            fail(f"model-set has no workflow links: {path.relative_to(ROOT)}")
+        for workflow in workflows:
+            if not re.fullmatch(
+                r"https://github\.com/Comfy-Org/workflow_templates/blob/"
+                r"[0-9a-f]{40}/templates/[A-Za-z0-9_.-]+\.json",
+                str(workflow),
+            ):
+                fail(f"model-set workflow URL is not commit-pinned: {path.relative_to(ROOT)}")
+        licenses = document.get("license")
+        if not isinstance(licenses, list) or not licenses:
+            fail(f"model-set has no license references: {path.relative_to(ROOT)}")
+        for license_entry in licenses:
+            license_url = str(license_entry.get("url", ""))
+            if not re.fullmatch(
+                r"(?:https://huggingface\.co/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/blob/[0-9a-f]{40}/\S+"
+                r"|https://cdn\.jsdelivr\.net/gh/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+@[0-9a-f]{40}/\S+)",
+                license_url,
+            ):
+                fail(f"model-set license URL is not immutable: {path.relative_to(ROOT)}")
+        files = document.get("file")
+        if not isinstance(files, list) or not files:
+            fail(f"model-set has no files: {path.relative_to(ROOT)}")
+        for entry in files:
+            if "gated" in entry:
+                fail(f"model-set file carries obsolete gated metadata: {path.relative_to(ROOT)}")
+            if not re.fullmatch(r"[0-9a-f]{40}", str(entry.get("revision", ""))):
+                fail(f"model file revision is not a full commit: {path.relative_to(ROOT)}")
+            if not re.fullmatch(r"[0-9a-f]{64}", str(entry.get("sha256", ""))):
+                fail(f"model file SHA-256 is invalid: {path.relative_to(ROOT)}")
+            if not isinstance(entry.get("size"), int) or entry["size"] <= 0:
+                fail(f"model file size is invalid: {path.relative_to(ROOT)}")
+
+
 def check_node_manager_git_guards() -> None:
     """Custom-node Git inspection must neutralize repository-controlled Git
     behavior (fsmonitor, hooks, optional locks)."""
@@ -753,6 +842,7 @@ def check_cli_node_workflows() -> None:
     host Python), the node-set workflows must exist, and removed
     dependency-refresh controls must not resurface."""
     cli = read_cli_sources()
+    compose_text = read_text("compose.yaml")
     env_example = read_text(".env.example")
     snapshot_function = cli.split("snapshot_node_dependencies()", 1)[1].split(
         "clear_node_dependencies()", 1
@@ -763,10 +853,14 @@ def check_cli_node_workflows() -> None:
         fail("custom-node snapshots must run through the node-deps-snapshot helper container")
     if 'compose_tool()' not in cli or 'compose "$engine" "$profile" --profile tools "$@"' not in cli:
         fail("containerized helper services must explicitly enable the tools Compose profile")
+    if "${CUSTOM_NODE_CACHE_KEY:-not-used}" not in compose_text:
+        fail("helper commands must render without preparing a custom-node cache key")
     tool_services = (
         "node-deps-snapshot",
         "node-set",
         "node-set-status",
+        "model-set",
+        "model-set-status",
         "frontend-fetch",
         "frontend-build",
     )
@@ -780,6 +874,9 @@ def check_cli_node_workflows() -> None:
         "nodes sync",
         "nodes status",
         "--use-saved-node-deps",
+        "models fetch",
+        "models status",
+        "--model-set",
     ):
         if node_contract not in cli:
             fail(f"custom-node CLI workflow is missing: {node_contract}")
@@ -981,6 +1078,8 @@ CHECKS = (
     check_tools_image_targets,
     check_node_deps_snapshot_service,
     check_node_set_services_hardened,
+    check_model_set_services_hardened,
+    check_model_set_manifests_pinned,
     check_node_manager_git_guards,
     check_cli_engine_and_remote_guard,
     check_cli_node_workflows,

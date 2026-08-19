@@ -176,4 +176,5 @@ bash bin/latentcrate down current         # Stop and remove the container
 
 For MiniMax H3, continue with the [SageAttention guide](sageattention.md). For
 Manager or private nodes, continue with the
-[third-party node guide](third-party-nodes.md).
+[third-party node guide](third-party-nodes.md). To fetch the pinned files for a
+ready workflow, see [Model sets](model-sets.md).

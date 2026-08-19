@@ -22,6 +22,10 @@ isolated helper containers and publish only its compiled assets. Container
 isolation does not change the licenses or trust requirements of that source and
 its dependencies.
 
+Model-set manifests refer to model weights under their upstream licenses.
+Those weights are downloaded to user-controlled storage and are not distributed
+under LatentCrate's MIT license. Users must review and accept each model license.
+
 Authoritative upstream projects include:
 
 - <https://github.com/Comfy-Org/ComfyUI>

@@ -16,7 +16,7 @@ unset \
   FRONTEND_GIT_REQUESTED_REF \
   FRONTEND_GIT_URL
 
-export CUSTOM_NODE_CACHE_KEY=podman-compose-fixture
+unset CUSTOM_NODE_CACHE_KEY
 export NODE_SET_FILE="$PROJECT_ROOT/config/custom-nodes/sets/latent-nodepack.toml"
 export NODE_SET_TARGET_DIR="$PROJECT_ROOT/data/comfy/custom_nodes"
 export NODE_DEPS_SOURCE_DIR="$PROJECT_ROOT/data/comfy/custom_nodes"
@@ -60,7 +60,8 @@ podman_compose_tool_dry_run() {
 
 for profile in current edge; do
   podman-compose "${compose_files[@]}" \
-    --env-file "versions/${profile}.env" config >/dev/null
+    --env-file "versions/${profile}.env" \
+    --podman-path "$fake_engine" config >/dev/null
 done
 
 COMFY_FRONTEND_MODE=git \
@@ -69,21 +70,26 @@ FRONTEND_GIT_URL=https://github.com/Comfy-Org/ComfyUI_frontend.git \
 FRONTEND_GIT_REF=0000000000000000000000000000000000000000 \
 FRONTEND_GIT_REQUESTED_REF=fixture \
   podman-compose "${compose_files[@]}" \
-    --env-file versions/edge.env config >/dev/null
+    --env-file versions/edge.env \
+    --podman-path "$fake_engine" config >/dev/null
 
 COMFY_FRONTEND_MODE=dist \
 COMFY_FRONTEND_DIST_DIR="$PROJECT_ROOT/tests/fixtures/frontend-dist" \
   podman-compose "${compose_files[@]}" \
     --file compose.frontend-dist.yaml \
-    --env-file versions/current.env config >/dev/null
+    --env-file versions/current.env \
+    --podman-path "$fake_engine" config >/dev/null
 
 tool_services=$(podman-compose "${compose_files[@]}" \
-  --env-file versions/edge.env --profile tools config --services)
+  --env-file versions/edge.env --profile tools \
+  --podman-path "$fake_engine" config --services)
 for service in \
   comfy \
   node-deps-snapshot \
   node-set \
   node-set-status \
+  model-set \
+  model-set-status \
   frontend-fetch \
   frontend-build; do
   grep -Fxq "$service" <<< "$tool_services" \
@@ -97,6 +103,8 @@ for service in \
   node-deps-snapshot \
   node-set \
   node-set-status \
+  model-set \
+  model-set-status \
   frontend-fetch \
   frontend-build; do
   podman_compose_tool_dry_run build "$service"
@@ -112,6 +120,9 @@ for service in \
   frontend-fetch \
   frontend-build; do
   podman_compose_tool_dry_run run --rm --no-deps "$service"
+done
+for service in model-set model-set-status; do
+  podman_compose_tool_dry_run run --rm --no-deps -T "$service" status all
 done
 
 podman_compose_dry_run build comfy

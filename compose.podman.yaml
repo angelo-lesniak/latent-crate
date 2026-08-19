@@ -13,6 +13,16 @@ services:
   node-set-status:
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     userns_mode: "keep-id:uid=${HOST_UID:-1000},gid=${HOST_GID:-1000}"
+  model-set:
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    userns_mode: "keep-id:uid=${HOST_UID:-1000},gid=${HOST_GID:-1000}"
+    group_add:
+      - keep-groups
+  model-set-status:
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    userns_mode: "keep-id:uid=${HOST_UID:-1000},gid=${HOST_GID:-1000}"
+    group_add:
+      - keep-groups
   frontend-fetch:
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     userns_mode: "keep-id:uid=${HOST_UID:-1000},gid=${HOST_GID:-1000}"

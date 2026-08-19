@@ -119,7 +119,6 @@ configure_variant() {
     || die 'invalid frontend/Sage image combination'
   export COMFY_BUILD_TARGET=$target
   export LATENTCRATE_TAG=$tag
-  prepare_custom_node_cache_key "$profile"
   SAGE=$sage
 }
 
