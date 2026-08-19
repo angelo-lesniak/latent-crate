@@ -11,10 +11,12 @@ string.
 
 from __future__ import annotations
 
+import ast
 import re
 import sys
 import tomllib
 from pathlib import Path
+from urllib.parse import urlsplit
 
 try:
     import yaml
@@ -527,9 +529,36 @@ def check_release_frontend_installer() -> None:
     never depend on the anonymous GitHub API."""
     dockerfile = read_text("services/comfy/Dockerfile")
     release_installer_text = read_text("services/comfy/install-release-frontend.py")
-    if "releases/" not in release_installer_text or "dist.zip" not in release_installer_text:
+    release_installer_tree = ast.parse(
+        release_installer_text,
+        filename="services/comfy/install-release-frontend.py",
+    )
+    top_level_strings = {
+        target.id: statement.value.value
+        for statement in release_installer_tree.body
+        if isinstance(statement, ast.Assign)
+        and isinstance(statement.value, ast.Constant)
+        and isinstance(statement.value.value, str)
+        for target in statement.targets
+        if isinstance(target, ast.Name)
+    }
+    expected_template = (
+        "https://github.com/{owner}/{repo}/releases/download/{tag}/dist.zip"
+    )
+    if top_level_strings.get("RELEASE_ASSET_URL_TEMPLATE") != expected_template:
         fail("release frontends must use the exact release asset URL")
-    if "api.github.com" in release_installer_text or "FrontendManager.init_frontend_unsafe" in dockerfile:
+
+    referenced_hosts = {
+        parsed.hostname
+        for node in ast.walk(release_installer_tree)
+        if isinstance(node, ast.Constant)
+        and isinstance(node.value, str)
+        for parsed in (urlsplit(node.value),)
+        if parsed.hostname is not None
+    }
+    if "api.github.com" in referenced_hosts:
+        fail("release frontend builds must not depend on the anonymous GitHub API")
+    if "FrontendManager.init_frontend_unsafe" in dockerfile:
         fail("release frontend builds must not depend on the anonymous GitHub API")
 
 
