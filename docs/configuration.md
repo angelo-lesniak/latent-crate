@@ -60,15 +60,8 @@ format for Podman builds because the Dockerfile relies on Bash `SHELL` metadata.
 
 ## SageAttention
 
-`LATENTCRATE_SAGE` selects one of three modes:
-
-| Mode | Effect |
-| --- | --- |
-| `off` | Smaller image without SageAttention |
-| `available` | Sage-capable image; workflows opt in (the default) |
-| `global` | Sage-capable image; ComfyUI applies Sage globally (`--use-sage-attention`) |
-
-The `--sage <mode>` flag overrides the setting for one command; see
+`LATENTCRATE_SAGE` (default `available`) selects one of three Sage modes; the
+modes and the per-command `--sage <mode>` override are defined in
 [shared variant flags](cli.md#shared-variant-flags).
 
 The default gives workflows access to SageAttention without forcing global

@@ -60,6 +60,9 @@ General rules:
 One mode drives both the image variant and the runtime behavior, so an
 impossible combination cannot be selected, and `doctor`, `up`, `build`,
 `config`, and `smoke-gpu` always resolve the same variant for the same mode.
+`doctor` performs the same checks for `available` and `global`. Use `global`
+only after representative workflows pass with global Sage; see
+[SageAttention](sageattention.md).
 
 ## Frontend flags
 
@@ -328,7 +331,9 @@ bin/latentcrate templates create-model-set <template> [profile] [--name name]
 Both subcommands first build the selected image when it is not built yet. A
 first build has the full time, download, and disk cost stated in the README
 (up to several hours and about 75 GB of build space) and needs network access;
-only the inspection itself runs offline.
+only the inspection itself runs offline. The `templates` commands take no
+`--sage` flag; they follow `LATENTCRATE_SAGE` from `.env` so they inspect the
+image variant you normally run.
 
 `list` reads the official workflow-template package installed in the selected
 ComfyUI image and shows templates marked as open source and suitable for local

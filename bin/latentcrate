@@ -37,13 +37,13 @@ Usage:
       Create .env and the host data directories; optionally install a node set.
   bin/latentcrate doctor [profile] [--allow-no-gpu] [--sage mode]
       Check the host (engine, GPU, directories, ports) before building.
-  bin/latentcrate up [profile] [--sage mode] [--detach] [--use-saved-node-deps] [--model-set name] [frontend option]
+  bin/latentcrate up [profile] [--sage mode] [--detach] [--use-saved-node-deps] [--model-set name] [frontend flag]
       Build the image if needed and start ComfyUI.
-  bin/latentcrate build [profile] [--sage mode] [--use-saved-node-deps] [frontend option]
+  bin/latentcrate build [profile] [--sage mode] [--use-saved-node-deps] [frontend flag]
       Build the image without starting ComfyUI.
   bin/latentcrate down [profile]
       Stop and remove the ComfyUI container.
-  bin/latentcrate config [profile] [--sage mode] [frontend option]
+  bin/latentcrate config [profile] [--sage mode] [frontend flag]
       Print the resolved Compose configuration.
   bin/latentcrate status [profile]
       Show the ComfyUI container status.
@@ -53,7 +53,7 @@ Usage:
       Follow the ComfyUI container logs.
   bin/latentcrate shell [profile]
       Open a bash shell in the running container.
-  bin/latentcrate smoke-gpu [profile] [--sage mode] [frontend option]
+  bin/latentcrate smoke-gpu [profile] [--sage mode] [frontend flag]
       Run the GPU verification suite in the running container and save a report.
   bin/latentcrate node-deps snapshot [profile]
       Capture custom-node Python dependencies for the next image build.
@@ -80,7 +80,7 @@ Usage:
   bin/latentcrate versions
       Show the pinned components for each version profile.
 
-Frontend options:
+Frontend flags:
   --frontend-release
   --frontend-git <https-url> <commit-branch-tag-or-pr-reference>
   --frontend-source <absolute-or-relative-source-directory>  (up/config/smoke-gpu)
@@ -149,12 +149,12 @@ parse_variant_options() {
         shift
         ;;
       --frontend-release)
-        [[ "$frontend_seen" == false ]] || die 'only one frontend option may be supplied'
+        [[ "$frontend_seen" == false ]] || die 'only one frontend flag may be supplied'
         frontend_seen=true
         export COMFY_FRONTEND_MODE=release
         ;;
       --frontend-git)
-        [[ "$frontend_seen" == false ]] || die 'only one frontend option may be supplied'
+        [[ "$frontend_seen" == false ]] || die 'only one frontend flag may be supplied'
         (($# >= 3)) \
           || die '--frontend-git requires a repository URL and a commit, branch, tag, or pull-request reference'
         frontend_seen=true
@@ -167,7 +167,7 @@ parse_variant_options() {
       --frontend-source)
         [[ "$command" == up || "$command" == config || "$command" == smoke-gpu ]] \
           || die '--frontend-source is only valid with up, config, or smoke-gpu'
-        [[ "$frontend_seen" == false ]] || die 'only one frontend option may be supplied'
+        [[ "$frontend_seen" == false ]] || die 'only one frontend flag may be supplied'
         (($# >= 2)) || die '--frontend-source requires a directory'
         frontend_seen=true
         export COMFY_FRONTEND_MODE=source
@@ -177,7 +177,7 @@ parse_variant_options() {
       --frontend-dist)
         [[ "$command" == up || "$command" == config || "$command" == smoke-gpu ]] \
           || die '--frontend-dist is only valid with up, config, or smoke-gpu'
-        [[ "$frontend_seen" == false ]] || die 'only one frontend option may be supplied'
+        [[ "$frontend_seen" == false ]] || die 'only one frontend flag may be supplied'
         (($# >= 2)) || die '--frontend-dist requires a directory'
         frontend_seen=true
         export COMFY_FRONTEND_MODE=dist

@@ -604,6 +604,19 @@ def check_entrypoint_privacy() -> None:
             fail(f"runtime privacy contract is missing: {privacy_contract}")
 
 
+def check_entrypoint_sage_contract() -> None:
+    """The global Sage mode must map to ComfyUI's --use-sage-attention and
+    stay guarded by the Sage-capable image marker."""
+    entrypoint = read_text("services/comfy/entrypoint.sh")
+    for sage_contract in (
+        "LATENTCRATE_SAGE_MODE:-available",
+        "args+=(--use-sage-attention)",
+        "LATENTCRATE_SAGE_ENABLED:-0",
+    ):
+        if sage_contract not in entrypoint:
+            fail(f"runtime Sage contract is missing: {sage_contract}")
+
+
 def check_comfy_service_hardened() -> None:
     """The ComfyUI runtime container must be contained (read-only root, no
     capabilities, no privilege escalation, PID limit, bounded tmpfs), mount
@@ -626,9 +639,10 @@ def check_comfy_service_hardened() -> None:
     for variable, expected in (
         ("COMFY_DISABLE_API_NODES", "${COMFY_DISABLE_API_NODES:-false}"),
         ("COMFY_DISABLE_METADATA", "${COMFY_DISABLE_METADATA:-false}"),
+        ("LATENTCRATE_SAGE_MODE", "${LATENTCRATE_SAGE_MODE:-available}"),
     ):
         if environment.get(variable) != expected:
-            fail(f"ComfyUI privacy environment must pass {variable} through with default {expected}")
+            fail(f"ComfyUI environment must pass {variable} through with default {expected}")
 
 
 def check_env_example_defaults() -> None:
@@ -1098,6 +1112,7 @@ CHECKS = (
     check_release_frontend_installer,
     check_manager_defaults,
     check_entrypoint_privacy,
+    check_entrypoint_sage_contract,
     check_comfy_service_hardened,
     check_env_example_defaults,
     check_excluded_default_features,

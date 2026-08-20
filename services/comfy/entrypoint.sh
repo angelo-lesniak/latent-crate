@@ -228,21 +228,24 @@ if is_true "${COMFY_ENABLE_MANAGER:-true}"; then
   args+=(--enable-manager)
 fi
 
-case "${LATENTCRATE_SAGE_MODE:-available}" in
-  off|available) ;;
-  global)
-    if [[ "${LATENTCRATE_SAGE_ENABLED:-0}" != 1 ]]; then
-      printf 'LatentCrate: LATENTCRATE_SAGE=global requires the runtime-sage image target.\n' >&2
+append_sage_args() {
+  case "${LATENTCRATE_SAGE_MODE:-available}" in
+    off|available) ;;
+    global)
+      if [[ "${LATENTCRATE_SAGE_ENABLED:-0}" != 1 ]]; then
+        printf 'LatentCrate: LATENTCRATE_SAGE=global requires the runtime-sage image target.\n' >&2
+        exit 1
+      fi
+      args+=(--use-sage-attention)
+      ;;
+    *)
+      printf 'LatentCrate: LATENTCRATE_SAGE_MODE must be off, available, or global, not: %s\n' \
+        "${LATENTCRATE_SAGE_MODE}" >&2
       exit 1
-    fi
-    args+=(--use-sage-attention)
-    ;;
-  *)
-    printf 'LatentCrate: LATENTCRATE_SAGE_MODE must be off, available, or global, not: %s\n' \
-      "${LATENTCRATE_SAGE_MODE}" >&2
-    exit 1
-    ;;
-esac
+      ;;
+  esac
+}
+append_sage_args
 
 if is_true "${COMFY_DISABLE_API_NODES:-false}"; then
   args+=(--disable-api-nodes)

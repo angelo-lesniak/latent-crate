@@ -133,11 +133,11 @@ remote_output=$(PATH="$fake_bin:$PATH" \
 
 release_config=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
   bash bin/latentcrate config current --frontend-release)
-[[ "$release_config" == *'target=runtime-sage mode=release'* ]]
+[[ "$release_config" == *'target=runtime-sage mode=release sage=available'* ]]
 
 release_no_sage_config=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
   bash bin/latentcrate config current --sage off --frontend-release)
-[[ "$release_no_sage_config" == *'target=runtime mode=release'* ]]
+[[ "$release_no_sage_config" == *'target=runtime mode=release sage=off'* ]]
 
 if removed_no_sage_output=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
     bash bin/latentcrate config current --no-sage --frontend-release 2>&1); then
@@ -152,7 +152,18 @@ release_env_no_sage_config=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
 
 release_global_config=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
   bash bin/latentcrate config current --sage global --frontend-release)
-[[ "$release_global_config" == *'target=runtime-sage mode=release'* ]]
+[[ "$release_global_config" == *'target=runtime-sage mode=release sage=global'* ]]
+
+release_global_env_config=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
+  LATENTCRATE_SAGE=global bash bin/latentcrate config current --frontend-release)
+[[ "$release_global_env_config" == *'target=runtime-sage mode=release sage=global'* ]]
+
+if trailing_sage_output=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
+    bash bin/latentcrate config current --frontend-release --sage 2>&1); then
+  printf 'cli test: trailing --sage without a mode unexpectedly succeeded\n' >&2
+  exit 1
+fi
+[[ "$trailing_sage_output" == *'--sage requires a mode: off, available, or global'* ]]
 
 if invalid_sage_output=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
     LATENTCRATE_SAGE=maybe bash bin/latentcrate config current --frontend-release 2>&1); then

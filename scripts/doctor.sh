@@ -123,7 +123,7 @@ architecture_list_contains() {
 
 printf '== LatentCrate host doctor ==\n'
 if [[ "$sage_enabled" == true ]]; then
-  ok 'checking the default SageAttention-capable image'
+  ok 'checking the SageAttention-capable image'
 else
   ok 'checking the smaller image without SageAttention'
 fi
