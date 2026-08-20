@@ -74,8 +74,8 @@ read every parent directory and file.
 LatentCrate does not discover or mount symlink targets automatically. A model
 tree must not be able to expose arbitrary host paths to the container. Keep
 machine-specific mount changes local and review them before each project
-update. Linux symlinks are expected under WSL2; Windows junction behavior is
-not part of the supported storage contract.
+update. Use Linux symlinks under WSL2; Windows junction behavior is not part
+of the supported storage contract.
 
 The model-set downloader applies the same rule and also needs write access to
 its destination. For an external symlink target, add the bind to `model-set`
@@ -91,8 +91,9 @@ duplicate node names are rejected.
 
 Docker can add `HOST_MODEL_GID` for model trees shared through a supplementary
 group. Rootless Podman uses `keep-groups` with `crun` to preserve the invoking
-user's supplementary groups. `doctor` checks root permissions, but the Arch
-validation guide also verifies access from inside the real container.
+user's supplementary groups. `doctor` checks the permissions of the storage
+root directories, but the Arch validation guide also verifies access from
+inside the real container.
 
 LatentCrate does not ship an SELinux-specific Compose overlay. Users on an
 SELinux-enforcing host may need to supply appropriate bind-mount relabeling or
@@ -129,7 +130,9 @@ and its Compose network. It does not remove:
 LatentCrate builds local images named `latentcrate/comfy` (the runtime, one tag
 per profile and variant, for example `current-sage`) and `latentcrate/tools`
 (small helpers with tags such as `current-node-deps`, `current-node-set`,
-`current-model-set`, and `current-frontend`). List and remove them:
+`current-model-set`, and `current-frontend`). The full tag scheme is described
+in [image names and tags](configuration.md#advanced-image-names-and-tags).
+List and remove the images:
 
 ```bash
 docker image ls 'latentcrate/*'
@@ -150,7 +153,8 @@ The build cache is separate from the images and can be large:
 docker builder prune
 ```
 
-Recent Podman versions provide the same command as `podman builder prune`.
+If your Podman version provides the `builder` subcommand (check
+`podman builder --help`), use the same command as `podman builder prune`.
 `podman system prune` also removes the build cache, but it removes all other
 unused containers, images, and networks as well, so read its prompt carefully.
 After a prune, the next build is a slow full rebuild.

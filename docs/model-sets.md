@@ -13,6 +13,10 @@ List the available sets:
 bash bin/latentcrate models list
 ```
 
+Download sizes are listed under [Included sets](#included-sets). The FLUX.2
+Klein sets are gated and need `HF_TOKEN`; see
+[Hugging Face access and licenses](#hugging-face-access-and-licenses).
+
 Download one or several sets:
 
 ```bash
@@ -28,8 +32,8 @@ bash bin/latentcrate up current \
   --detach
 ```
 
-`--model-set` is repeatable. Downloads finish before the image build and
-startup begin. Normal `up` does not download models unless you add this flag.
+See the [`up` command](cli.md#up) in the CLI reference for the exact
+`--model-set` flag behavior.
 
 It is also safe to run `models fetch` while ComfyUI is open. Refresh the browser
 tab after the command finishes. To verify files already on disk:
@@ -40,8 +44,8 @@ bash bin/latentcrate models status all
 ```
 
 The status container runs with networking disabled. Its helper image may still
-need to be built on first use. Checksum verification of large files can take a
-little time.
+need to be built on first use. Checksum verification of large files can take
+several minutes, depending on disk speed.
 
 ## Included sets
 
@@ -73,7 +77,8 @@ runs.
 Krea-2 uses the INT8 ConvRot model here. The BF16 model stack is about 31.8 GB
 before runtime and activation memory, so it is not offered as a reliable 32 GB
 RTX 5090 setup. In the official Krea-2 text-to-image workflow, select
-`krea2_turbo_int8_convrot.safetensors` in the model loader after opening it.
+`krea2_turbo_int8_convrot.safetensors` in the model loader after opening the
+workflow.
 
 The MiniMax H3 workflows also need KJNodes and SageAttention. The default image
 has SageAttention, and `latent-nodepack` includes the pinned KJNodes source.
@@ -123,12 +128,10 @@ matching hidden staging directory to reclaim its space; a later fetch starts
 that file again.
 
 The destination is `COMFY_MODELS_DIR`. If a model-category symlink points
-outside that mount, the downloader rejects it by default. Follow the manual
-mount guidance in [Storage layout](storage.md#model-symlinks-and-multiple-storage-devices),
-add the same writable bind to the `model-set` helper, add a read-only bind to
-`model-set-status`, and allow the container path with
-`MODEL_SET_EXTRA_WRITE_ROOTS`. LatentCrate never discovers host symlink targets
-or mounts them automatically.
+outside that mount, the downloader rejects it by default; follow the
+helper-mount procedure in
+[Storage layout](storage.md#model-symlinks-and-multiple-storage-devices).
+LatentCrate never discovers host symlink targets or mounts them automatically.
 
 Manifests live under `config/model-sets/`. They are data, not executable code,
 and accept Hugging Face files only in this first version.

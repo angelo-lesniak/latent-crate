@@ -123,7 +123,7 @@ architecture_list_contains() {
 
 printf '== LatentCrate host doctor ==\n'
 if [[ "$sage_enabled" == true ]]; then
-  ok 'checking the default SageAttention-capable image'
+  ok 'checking the SageAttention-capable image'
 else
   ok 'checking the smaller image without SageAttention'
 fi
@@ -251,7 +251,7 @@ if command -v nvidia-smi >/dev/null 2>&1; then
       if architecture_list_contains "$sage_architectures" "$capability"; then
         ok "SageAttention CUDA architecture list covers compute capability $capability"
       elif [[ "$sage_enabled" == true ]]; then
-        gpu_problem "SAGE_CUDA_ARCH_LIST=$sage_architectures does not cover compute capability $capability; set both architecture lists for this GPU or opt out with LATENTCRATE_SAGE=false"
+        gpu_problem "SAGE_CUDA_ARCH_LIST=$sage_architectures does not cover compute capability $capability; set both architecture lists for this GPU or opt out with LATENTCRATE_SAGE=off"
       else
         warn "SAGE_CUDA_ARCH_LIST=$sage_architectures does not cover compute capability $capability; the Sage image is disabled"
       fi

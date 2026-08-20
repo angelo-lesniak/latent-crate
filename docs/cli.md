@@ -14,8 +14,8 @@ General rules:
   `COMFY_PORT=4210 bash bin/latentcrate up current --detach`.
 - `CONTAINER_ENGINE=docker` or `CONTAINER_ENGINE=podman` overrides engine
   detection. Podman must be rootless and use `crun`.
-- `LATENTCRATE_SAGE` (default `true`) selects the Sage-capable image. The
-  command-line flags `--sage` and `--no-sage` override it for one command.
+- `LATENTCRATE_SAGE` (default `available`) selects the Sage mode. The
+  command-line flag `--sage <mode>` overrides it for one command.
 
 ## Command summary
 
@@ -48,12 +48,21 @@ General rules:
 
 ## Shared variant flags
 
-`doctor`, `up`, `build`, `config`, and `smoke-gpu` accept:
+`doctor`, `up`, `build`, `config`, and `smoke-gpu` accept
+`--sage <off|available|global>`:
 
-| Flag | Meaning |
+| Mode | Effect |
 | --- | --- |
-| `--sage` | Use the SageAttention-capable image (the default) |
-| `--no-sage` | Use the smaller image without SageAttention |
+| `off` | Smaller image without SageAttention |
+| `available` | Sage-capable image; workflows opt in (the default) |
+| `global` | Sage-capable image; ComfyUI applies Sage globally (`--use-sage-attention`) |
+
+One mode drives both the image variant and the runtime behavior, so an
+impossible combination cannot be selected, and `doctor`, `up`, `build`,
+`config`, and `smoke-gpu` always resolve the same variant for the same mode.
+`doctor` performs the same checks for `available` and `global`. Use `global`
+only after representative workflows pass with global Sage; see
+[SageAttention](sageattention.md).
 
 ## Frontend flags
 
@@ -77,8 +86,9 @@ bin/latentcrate init [--node-set name] [profile]
 
 Creates `.env` from `.env.example` when `.env` does not exist, fills in
 `HOST_UID`, `HOST_GID`, and `HOST_MODEL_GID` from the current user, and creates
-the host storage directories. An existing `.env` is kept unchanged, so `init`
-is safe to re-run.
+the host storage directories. An existing `.env` keeps its content, but every
+run re-applies mode `0600`, so re-running `init` is the supported way to fix
+`.env` permissions.
 
 | Flag | Meaning |
 | --- | --- |
@@ -92,12 +102,14 @@ bash bin/latentcrate init --node-set latent-nodepack current
 ## doctor
 
 ```text
-bin/latentcrate doctor [profile] [--allow-no-gpu] [--sage|--no-sage]
+bin/latentcrate doctor [profile] [--allow-no-gpu] [--sage mode]
 ```
 
 Checks the host: engine and Compose availability, GPU and driver, CDI devices,
-and whether the profile's CUDA architecture lists cover the detected compute
-capability. Fix every `[fail]` line before building.
+whether the profile's CUDA architecture lists cover the detected compute
+capability, about 75 GB of free engine storage, the existence and permissions
+of the host storage directories, and whether `COMFY_PORT` is already in use.
+Fix every `[fail]` line before building.
 
 | Flag | Meaning |
 | --- | --- |
@@ -105,13 +117,13 @@ capability. Fix every `[fail]` line before building.
 
 ```bash
 bash bin/latentcrate doctor current
-bash bin/latentcrate doctor my-gpu --no-sage
+bash bin/latentcrate doctor my-gpu --sage off
 ```
 
 ## up
 
 ```text
-bin/latentcrate up [profile] [--sage|--no-sage] [--detach] [--use-saved-node-deps] [--model-set name] [frontend flag]
+bin/latentcrate up [profile] [--sage mode] [--detach] [--use-saved-node-deps] [--model-set name] [frontend flag]
 ```
 
 Captures the current third-party node requirements, builds the image, and starts
@@ -133,7 +145,7 @@ bash bin/latentcrate up edge --frontend-source /path/to/ComfyUI_frontend --detac
 ## build
 
 ```text
-bin/latentcrate build [profile] [--sage|--no-sage] [--use-saved-node-deps] [frontend flag]
+bin/latentcrate build [profile] [--sage mode] [--use-saved-node-deps] [frontend flag]
 ```
 
 Same capture and image build as `up`, but does not start ComfyUI. Supports the
@@ -161,14 +173,14 @@ bash bin/latentcrate down current
 ## config
 
 ```text
-bin/latentcrate config [profile] [--sage|--no-sage] [frontend flag]
+bin/latentcrate config [profile] [--sage mode] [frontend flag]
 ```
 
 Prints the fully rendered Compose configuration for inspection. Repeat the
 same variant and frontend flags that you use with `up`.
 
 ```bash
-bash bin/latentcrate config current --no-sage
+bash bin/latentcrate config current --sage off
 ```
 
 ## status
@@ -229,7 +241,7 @@ bash bin/latentcrate shell current
 ## smoke-gpu
 
 ```text
-bin/latentcrate smoke-gpu [profile] [--sage|--no-sage] [frontend flag]
+bin/latentcrate smoke-gpu [profile] [--sage mode] [frontend flag]
 ```
 
 Runs the real GPU and media checks inside the running container: CUDA, Torch,
@@ -298,7 +310,7 @@ every shipped set. `status` performs the same local verification without
 network access or file changes.
 
 The helper image follows the selected version profile; use `--profile edge`
-when wanted. It does not change which files a model set contains.
+when wanted. The profile does not change which files a model set contains.
 
 ```bash
 bash bin/latentcrate models list
@@ -315,6 +327,13 @@ workflows, and storage behavior.
 bin/latentcrate templates list [profile]
 bin/latentcrate templates create-model-set <template> [profile] [--name name]
 ```
+
+Both subcommands first build the selected image when it is not built yet. A
+first build has the full time, download, and disk cost stated in the README
+(up to several hours and about 75 GB of build space) and needs network access;
+only the inspection itself runs offline. The `templates` commands take no
+`--sage` flag; they follow `LATENTCRATE_SAGE` from `.env` so they inspect the
+image variant you normally run.
 
 `list` reads the official workflow-template package installed in the selected
 ComfyUI image and shows templates marked as open source and suitable for local

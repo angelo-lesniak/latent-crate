@@ -10,6 +10,7 @@ unset \
   COMFY_FRONTEND_DIST_DIR \
   COMFY_FRONTEND_SOURCE_DIR \
   LATENTCRATE_SAGE \
+  LATENTCRATE_SAGE_MODE \
   COMFY_ALLOW_REMOTE \
   COMFY_BIND_ADDRESS \
   COMFY_MODELS_DIR \
@@ -132,22 +133,51 @@ remote_output=$(PATH="$fake_bin:$PATH" \
 
 release_config=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
   bash bin/latentcrate config current --frontend-release)
-[[ "$release_config" == *'target=runtime-sage mode=release'* ]]
+[[ "$release_config" == *'target=runtime-sage mode=release sage=available'* ]]
 
 release_no_sage_config=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
-  bash bin/latentcrate config current --no-sage --frontend-release)
-[[ "$release_no_sage_config" == *'target=runtime mode=release'* ]]
+  bash bin/latentcrate config current --sage off --frontend-release)
+[[ "$release_no_sage_config" == *'target=runtime mode=release sage=off'* ]]
+
+if removed_no_sage_output=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
+    bash bin/latentcrate config current --no-sage --frontend-release 2>&1); then
+  printf 'cli test: removed --no-sage flag unexpectedly succeeded\n' >&2
+  exit 1
+fi
+[[ "$removed_no_sage_output" == *'unknown option for config: --no-sage'* ]]
 
 release_env_no_sage_config=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
-  LATENTCRATE_SAGE=false bash bin/latentcrate config current --frontend-release)
+  LATENTCRATE_SAGE=off bash bin/latentcrate config current --frontend-release)
 [[ "$release_env_no_sage_config" == *'target=runtime mode=release'* ]]
+
+release_global_config=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
+  bash bin/latentcrate config current --sage global --frontend-release)
+[[ "$release_global_config" == *'target=runtime-sage mode=release sage=global'* ]]
+
+release_global_env_config=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
+  LATENTCRATE_SAGE=global bash bin/latentcrate config current --frontend-release)
+[[ "$release_global_env_config" == *'target=runtime-sage mode=release sage=global'* ]]
+
+if trailing_sage_output=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
+    bash bin/latentcrate config current --frontend-release --sage 2>&1); then
+  printf 'cli test: trailing --sage without a mode unexpectedly succeeded\n' >&2
+  exit 1
+fi
+[[ "$trailing_sage_output" == *'--sage requires a mode: off, available, or global'* ]]
 
 if invalid_sage_output=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
     LATENTCRATE_SAGE=maybe bash bin/latentcrate config current --frontend-release 2>&1); then
   printf 'cli test: invalid LATENTCRATE_SAGE unexpectedly succeeded\n' >&2
   exit 1
 fi
-[[ "$invalid_sage_output" == *'LATENTCRATE_SAGE must be true or false'* ]]
+[[ "$invalid_sage_output" == *'LATENTCRATE_SAGE must be off, available, or global'* ]]
+
+if bad_sage_mode_output=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
+    bash bin/latentcrate config current --sage maybe --frontend-release 2>&1); then
+  printf 'cli test: invalid --sage mode unexpectedly succeeded\n' >&2
+  exit 1
+fi
+[[ "$bad_sage_mode_output" == *'--sage requires a mode: off, available, or global'* ]]
 
 git_config=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
   bash bin/latentcrate config edge --frontend-git \
@@ -156,7 +186,7 @@ git_config=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
 [[ "$git_config" == *'target=runtime-frontend-git-sage mode=git'* ]]
 
 git_sage_config=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
-  bash bin/latentcrate config edge --sage --frontend-git \
+  bash bin/latentcrate config edge --sage available --frontend-git \
     https://github.com/Comfy-Org/ComfyUI_frontend.git \
     0000000000000000000000000000000000000000)
 [[ "$git_sage_config" == *'target=runtime-frontend-git-sage mode=git'* ]]

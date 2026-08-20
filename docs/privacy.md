@@ -27,7 +27,9 @@ from a new third-party node.
   and lets Manager's Extensions UI reach `https://api.comfy.org`. The upstream
   [`--disable-api-nodes`](https://github.com/Comfy-Org/ComfyUI/blob/master/comfy/cli_args.py)
   flag combines API-node removal with a browser-offline Content Security Policy,
-  so these behaviors cannot be selected separately.
+  so these behaviors cannot be selected separately. The link shows upstream
+  `master`; LatentCrate builds the ComfyUI version pinned in the selected
+  `versions/*.env` profile.
 - Manager hides sharing, keeps TLS verification enabled, rejects direct Git URL
   and arbitrary pip installs, and does not persist its file log. It remains in
   `network_mode=public` so its catalogue and registered-node/model installation
@@ -42,7 +44,8 @@ from a new third-party node.
 Manager configuration is initialized only for a fresh data directory. Existing
 `/data/user/__manager/config.ini` and the alternate Manager configuration path
 are preserved.
-To adopt the privacy defaults in an existing installation, review and add:
+To adopt the privacy defaults in an existing installation, review and add
+these shipped defaults, copied from `config/comfy/manager-config.ini`:
 
 ```ini
 [default]
@@ -70,9 +73,11 @@ COMFY_ENABLE_MANAGER=false
 ```
 
 The API-node setting adds ComfyUI's strict Content Security Policy. Enabling it
-while keeping Manager enabled blocks browser requests used by the Extensions
-UI. This mode does not block runtime network access for third-party Python code;
-use host firewall rules when outbound containment is required.
+while keeping Manager enabled is expected to block browser requests used by the
+Extensions UI; this check is not yet validated (see
+[validation status](validation-status.md)). This mode does not block runtime
+network access for third-party Python code; use host firewall rules when
+outbound containment is required.
 
 ## Output metadata
 
@@ -120,13 +125,14 @@ Dependency isolation works like this:
 - **What it does not prevent:** anything the node does after ComfyUI imports
   it at runtime. The node is not sandboxed.
 
-An engine-level `internal` network is not offered as a portable offline mode.
-In validation, Podman blocked both egress and the published localhost port.
+An engine-level `internal` network is not offered as a portable offline mode
+because it can block the published localhost port together with egress.
 Docker and Podman need a separately tested proxy or host-firewall design for an
 offline UI that remains reachable.
 
-The supported interface is `bash bin/latentcrate ...`. Manually bypassing it
-with direct Compose calls also bypasses the remote-bind acknowledgement and
+The supported interface is `bash bin/latentcrate ...` (see the
+[CLI reference](cli.md)). Manually bypassing it with direct Compose calls also
+bypasses the remote-bind acknowledgement and
 requires internal build variables and engine overlays. Keep
 `COMFY_BIND_ADDRESS=127.0.0.1`, or put an authenticated TLS reverse proxy in
 front of ComfyUI before opting into remote access.

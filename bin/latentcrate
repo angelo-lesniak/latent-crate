@@ -35,15 +35,15 @@ LatentCrate - pinned ComfyUI containers for Docker and Podman
 Usage:
   bin/latentcrate init [--node-set name] [profile]
       Create .env and the host data directories; optionally install a node set.
-  bin/latentcrate doctor [profile] [--allow-no-gpu] [--sage|--no-sage]
+  bin/latentcrate doctor [profile] [--allow-no-gpu] [--sage mode]
       Check the host (engine, GPU, directories, ports) before building.
-  bin/latentcrate up [profile] [--sage|--no-sage] [--detach] [--use-saved-node-deps] [--model-set name] [frontend option]
+  bin/latentcrate up [profile] [--sage mode] [--detach] [--use-saved-node-deps] [--model-set name] [frontend flag]
       Build the image if needed and start ComfyUI.
-  bin/latentcrate build [profile] [--sage|--no-sage] [--use-saved-node-deps] [frontend option]
+  bin/latentcrate build [profile] [--sage mode] [--use-saved-node-deps] [frontend flag]
       Build the image without starting ComfyUI.
   bin/latentcrate down [profile]
       Stop and remove the ComfyUI container.
-  bin/latentcrate config [profile] [--sage|--no-sage] [frontend option]
+  bin/latentcrate config [profile] [--sage mode] [frontend flag]
       Print the resolved Compose configuration.
   bin/latentcrate status [profile]
       Show the ComfyUI container status.
@@ -53,7 +53,7 @@ Usage:
       Follow the ComfyUI container logs.
   bin/latentcrate shell [profile]
       Open a bash shell in the running container.
-  bin/latentcrate smoke-gpu [profile] [--sage|--no-sage] [frontend option]
+  bin/latentcrate smoke-gpu [profile] [--sage mode] [frontend flag]
       Run the GPU verification suite in the running container and save a report.
   bin/latentcrate node-deps snapshot [profile]
       Capture custom-node Python dependencies for the next image build.
@@ -80,7 +80,7 @@ Usage:
   bin/latentcrate versions
       Show the pinned components for each version profile.
 
-Frontend options:
+Frontend flags:
   --frontend-release
   --frontend-git <https-url> <commit-branch-tag-or-pr-reference>
   --frontend-source <absolute-or-relative-source-directory>  (up/config/smoke-gpu)
@@ -88,18 +88,27 @@ Frontend options:
 
 Version profiles are files below versions/ without the .env suffix. Set
 CONTAINER_ENGINE=docker or CONTAINER_ENGINE=podman to override detection.
-The Sage-capable image is the default. Use --no-sage for the smaller base image.
+Sage modes (LATENTCRATE_SAGE in .env, or --sage for one command):
+  off        smaller image without SageAttention
+  available  Sage-capable image; workflows opt in (the default)
+  global     Sage-capable image; ComfyUI applies Sage globally
 Node dependencies refresh by default. Use --use-saved-node-deps to reuse the
 last saved dependency snapshot.
 EOF
 }
 
 set_default_sage_variant() {
-  local value=${LATENTCRATE_SAGE:-true}
+  local value=${LATENTCRATE_SAGE:-available}
   case "${value,,}" in
-    1|true|yes|on) SAGE=true ;;
-    0|false|no|off) SAGE=false ;;
-    *) die 'LATENTCRATE_SAGE must be true or false' ;;
+    off|available|global) SAGE_MODE=${value,,} ;;
+    *) die 'LATENTCRATE_SAGE must be off, available, or global' ;;
+  esac
+}
+
+set_sage_mode_flag() {
+  case "${1,,}" in
+    off|available|global) SAGE_MODE=${1,,} ;;
+    *) die '--sage requires a mode: off, available, or global' ;;
   esac
 }
 
@@ -118,10 +127,9 @@ parse_variant_options() {
   while (($# > 0)); do
     case "$1" in
       --sage)
-        SAGE=true
-        ;;
-      --no-sage)
-        SAGE=false
+        (($# >= 2)) || die '--sage requires a mode: off, available, or global'
+        set_sage_mode_flag "$2"
+        shift
         ;;
       --detach|-d)
         [[ "$command" == up ]] || die "$1 is only valid with up"
@@ -141,12 +149,12 @@ parse_variant_options() {
         shift
         ;;
       --frontend-release)
-        [[ "$frontend_seen" == false ]] || die 'only one frontend option may be supplied'
+        [[ "$frontend_seen" == false ]] || die 'only one frontend flag may be supplied'
         frontend_seen=true
         export COMFY_FRONTEND_MODE=release
         ;;
       --frontend-git)
-        [[ "$frontend_seen" == false ]] || die 'only one frontend option may be supplied'
+        [[ "$frontend_seen" == false ]] || die 'only one frontend flag may be supplied'
         (($# >= 3)) \
           || die '--frontend-git requires a repository URL and a commit, branch, tag, or pull-request reference'
         frontend_seen=true
@@ -159,7 +167,7 @@ parse_variant_options() {
       --frontend-source)
         [[ "$command" == up || "$command" == config || "$command" == smoke-gpu ]] \
           || die '--frontend-source is only valid with up, config, or smoke-gpu'
-        [[ "$frontend_seen" == false ]] || die 'only one frontend option may be supplied'
+        [[ "$frontend_seen" == false ]] || die 'only one frontend flag may be supplied'
         (($# >= 2)) || die '--frontend-source requires a directory'
         frontend_seen=true
         export COMFY_FRONTEND_MODE=source
@@ -169,7 +177,7 @@ parse_variant_options() {
       --frontend-dist)
         [[ "$command" == up || "$command" == config || "$command" == smoke-gpu ]] \
           || die '--frontend-dist is only valid with up, config, or smoke-gpu'
-        [[ "$frontend_seen" == false ]] || die 'only one frontend option may be supplied'
+        [[ "$frontend_seen" == false ]] || die 'only one frontend flag may be supplied'
         (($# >= 2)) || die '--frontend-dist requires a directory'
         frontend_seen=true
         export COMFY_FRONTEND_MODE=dist
@@ -197,7 +205,7 @@ parse_profile_only() {
 
 main() {
   local command=${1:-help}
-  local engine timeout allow_no_gpu min_driver profile_seen node_set model_action template_action template_name draft_name
+  local engine timeout allow_no_gpu min_driver profile_seen node_set model_action template_action template_name draft_name sage_enabled
   local -a up_args
   local -a model_sets
   shift || true
@@ -269,8 +277,11 @@ main() {
       while (($# > 0)); do
         case "$1" in
           --allow-no-gpu) allow_no_gpu=true ;;
-          --sage) SAGE=true ;;
-          --no-sage) SAGE=false ;;
+          --sage)
+            (($# >= 2)) || die '--sage requires a mode: off, available, or global'
+            set_sage_mode_flag "$2"
+            shift
+            ;;
           --*) die "unknown doctor option: $1" ;;
           *)
             [[ "$profile_seen" == false ]] || die 'doctor accepts at most one version profile'
@@ -282,17 +293,19 @@ main() {
         shift
       done
       min_driver=${CUDA_MIN_DRIVER_MAJOR:-$(profile_value "$PROFILE" CUDA_MIN_DRIVER_MAJOR)}
+      sage_enabled=true
+      [[ "$SAGE_MODE" != off ]] || sage_enabled=false
       bash "$PROJECT_ROOT/scripts/doctor.sh" \
         --engine "${CONTAINER_ENGINE:-}" \
         --allow-no-gpu "$allow_no_gpu" \
         --min-driver-major "${min_driver:-580}" \
         --custom-node-arch-list "${CUSTOM_NODE_CUDA_ARCH_LIST:-$(profile_value "$PROFILE" CUSTOM_NODE_CUDA_ARCH_LIST)}" \
         --sage-arch-list "${SAGE_CUDA_ARCH_LIST:-$(profile_value "$PROFILE" SAGE_CUDA_ARCH_LIST)}" \
-        --sage "$SAGE"
+        --sage "$sage_enabled"
       ;;
     up)
       parse_variant_options up "$@"
-      configure_variant "$PROFILE" "$SAGE"
+      configure_variant "$PROFILE" "$SAGE_MODE"
       validate_bind_address
       prepare_host_directories
       engine=$(detect_engine)
@@ -321,7 +334,7 @@ main() {
       ;;
     build)
       parse_variant_options build "$@"
-      configure_variant "$PROFILE" "$SAGE"
+      configure_variant "$PROFILE" "$SAGE_MODE"
       [[ "$COMFY_FRONTEND_MODE" != dist ]] \
         || die 'build supports release and Git frontends; use up for --frontend-source or --frontend-dist'
       engine=$(detect_engine)
@@ -338,7 +351,7 @@ main() {
       ;;
     config)
       parse_variant_options config "$@"
-      configure_variant "$PROFILE" "$SAGE"
+      configure_variant "$PROFILE" "$SAGE_MODE"
       [[ "${COMFY_FRONTEND_MODE}" == dist ]] && INCLUDE_FRONTEND_OVERLAY=true
       engine=$(detect_engine)
       compose "$engine" "$PROFILE" config
@@ -385,7 +398,7 @@ main() {
       ;;
     smoke-gpu)
       parse_variant_options smoke-gpu "$@"
-      configure_variant "$PROFILE" "$SAGE"
+      configure_variant "$PROFILE" "$SAGE_MODE"
       engine=$(detect_engine)
       run_gpu_smoke "$engine" "$PROFILE" "$SAGE"
       ;;

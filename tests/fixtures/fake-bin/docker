@@ -22,8 +22,9 @@ case "${1:-}" in
             || { printf 'fake Compose provider: missing tools profile for %s\n' "$tool_service" >&2; exit 1; }
         fi
       done
-      printf 'target=%s mode=%s args=' \
-        "${COMFY_BUILD_TARGET:-unset}" "${COMFY_FRONTEND_MODE:-unset}"
+      printf 'target=%s mode=%s sage=%s args=' \
+        "${COMFY_BUILD_TARGET:-unset}" "${COMFY_FRONTEND_MODE:-unset}" \
+        "${LATENTCRATE_SAGE_MODE:-unset}"
       printf ' %q' "$@"
       printf '\n'
     fi

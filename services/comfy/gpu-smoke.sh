@@ -154,7 +154,7 @@ PY
 
 if [[ "${LATENTCRATE_REQUIRE_SAGE:-0}" == 1 && "${LATENTCRATE_SAGE_ENABLED:-0}" != 1 ]]; then
   printf '\nLatentCrate: SageAttention was required, but the running container is not Sage-capable.\n' >&2
-  printf 'Recreate it without --no-sage, or use: bash bin/latentcrate up <profile> --sage --detach\n' >&2
+  printf 'Recreate it with a Sage-capable image: bash bin/latentcrate up <profile> --sage available --detach\n' >&2
   exit 1
 fi
 

@@ -43,5 +43,9 @@ every page before using LatentCrate.
 - [WSL2/NVIDIA checklist](wsl2-nvidia-validation.md): Windows and WSL2 checks.
 - [Continuous integration](ci.md): image builds, caches, and GPU test limits.
 - [Trainer integrations](trainers.md): plans for future trainer setups.
+- [Documentation guidelines](documentation-guidelines.md): decide what to
+  document, how deeply, and where it belongs.
+- [Documentation agent checklist](documentation-agent-checklist.md): apply the
+  guidelines while writing or reviewing documentation changes.
 
 Contributors should also read [CONTRIBUTING.md](../CONTRIBUTING.md).
