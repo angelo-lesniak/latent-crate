@@ -25,6 +25,17 @@ COMFY_PORT=4210 bash bin/latentcrate up current --detach
 | `HOST_MODEL_GID` | Host GID | Extra model-storage group used by Docker |
 | `UMASK` | `0002` | Permissions mask for created files |
 
+`HF_TOKEN` is optional and is needed for gated model sets such as FLUX.2 Klein.
+Put a read token in `.env` only after accepting the model license. The wrapper
+pipes it to the model downloader and removes it from the environment used by
+Compose. `latentcrate init` restricts `.env` to mode `0600`; run it again or
+use `chmod 600 .env` for an older file. See [Model sets](model-sets.md).
+
+`MODEL_SET_EXTRA_WRITE_ROOTS` is an advanced, colon-separated list of absolute
+container paths that the model downloader may reach through model symlinks.
+Each path still needs an explicit bind mount in the model helper services; this
+setting never creates mounts.
+
 Relative paths are resolved from the repository root. See
 [storage layout](storage.md) for container paths and permission details.
 
@@ -184,7 +195,7 @@ change them.
 | `LATENTCRATE_IMAGE` | `latentcrate/comfy` | Name of the ComfyUI runtime image |
 | `LATENTCRATE_TAG` | Set by the wrapper | Runtime image tag: the profile name plus variant suffixes, for example `current-sage` or `edge-frontend-git-sage` |
 | `LATENTCRATE_TOOLS_IMAGE` | `latentcrate/tools` | Name of the helper-tool images (dependency snapshot, node sets, frontend builds) |
-| `LATENTCRATE_TOOLS_TAG` | Set by the wrapper | Tool image tag prefix: the profile name; each tool appends its own suffix (`-node-deps`, `-node-set`, `-frontend`) |
+| `LATENTCRATE_TOOLS_TAG` | Set by the wrapper | Tool image tag prefix: the profile name; each tool appends its own suffix (`-node-deps`, `-node-set`, `-model-set`, `-frontend`) |
 
 The wrapper derives `LATENTCRATE_TAG` and `LATENTCRATE_TOOLS_TAG` from the
 selected profile and options. Do not override the tags in `.env` or on the

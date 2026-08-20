@@ -12,7 +12,7 @@ fi
 PROJECT_ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 readonly PROJECT_ROOT
 cd "$PROJECT_ROOT"
-export CUSTOM_NODE_CACHE_KEY=static-fixture
+unset CUSTOM_NODE_CACHE_KEY
 
 if ! command -v python >/dev/null 2>&1; then
   printf 'static: required command is unavailable: python\n' >&2

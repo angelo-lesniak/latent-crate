@@ -328,6 +328,7 @@ COPY --from=torchcodec-runtime-libs /opt/latentcrate-npp /opt/latentcrate-npp
 COPY services/comfy/entrypoint.sh /usr/local/bin/latentcrate-entrypoint
 COPY services/comfy/healthcheck.py /usr/local/bin/latentcrate-healthcheck.py
 COPY services/comfy/gpu-smoke.sh /usr/local/bin/latentcrate-gpu-smoke
+COPY scripts/manage-templates.py /usr/local/bin/latentcrate-manage-templates.py
 COPY config/comfy/extra_model_paths.yaml /etc/latentcrate/extra_model_paths.yaml
 COPY config/python/custom-node-constraints.txt /etc/latentcrate/custom-node-constraints.txt
 

@@ -96,6 +96,15 @@ Node sets allow only configured public HTTPS hosts and exact commits. This
 improves repeatability, but commit pinning is not a code audit: installed node
 source still executes with the runtime's access to mounted data and network.
 
+Model-set downloads use a separate helper with access only to the model-set
+manifests, model library, Hugging Face sub-cache, temporary directory, and
+normal network. The status helper receives only the manifests and read-only model
+library, with networking disabled. When `HF_TOKEN` is set, the wrapper pipes it
+through the fetch helper's standard input; it is not added to Compose
+configuration or a container environment. The downloaded files and Hugging
+Face cache are still untrusted input. Model licenses and repository access
+rules remain the user's responsibility.
+
 Dependency isolation works like this:
 
 - **What enters the final image:** the isolated package tree built from the
