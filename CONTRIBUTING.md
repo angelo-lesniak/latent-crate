@@ -32,6 +32,19 @@ ShellCheck, a container engine) skip their component with an explicit
 `LATENTCRATE_STATIC_STRICT=1`, as CI does, to turn every such skip into a hard
 failure that names the missing tool.
 
+## Documentation changes
+
+Use the [documentation guidelines](docs/documentation-guidelines.md) to decide
+what belongs in the documentation, how much detail it needs, and where it should
+live. Coding and documentation agents should also apply the focused
+[documentation agent checklist](docs/documentation-agent-checklist.md) when
+writing or reviewing documentation and when user-visible behavior changes.
+
+Prefer an existing canonical page over duplicated explanations. Update
+`docs/index.md` when a justified new page changes task-oriented navigation. Do
+not add pages, examples, or general tutorials solely to make the documentation
+appear complete.
+
 ## Adding a pinned version key
 
 A new pinned version key must be added in every one of these synchronized
@@ -75,3 +88,9 @@ remote metadata with `python3 scripts/verify-model-set-metadata.py` before
 changing a shipped pin. This checks file metadata, official workflow links, and
 license references using public metadata and no token. Do not add tokens or
 downloaded weights to the repository.
+
+`bash bin/latentcrate templates create-model-set <template> [profile]` can
+extract the installed official template's model hints into
+`build/model-set-drafts/`. It deliberately leaves `TODO` values when upstream
+metadata is not immutable or complete. Review every field before moving a draft
+to `config/model-sets/`.
