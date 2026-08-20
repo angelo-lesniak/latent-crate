@@ -12,6 +12,7 @@ unset \
   LATENTCRATE_SAGE \
   COMFY_ALLOW_REMOTE \
   COMFY_BIND_ADDRESS \
+  COMFY_MODELS_DIR \
   COMPOSE_PROJECT_NAME \
   CONTAINER_ENGINE \
   FRONTEND_OUTPUT_DIR \
@@ -87,6 +88,7 @@ status_output=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
   bash bin/latentcrate status current)
 [[ "$status_output" == *' ps'* ]]
 
+mkdir -p "$PROJECT_ROOT/data/models"
 model_status=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
   bash bin/latentcrate models status --profile edge krea2-t2i-int8)
 [[ "$model_status" == *'build model-set-status'* ]]
