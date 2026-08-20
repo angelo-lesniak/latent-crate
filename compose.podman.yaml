@@ -23,6 +23,12 @@ services:
     userns_mode: "keep-id:uid=${HOST_UID:-1000},gid=${HOST_GID:-1000}"
     group_add:
       - keep-groups
+  template-inspector:
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    userns_mode: "keep-id:uid=${HOST_UID:-1000},gid=${HOST_GID:-1000}"
+  template-draft:
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    userns_mode: "keep-id:uid=${HOST_UID:-1000},gid=${HOST_GID:-1000}"
   frontend-fetch:
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     userns_mode: "keep-id:uid=${HOST_UID:-1000},gid=${HOST_GID:-1000}"

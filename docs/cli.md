@@ -42,6 +42,8 @@ General rules:
 | `models list` | List the available pinned model-file sets |
 | `models fetch` | Download and verify one or more model sets |
 | `models status` | Verify selected model files without network access |
+| `templates list` | List local-compatible official templates in a selected image |
+| `templates create-model-set` | Create a model-set manifest draft from a template |
 | `versions` | Print the pinned values of every version profile |
 
 ## Shared variant flags
@@ -306,6 +308,33 @@ bash bin/latentcrate models status --profile edge all
 
 See [Model sets](model-sets.md) for licenses, token handling, included
 workflows, and storage behavior.
+
+## templates
+
+```text
+bin/latentcrate templates list [profile]
+bin/latentcrate templates create-model-set <template> [profile] [--name name]
+```
+
+`list` reads the official workflow-template package installed in the selected
+ComfyUI image and shows templates marked as open source and suitable for local
+distribution. It excludes archived, deprecated, cloud-only, and packaged API
+workflows. This offline metadata check does not prove that extra nodes or model
+files are installed.
+
+`create-model-set` extracts embedded Hugging Face model hints into a new draft
+below `build/model-set-drafts/`. `--name` selects the draft filename; otherwise
+the template ID is used. Existing drafts are not overwritten. Complete every
+`TODO` before moving the file to `config/model-sets/`.
+
+```bash
+bash bin/latentcrate templates list edge
+bash bin/latentcrate templates create-model-set video_minimax_h3_i2v edge \
+  --name minimax-h3-i2v-review
+```
+
+See [Official template tools](templates.md) for the filter rules and review
+steps.
 
 ## versions
 

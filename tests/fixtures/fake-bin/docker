@@ -15,7 +15,7 @@ case "${1:-}" in
     else
       [[ " $* " != *' ps comfy '* ]] \
         || { printf 'fake Compose provider: ps does not accept a service argument\n' >&2; exit 1; }
-      for tool_service in node-set node-set-status model-set model-set-status node-deps-snapshot frontend-fetch frontend-build; do
+      for tool_service in node-set node-set-status model-set model-set-status template-inspector template-draft node-deps-snapshot frontend-fetch frontend-build; do
         if [[ " $* " == *" build $tool_service "* \
             || " $* " == *" run "*" $tool_service "* ]]; then
           [[ " $* " == *' --profile tools '* ]] \

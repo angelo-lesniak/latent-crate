@@ -70,6 +70,22 @@ x-model-set-common: &model-set-common
     - type: tmpfs
       target: /tmp
 
+# Template inspection uses the exact workflow-template package installed in
+# the selected ComfyUI image. Both operations are offline; only draft creation
+# receives a writable host directory.
+x-template-common: &template-common
+  profiles: ["tools"]
+  image: "${LATENTCRATE_IMAGE:-latentcrate/comfy}:${LATENTCRATE_TAG:-current-sage}"
+  entrypoint: ["python", "/usr/local/bin/latentcrate-manage-templates.py"]
+  network_mode: none
+  read_only: true
+  pids_limit: 128
+  cap_drop: ["ALL"]
+  security_opt:
+    - no-new-privileges:true
+  tmpfs:
+    - /tmp
+
 services:
   comfy:
     image: "${LATENTCRATE_IMAGE:-latentcrate/comfy}:${LATENTCRATE_TAG:-current-sage}"
@@ -267,6 +283,16 @@ services:
         read_only: true
       - type: tmpfs
         target: /tmp
+
+  template-inspector:
+    <<: *template-common
+
+  template-draft:
+    <<: *template-common
+    volumes:
+      - type: bind
+        source: "${TEMPLATE_DRAFT_OUTPUT_DIR:-./build/model-set-drafts}"
+        target: /output
 
   frontend-fetch:
     profiles: ["tools"]

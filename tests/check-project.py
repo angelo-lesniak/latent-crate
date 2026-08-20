@@ -62,6 +62,7 @@ CLI_MODULES = (
     "lib/latentcrate/node-deps.sh",
     "lib/latentcrate/nodes.sh",
     "lib/latentcrate/models.sh",
+    "lib/latentcrate/templates.sh",
     "lib/latentcrate/runtime.sh",
 )
 MARKDOWN_LINK_RE = re.compile(r"\[[^\]]*\]\((?P<target>[^)]+)\)")
@@ -766,6 +767,27 @@ def check_model_set_services_hardened() -> None:
             fail(f"Podman service {name} must preserve supplementary model-storage groups")
 
 
+def check_template_services_hardened() -> None:
+    """Template inspection must use the selected image offline, while only
+    draft creation may write to the narrow draft output mount."""
+    compose = compose_document()
+    inspector = compose_service(compose, "template-inspector")
+    draft = compose_service(compose, "template-draft")
+    require_service_hardening("template-inspector", inspector, network_none=True)
+    require_service_hardening("template-draft", draft, network_none=True)
+    if inspector.get("image") != compose_service(compose, "comfy").get("image"):
+        fail("template inspection must use the exact selected ComfyUI image")
+    if find_mount(inspector, "/output") is not None:
+        fail("template listing must not receive a writable output mount")
+    output = find_mount(draft, "/output")
+    if output is None or output.get("read_only") is True:
+        fail("template draft creation needs one writable /output mount")
+    if "/usr/local/bin/latentcrate-manage-templates.py" not in read_text(
+        "services/comfy/Dockerfile"
+    ):
+        fail("the selected ComfyUI image must contain the template inspector")
+
+
 def check_model_set_manifests_pinned() -> None:
     """Every shipped model file and workflow reference must be immutable and
     carry enough metadata for size and SHA-256 verification."""
@@ -861,6 +883,8 @@ def check_cli_node_workflows() -> None:
         "node-set-status",
         "model-set",
         "model-set-status",
+        "template-inspector",
+        "template-draft",
         "frontend-fetch",
         "frontend-build",
     )
@@ -877,6 +901,8 @@ def check_cli_node_workflows() -> None:
         "models fetch",
         "models status",
         "--model-set",
+        "templates list",
+        "templates create-model-set",
     ):
         if node_contract not in cli:
             fail(f"custom-node CLI workflow is missing: {node_contract}")
@@ -1079,6 +1105,7 @@ CHECKS = (
     check_node_deps_snapshot_service,
     check_node_set_services_hardened,
     check_model_set_services_hardened,
+    check_template_services_hardened,
     check_model_set_manifests_pinned,
     check_node_manager_git_guards,
     check_cli_engine_and_remote_guard,

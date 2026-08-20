@@ -20,6 +20,7 @@ unset \
   FRONTEND_WORK_DIR \
   HF_TOKEN \
   LATENTCRATE_HF_TOKEN_VALUE \
+  TEMPLATE_DRAFT_OUTPUT_DIR \
   FAKE_DOCKER_COMFY_RUNNING
 fake_bin="$PROJECT_ROOT/tests/fixtures/fake-bin"
 chmod +x "$fake_bin/docker" "$fake_bin/flock"
@@ -51,6 +52,17 @@ node_sets=$(bash bin/latentcrate nodes list)
 model_sets=$(bash bin/latentcrate models list)
 [[ "$model_sets" == *flux2-klein-9b-distilled* ]]
 [[ "$model_sets" == *minimax-h3-r2v* ]]
+
+template_list=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
+  bash bin/latentcrate templates list edge)
+[[ "$template_list" == *'build comfy'* ]]
+[[ "$template_list" == *'run --rm --no-deps -T template-inspector list'* ]]
+
+template_draft=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
+  bash bin/latentcrate templates create-model-set video_minimax_h3_i2v edge \
+    --name minimax-h3-i2v-draft)
+[[ "$template_draft" == *'build comfy'* ]]
+[[ "$template_draft" == *'template-draft create-model-set video_minimax_h3_i2v --name minimax-h3-i2v-draft'* ]]
 
 mkdir -p "$PROJECT_ROOT/data/comfy/custom_nodes"
 node_set_install=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
@@ -97,6 +109,9 @@ expect_failure 'only valid with up or build' config current --use-saved-node-dep
 expect_failure 'unknown option for up: --refresh-node-deps' up current --refresh-node-deps
 expect_failure 'only valid with up' build current --model-set krea2-t2i-int8
 expect_failure 'all cannot be combined' models status all krea2-t2i-int8
+expect_failure 'at most one version profile' templates list current edge
+expect_failure 'unsafe template name' templates create-model-set ../unsafe
+expect_failure 'unsafe model-set name' templates create-model-set fixture --name all
 
 if remote_output=$(COMFY_BIND_ADDRESS=0.0.0.0 \
     bash bin/latentcrate up current --detach 2>&1); then

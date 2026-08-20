@@ -26,6 +26,7 @@ export FRONTEND_SOURCE_DIR="$PROJECT_ROOT/tests/fixtures/frontend-source"
 export FRONTEND_OUTPUT_DIR="$PROJECT_ROOT/data/cache/frontend-builds/test"
 export FRONTEND_PNPM_CACHE_DIR="$PROJECT_ROOT/data/cache/frontend-pnpm"
 export FRONTEND_WORK_DIR="$PROJECT_ROOT/data/cache/frontend-work/test"
+export TEMPLATE_DRAFT_OUTPUT_DIR="$PROJECT_ROOT/build/model-set-drafts"
 
 mkdir -p \
   "$NODE_SET_TARGET_DIR" \
@@ -33,7 +34,8 @@ mkdir -p \
   "$NODE_DEPS_OUTPUT_DIR" \
   "$FRONTEND_OUTPUT_DIR" \
   "$FRONTEND_PNPM_CACHE_DIR" \
-  "$FRONTEND_WORK_DIR"
+  "$FRONTEND_WORK_DIR" \
+  "$TEMPLATE_DRAFT_OUTPUT_DIR"
 
 compose_files=(--file compose.yaml --file compose.podman.yaml)
 if [[ "${OS:-}" == Windows_NT ]]; then
@@ -90,6 +92,8 @@ for service in \
   node-set-status \
   model-set \
   model-set-status \
+  template-inspector \
+  template-draft \
   frontend-fetch \
   frontend-build; do
   grep -Fxq "$service" <<< "$tool_services" \
@@ -124,6 +128,9 @@ done
 for service in model-set model-set-status; do
   podman_compose_tool_dry_run run --rm --no-deps -T "$service" status all
 done
+podman_compose_tool_dry_run run --rm --no-deps -T template-inspector list
+podman_compose_tool_dry_run run --rm --no-deps -T template-draft \
+  create-model-set fixture --name fixture
 
 podman_compose_dry_run build comfy
 podman_compose_dry_run up --no-build --detach comfy

@@ -132,3 +132,8 @@ or mounts them automatically.
 
 Manifests live under `config/model-sets/`. They are data, not executable code,
 and accept Hugging Face files only in this first version.
+
+Contributors can start a new manifest from model metadata embedded in an
+installed official workflow. See [Official template tools](templates.md). The
+generated file is a draft: immutable revisions, licenses, sizes, checksums, and
+destinations still require review.

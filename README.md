@@ -84,6 +84,28 @@ nvidia-smi --query-gpu=compute_cap --format=csv,noheader
 
 ## Start here
 
+### Short path to a first workflow
+
+If Docker or Podman and the NVIDIA Container Toolkit are already ready, run:
+
+```bash
+git clone https://github.com/angelo-lesniak/latent-crate.git latentcrate
+cd latentcrate
+bash bin/latentcrate init
+bash bin/latentcrate doctor edge
+bash bin/latentcrate up edge --model-set minimax-h3-i2v
+```
+
+The last command downloads the selected models, builds the image, and keeps
+ComfyUI in the foreground so you can see its logs. Open
+<http://127.0.0.1:4207> when it is ready, open the template browser, and choose
+**MiniMax H3: Image to Video**. Press **Ctrl+C** in the terminal to stop
+ComfyUI. There is no background process to remember for this path.
+
+MiniMax H3 downloads about 44 GB. The first image build can also take from
+tens of minutes to several hours. Continue below if the host is not prepared,
+`doctor` reports a problem, or your GPU is not an RTX 50-series card.
+
 ### 1. Prepare the host
 
 You need:
@@ -227,6 +249,7 @@ If the first run fails, start with the [troubleshooting guide](docs/troubleshoot
 | Look up any command or flag | [CLI reference](docs/cli.md) |
 | Set up MiniMax H3 with SageAttention | [SageAttention guide](docs/sageattention.md) |
 | Add nodes with ComfyUI Manager or local-only nodes | [Third-party node guide](docs/third-party-nodes.md) |
+| Find official workflows intended for local ComfyUI | [Template tools](docs/templates.md) |
 | Download pinned files for an official workflow | [Model sets](docs/model-sets.md) |
 | Develop or test a local node | [Local node development](#local-node-development) |
 | Test a public frontend fork or pull request | [Frontend modes](docs/frontends.md) |

@@ -23,6 +23,8 @@ source "$PROJECT_ROOT/lib/latentcrate/node-deps.sh"
 source "$PROJECT_ROOT/lib/latentcrate/nodes.sh"
 # shellcheck source=lib/latentcrate/models.sh
 source "$PROJECT_ROOT/lib/latentcrate/models.sh"
+# shellcheck source=lib/latentcrate/templates.sh
+source "$PROJECT_ROOT/lib/latentcrate/templates.sh"
 # shellcheck source=lib/latentcrate/runtime.sh
 source "$PROJECT_ROOT/lib/latentcrate/runtime.sh"
 
@@ -71,6 +73,10 @@ Usage:
       Download and verify one or more model sets from Hugging Face.
   bin/latentcrate models status [--profile profile] <set> [<set> ...] | all
       Verify the selected files already present in the models directory.
+  bin/latentcrate templates list [profile]
+      List official templates marked for local ComfyUI use in the selected image.
+  bin/latentcrate templates create-model-set <template> [profile] [--name name]
+      Create a reviewable model-set manifest draft from a template.
   bin/latentcrate versions
       Show the pinned components for each version profile.
 
@@ -191,7 +197,7 @@ parse_profile_only() {
 
 main() {
   local command=${1:-help}
-  local engine timeout allow_no_gpu min_driver profile_seen node_set model_action
+  local engine timeout allow_no_gpu min_driver profile_seen node_set model_action template_action template_name draft_name
   local -a up_args
   local -a model_sets
   shift || true
@@ -448,6 +454,45 @@ main() {
           run_model_sets "$model_action" "$PROFILE" "${model_sets[@]}"
           ;;
         *) die 'usage: bin/latentcrate models list | models fetch [--profile profile] <set> [<set> ...] | all | models status [--profile profile] <set> [<set> ...] | all' ;;
+      esac
+      ;;
+    templates)
+      template_action=${1:-}
+      case "$template_action" in
+        list)
+          (($# <= 2)) || die 'templates list accepts at most one version profile'
+          run_template_tool list "${2:-current}"
+          ;;
+        create-model-set)
+          (($# >= 2)) || die 'templates create-model-set requires a template ID'
+          template_name=$2
+          draft_name=$template_name
+          PROFILE=current
+          profile_seen=false
+          shift 2
+          while (($# > 0)); do
+            case "$1" in
+              --name)
+                (($# >= 2)) || die '--name requires a model-set name'
+                draft_name=$2
+                shift
+                ;;
+              --*) die "unknown templates create-model-set option: $1" ;;
+              *)
+                [[ "$profile_seen" == false ]] \
+                  || die 'templates create-model-set accepts at most one version profile'
+                PROFILE=$1
+                profile_file "$PROFILE" >/dev/null
+                profile_seen=true
+                ;;
+            esac
+            shift
+          done
+          validate_template_name "$template_name"
+          validate_draft_name "$draft_name"
+          run_template_tool create-model-set "$PROFILE" "$template_name" "$draft_name"
+          ;;
+        *) die 'usage: bin/latentcrate templates list [profile] | templates create-model-set <template> [profile] [--name name]' ;;
       esac
       ;;
     *)
