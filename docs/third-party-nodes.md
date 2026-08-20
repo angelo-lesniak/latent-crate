@@ -21,7 +21,7 @@ Every `up` captures requirements, builds the image, and recreates the container:
 bash bin/latentcrate up current --detach
 ```
 
-Use the profile and `--no-sage` choice that you normally run; the
+Use the profile and `--sage` mode that you normally run; the
 [CLI reference](cli.md#up) is the main source for these flags. To capture and
 build without starting ComfyUI:
 

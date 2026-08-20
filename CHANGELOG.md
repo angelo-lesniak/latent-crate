@@ -12,8 +12,9 @@ tagged release is published. Until then, notable changes are collected under
 - Pinned `current` and forward-looking `edge` version profiles.
 - Release, trusted Git, containerized local-source, and prebuilt-dist frontend
   modes.
-- SageAttention-capable images by default, smaller opt-out image targets, and
-  GPU smoke verification.
+- SageAttention-capable images by default, with one
+  `LATENTCRATE_SAGE=off|available|global` mode selecting the smaller opt-out
+  image, workflow-level Sage, or global Sage, plus GPU smoke verification.
 - Host-mounted storage, saved custom-node dependencies, and source/build
   records.
 - Network-disabled, containerized custom-node snapshotting without a host Python

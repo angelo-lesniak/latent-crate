@@ -8,8 +8,8 @@ bash bin/latentcrate logs current
 ```
 
 Use the same version profile that you used when starting the container. Repeat
-`--no-sage` with `doctor`, `config`, or `smoke-gpu` when you started the opt-out
-image. The sections below cover common first-run problems.
+`--sage off` with `doctor`, `config`, or `smoke-gpu` when you started the
+opt-out image. The sections below cover common first-run problems.
 
 ## `doctor` cannot find an NVIDIA CDI device
 
@@ -74,7 +74,7 @@ Keep at least 75 GB free for a first release build and more when building severa
 profiles. Sage uses a low-memory default of two compiler jobs. Reduce
 `SAGE_BUILD_JOBS` in the selected profile if the compiler is killed for memory.
 
-If Sage is not needed for a diagnostic build, use `--no-sage`. The flag is an
+If Sage is not needed for a diagnostic build, use `--sage off`. The mode is an
 opt-out from LatentCrate's normal feature set, not a separate compatibility
 mode.
 
@@ -160,7 +160,7 @@ build. See [frontend modes](frontends.md).
 The Sage-capable image does not force global replacement. Select the Sage option
 inside the workflow or use the KJNodes patch required by that workflow.
 
-Set `COMFY_GLOBAL_SAGE=true` only after representative workflows pass with
+Set `LATENTCRATE_SAGE=global` only after representative workflows pass with
 ComfyUI's global `--use-sage-attention` behavior.
 
 ## WSL2 bind mounts are slow

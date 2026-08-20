@@ -27,7 +27,7 @@ run_template_tool() {
   # frontend fork or local frontend build. Avoid unrelated Git resolution.
   export COMFY_FRONTEND_MODE=release
   set_default_sage_variant
-  configure_variant "$profile" "$SAGE"
+  configure_variant "$profile" "$SAGE_MODE"
   engine=$(detect_engine)
 
   # Build the selected runtime first: the helper intentionally reads the

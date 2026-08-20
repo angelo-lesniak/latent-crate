@@ -98,13 +98,12 @@ frontend_tree_digest() {
 
 configure_variant() {
   local profile=$1
-  local sage=$2
-  local variant target tag
+  local sage_mode=$2
+  local sage variant target tag
 
   prepare_frontend_mode "$profile"
-  if is_true "${COMFY_GLOBAL_SAGE:-false}"; then
-    sage=true
-  fi
+  sage=true
+  [[ "$sage_mode" != off ]] || sage=false
 
   case "${COMFY_FRONTEND_MODE}:${sage}" in
     release:false|release:true|dist:false|dist:true) variant=release ;;
@@ -119,6 +118,7 @@ configure_variant() {
     || die 'invalid frontend/Sage image combination'
   export COMFY_BUILD_TARGET=$target
   export LATENTCRATE_TAG=$tag
+  export LATENTCRATE_SAGE_MODE=$sage_mode
   SAGE=$sage
 }
 

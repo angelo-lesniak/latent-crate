@@ -60,19 +60,20 @@ format for Podman builds because the Dockerfile relies on Bash `SHELL` metadata.
 
 ## SageAttention
 
-| Setting | Default | Meaning |
-| --- | --- | --- |
-| `LATENTCRATE_SAGE` | `true` | Build and run the Sage-capable image |
-| `COMFY_GLOBAL_SAGE` | `false` | Add ComfyUI's global `--use-sage-attention` flag |
+`LATENTCRATE_SAGE` selects one of three modes:
 
-The `--sage` and `--no-sage` flags override `LATENTCRATE_SAGE` for one
-command; see [shared variant flags](cli.md#shared-variant-flags).
-`COMFY_GLOBAL_SAGE=true` forces the Sage-capable image: while it is set,
-`--no-sage` and `LATENTCRATE_SAGE=false` have no effect.
+| Mode | Effect |
+| --- | --- |
+| `off` | Smaller image without SageAttention |
+| `available` | Sage-capable image; workflows opt in (the default) |
+| `global` | Sage-capable image; ComfyUI applies Sage globally (`--use-sage-attention`) |
+
+The `--sage <mode>` flag overrides the setting for one command; see
+[shared variant flags](cli.md#shared-variant-flags).
 
 The default gives workflows access to SageAttention without forcing global
-replacement. Keep `COMFY_GLOBAL_SAGE=false` unless representative workflows
-have been tested with global Sage. See [SageAttention](sageattention.md).
+replacement. Use `global` only after representative workflows have been tested
+with global Sage. See [SageAttention](sageattention.md).
 
 ## ComfyUI behavior
 

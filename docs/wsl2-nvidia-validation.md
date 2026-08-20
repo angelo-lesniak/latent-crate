@@ -92,7 +92,7 @@ portable Compose file uses a CDI device name. Record whether the current
 
 ## 5. Other variants
 
-- [ ] Build and verify `--no-sage`; confirm the smaller image contains no Sage
+- [ ] Build and verify `--sage off`; confirm the smaller image contains no Sage
       package and the matching smoke command does not run Sage checks.
 - [ ] Build `edge` and confirm its pinned CUDA TorchCodec wheel decodes the smoke
       video and a representative real input.

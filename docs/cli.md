@@ -14,8 +14,8 @@ General rules:
   `COMFY_PORT=4210 bash bin/latentcrate up current --detach`.
 - `CONTAINER_ENGINE=docker` or `CONTAINER_ENGINE=podman` overrides engine
   detection. Podman must be rootless and use `crun`.
-- `LATENTCRATE_SAGE` (default `true`) selects the Sage-capable image. The
-  command-line flags `--sage` and `--no-sage` override it for one command.
+- `LATENTCRATE_SAGE` (default `available`) selects the Sage mode. The
+  command-line flag `--sage <mode>` overrides it for one command.
 
 ## Command summary
 
@@ -48,17 +48,18 @@ General rules:
 
 ## Shared variant flags
 
-`doctor`, `up`, `build`, `config`, and `smoke-gpu` accept:
+`doctor`, `up`, `build`, `config`, and `smoke-gpu` accept
+`--sage <off|available|global>`:
 
-| Flag | Meaning |
+| Mode | Effect |
 | --- | --- |
-| `--sage` | Use the SageAttention-capable image (the default) |
-| `--no-sage` | Use the smaller image without SageAttention |
+| `off` | Smaller image without SageAttention |
+| `available` | Sage-capable image; workflows opt in (the default) |
+| `global` | Sage-capable image; ComfyUI applies Sage globally (`--use-sage-attention`) |
 
-`COMFY_GLOBAL_SAGE=true` forces the Sage-capable image for `up`, `build`,
-`config`, and `smoke-gpu`: while it is set, `--no-sage` and
-`LATENTCRATE_SAGE=false` have no effect. `doctor` does not apply this
-override, so `doctor --no-sage` can check a variant that `up` will not build.
+One mode drives both the image variant and the runtime behavior, so an
+impossible combination cannot be selected, and `doctor`, `up`, `build`,
+`config`, and `smoke-gpu` always resolve the same variant for the same mode.
 
 ## Frontend flags
 
@@ -98,7 +99,7 @@ bash bin/latentcrate init --node-set latent-nodepack current
 ## doctor
 
 ```text
-bin/latentcrate doctor [profile] [--allow-no-gpu] [--sage|--no-sage]
+bin/latentcrate doctor [profile] [--allow-no-gpu] [--sage mode]
 ```
 
 Checks the host: engine and Compose availability, GPU and driver, CDI devices,
@@ -113,13 +114,13 @@ Fix every `[fail]` line before building.
 
 ```bash
 bash bin/latentcrate doctor current
-bash bin/latentcrate doctor my-gpu --no-sage
+bash bin/latentcrate doctor my-gpu --sage off
 ```
 
 ## up
 
 ```text
-bin/latentcrate up [profile] [--sage|--no-sage] [--detach] [--use-saved-node-deps] [--model-set name] [frontend flag]
+bin/latentcrate up [profile] [--sage mode] [--detach] [--use-saved-node-deps] [--model-set name] [frontend flag]
 ```
 
 Captures the current third-party node requirements, builds the image, and starts
@@ -141,7 +142,7 @@ bash bin/latentcrate up edge --frontend-source /path/to/ComfyUI_frontend --detac
 ## build
 
 ```text
-bin/latentcrate build [profile] [--sage|--no-sage] [--use-saved-node-deps] [frontend flag]
+bin/latentcrate build [profile] [--sage mode] [--use-saved-node-deps] [frontend flag]
 ```
 
 Same capture and image build as `up`, but does not start ComfyUI. Supports the
@@ -169,14 +170,14 @@ bash bin/latentcrate down current
 ## config
 
 ```text
-bin/latentcrate config [profile] [--sage|--no-sage] [frontend flag]
+bin/latentcrate config [profile] [--sage mode] [frontend flag]
 ```
 
 Prints the fully rendered Compose configuration for inspection. Repeat the
 same variant and frontend flags that you use with `up`.
 
 ```bash
-bash bin/latentcrate config current --no-sage
+bash bin/latentcrate config current --sage off
 ```
 
 ## status
@@ -237,7 +238,7 @@ bash bin/latentcrate shell current
 ## smoke-gpu
 
 ```text
-bin/latentcrate smoke-gpu [profile] [--sage|--no-sage] [frontend flag]
+bin/latentcrate smoke-gpu [profile] [--sage mode] [frontend flag]
 ```
 
 Runs the real GPU and media checks inside the running container: CUDA, Torch,

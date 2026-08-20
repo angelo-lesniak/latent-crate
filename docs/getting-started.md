@@ -146,11 +146,11 @@ available, but ComfyUI does not replace attention globally. To build without
 Sage, use:
 
 ```bash
-bash bin/latentcrate up current --no-sage --detach
+bash bin/latentcrate up current --sage off --detach
 ```
 
-You can make that choice persistent with `LATENTCRATE_SAGE=false` in `.env`.
-Use `doctor current --no-sage` when checking a one-off opt-out build.
+You can make that choice persistent with `LATENTCRATE_SAGE=off` in `.env`.
+Use `doctor current --sage off` when checking a one-off opt-out build.
 
 ## Confirm persistence
 

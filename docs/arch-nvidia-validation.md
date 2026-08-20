@@ -69,7 +69,7 @@ bash bin/latentcrate up current --detach
   not prove that a CUDA kernel or codec works.
 - For MiniMax H3 work, confirm the memory-efficient SageAttention path is active
   and observe its peak VRAM use.
-- If image selection changed, also build and test `--no-sage`.
+- If image selection changed, also build and test `--sage off`.
 
 ### Frontend modes
 

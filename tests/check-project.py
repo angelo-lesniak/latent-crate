@@ -640,7 +640,7 @@ def check_env_example_defaults() -> None:
         "COMFY_ALLOW_REMOTE=false",
         "COMFY_PIDS_LIMIT=2048",
         "COMFY_LOCAL_NODES_DIR=./local/custom_nodes",
-        "LATENTCRATE_SAGE=true",
+        "LATENTCRATE_SAGE=available",
     ):
         if default not in env_example:
             fail(f"privacy/containment default is undocumented: {default}")

@@ -22,18 +22,19 @@ Having Sage in the image does not force every workflow to use it. This is the
 default because workflow-level patches can select Sage only where it is known to
 work.
 
-`COMFY_GLOBAL_SAGE=false` therefore remains the normal setting. Change it to
-`true` only after representative workflows pass with ComfyUI's global
-`--use-sage-attention` behavior.
+`LATENTCRATE_SAGE=available` therefore remains the normal setting. Use
+`LATENTCRATE_SAGE=global` (or `--sage global` for one command) only after
+representative workflows pass with ComfyUI's global `--use-sage-attention`
+behavior.
 
 To build the smaller image without Sage:
 
 ```bash
-bash bin/latentcrate up current --no-sage --detach
+bash bin/latentcrate up current --sage off --detach
 ```
 
-After `up --no-sage`, repeat `--no-sage` with `config` or `smoke-gpu` when
-inspecting that running variant. Set `LATENTCRATE_SAGE=false` in `.env` for a
+After `up --sage off`, repeat `--sage off` with `config` or `smoke-gpu` when
+inspecting that running variant. Set `LATENTCRATE_SAGE=off` in `.env` for a
 persistent opt-out.
 
 ## KJNodes MiniMax H3 path

@@ -11,7 +11,7 @@ All modes ultimately supply a built `dist/` directory to ComfyUI through
 | Test uncommitted source without host Node.js | `--frontend-source` |
 | Serve frontend files built by another trusted system | `--frontend-dist` |
 
-All four modes use the Sage-capable runtime by default. Add `--no-sage` only
+All four modes use the Sage-capable runtime by default. Add `--sage off` only
 when you want the smaller runtime variant. The
 [CLI reference](cli.md#frontend-flags) is the main source for these flags; the
 table below maps each flag to its mode.
