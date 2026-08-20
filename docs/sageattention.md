@@ -10,6 +10,9 @@ bash bin/latentcrate up current --detach
 bash bin/latentcrate smoke-gpu current
 ```
 
+The [CLI reference](cli.md) is the main source for these commands and their
+flags.
+
 Container caching rebuilds Sage only when a relevant input changes. The image
 records the source commit, CUDA architecture list, and wheel digest.
 
@@ -29,9 +32,9 @@ To build the smaller image without Sage:
 bash bin/latentcrate up current --no-sage --detach
 ```
 
-Set `LATENTCRATE_SAGE=false` in `.env` for a persistent opt-out. Use
-`--no-sage` again with `config` or `smoke-gpu` when inspecting that running
-variant.
+After `up --no-sage`, repeat `--no-sage` with `config` or `smoke-gpu` when
+inspecting that running variant. Set `LATENTCRATE_SAGE=false` in `.env` for a
+persistent opt-out.
 
 ## KJNodes MiniMax H3 path
 

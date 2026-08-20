@@ -2,10 +2,10 @@
 
 ## Guiding principle
 
-**Code is a liability; less is more.** Prefer the smallest coherent solution
-that satisfies the task and preserves the project's invariants. Remove obsolete
-complexity when it is in scope and verified. Do not turn a local task into an
-unrelated rewrite.
+**Code is a liability; less is more.** Prefer the smallest coherent
+solution that satisfies the task and preserves the project's invariants.
+Remove obsolete complexity when it is in scope and
+verified. Do not turn a local task into an unrelated rewrite.
 
 Documentation is maintained surface area too. Add information only when it
 helps a named reader decide, act, verify, or recover.
@@ -22,13 +22,8 @@ helps a named reader decide, act, verify, or recover.
 
 ## Documentation review gate
 
-Apply `docs/documentation-agent-checklist.md` when a change affects:
-
-- user-visible behavior;
-- commands, configuration, defaults, or storage;
-- installation, operation, troubleshooting, privacy, or security;
-- compatibility, support, validation, or expected limitations; or
-- terminology or navigation used by a meaningful audience.
+Apply `docs/documentation-agent-checklist.md` for the changes named in its
+"When to use this checklist" section.
 
 Compare the change with the relevant canonical documentation and
 `docs/index.md`.

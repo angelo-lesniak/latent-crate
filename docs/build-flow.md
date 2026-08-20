@@ -5,7 +5,7 @@ wheel files do not enter the final image. The build is split into four small
 diagrams to keep the arrows short. Read each diagram from top to bottom.
 
 Solid arrows mean `FROM`: the next stage builds on the earlier stage. Dotted
-arrows pass only the named artifact. A stage may appear in more than one
+arrows pass only the named artifact. A stage can appear in more than one
 diagram so each path can be read on its own.
 
 ## Shared ComfyUI runtime

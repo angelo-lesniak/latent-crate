@@ -12,7 +12,9 @@ All modes ultimately supply a built `dist/` directory to ComfyUI through
 | Serve frontend files built by another trusted system | `--frontend-dist` |
 
 All four modes use the Sage-capable runtime by default. Add `--no-sage` only
-when you want the smaller runtime variant.
+when you want the smaller runtime variant. The
+[CLI reference](cli.md#frontend-flags) is the main source for these flags; the
+table below maps each flag to its mode.
 
 | Flag | `COMFY_FRONTEND_MODE` value |
 | --- | --- |
@@ -41,7 +43,10 @@ The requested release and a digest of the installed assets are stored below
 ## Trusted Git mode
 
 Git mode builds a public fork, branch, pull-request reference, tag, or commit in
-an isolated Node stage and copies only `dist/` into the runtime image.
+an isolated Node stage and copies only `dist/` into the runtime image. Use only
+trusted source: package installation and frontend build scripts execute code
+inside the builder, and the resulting JavaScript runs in the browser with
+access to the ComfyUI API.
 
 ```bash
 bash bin/latentcrate up edge \
@@ -80,12 +85,9 @@ FRONTEND_GIT_URL=https://github.com/your-name/ComfyUI_frontend.git
 FRONTEND_GIT_REF=<full-40-character-commit>
 ```
 
-Copy all other required pinned versions from an existing profile. Use only
-trusted source:
-package installation and frontend build scripts execute code inside the builder,
-and the resulting JavaScript runs in the browser with access to the ComfyUI API.
-Git URLs containing credentials are rejected. Private repositories and build
-credentials are not supported by the default setup.
+Copy all other required pinned versions from an existing profile. Git URLs
+containing credentials are rejected. Private repositories and build credentials
+are not supported by the default setup.
 
 Git images record the requested reference, resolved commit, repository URL, and
 asset content digest below `/usr/local/share/latentcrate`.

@@ -55,6 +55,11 @@ General rules:
 | `--sage` | Use the SageAttention-capable image (the default) |
 | `--no-sage` | Use the smaller image without SageAttention |
 
+`COMFY_GLOBAL_SAGE=true` forces the Sage-capable image for `up`, `build`,
+`config`, and `smoke-gpu`: while it is set, `--no-sage` and
+`LATENTCRATE_SAGE=false` have no effect. `doctor` does not apply this
+override, so `doctor --no-sage` can check a variant that `up` will not build.
+
 ## Frontend flags
 
 At most one frontend flag may be supplied per command.
@@ -77,8 +82,9 @@ bin/latentcrate init [--node-set name] [profile]
 
 Creates `.env` from `.env.example` when `.env` does not exist, fills in
 `HOST_UID`, `HOST_GID`, and `HOST_MODEL_GID` from the current user, and creates
-the host storage directories. An existing `.env` is kept unchanged, so `init`
-is safe to re-run.
+the host storage directories. An existing `.env` keeps its content, but every
+run re-applies mode `0600`, so re-running `init` is the supported way to fix
+`.env` permissions.
 
 | Flag | Meaning |
 | --- | --- |
@@ -96,8 +102,10 @@ bin/latentcrate doctor [profile] [--allow-no-gpu] [--sage|--no-sage]
 ```
 
 Checks the host: engine and Compose availability, GPU and driver, CDI devices,
-and whether the profile's CUDA architecture lists cover the detected compute
-capability. Fix every `[fail]` line before building.
+whether the profile's CUDA architecture lists cover the detected compute
+capability, about 75 GB of free engine storage, the existence and permissions
+of the host storage directories, and whether `COMFY_PORT` is already in use.
+Fix every `[fail]` line before building.
 
 | Flag | Meaning |
 | --- | --- |
@@ -298,7 +306,7 @@ every shipped set. `status` performs the same local verification without
 network access or file changes.
 
 The helper image follows the selected version profile; use `--profile edge`
-when wanted. It does not change which files a model set contains.
+when wanted. The profile does not change which files a model set contains.
 
 ```bash
 bash bin/latentcrate models list
@@ -315,6 +323,11 @@ workflows, and storage behavior.
 bin/latentcrate templates list [profile]
 bin/latentcrate templates create-model-set <template> [profile] [--name name]
 ```
+
+Both subcommands first build the selected image when it is not built yet. A
+first build has the full time, download, and disk cost stated in the README
+(up to several hours and about 75 GB of build space) and needs network access;
+only the inspection itself runs offline.
 
 `list` reads the official workflow-template package installed in the selected
 ComfyUI image and shows templates marked as open source and suitable for local

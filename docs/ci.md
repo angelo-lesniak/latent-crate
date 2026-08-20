@@ -7,19 +7,22 @@ a physical NVIDIA GPU. The workflow does not test CUDA, Triton, Sage kernels,
 TorchCodec CUDA, or NVENC at runtime.
 
 The static workflow also renders every Compose variant with the pinned
-standalone podman-compose parser. This catches provider-specific YAML and
-profile handling without needing a Podman service in GitHub Actions.
+standalone podman-compose parser. This rendering check catches
+provider-specific YAML and profile handling without needing a Podman service
+in GitHub Actions.
 It also builds the real model-set helper, downloads one tiny public pinned
 file, and verifies that file again with networking disabled.
 
-Standard GitHub-hosted `ubuntu-latest` runners may be too small for the CUDA
+Standard GitHub-hosted `ubuntu-latest` runners might be too small for the CUDA
 development/runtime bases, intermediate BuildKit state, and cache export. The
 workflow leaves its result in BuildKit instead of loading a duplicate image into
 the runner's Docker daemon. Set the repository variable
 `LATENTCRATE_BUILD_RUNNER` to the label of a larger Linux runner or a self-hosted
-CPU runner with ample disk. A GPU is not required for image construction. A
-75 GB runner is a practical release-only starting point; prefer the 4-vCPU,
-16-GB RAM, 150-GB class for Sage builds. Sage compilation is serialized across
+CPU runner with ample disk. A GPU is not required for image construction. The
+runner sizes below are estimates based on builds observed in August 2026;
+re-measure them when build inputs change. A 75 GB runner is a practical
+release-only starting point; prefer the 4-vCPU, 16-GB RAM, 150-GB class for
+Sage builds. Sage compilation is serialized across
 extensions and uses the profile's low-memory `SAGE_BUILD_JOBS=2` setting;
 increase it only on a runner with enough measured free memory.
 
@@ -47,6 +50,5 @@ Before publishing images or describing a release as fully validated:
 - retain the image digest, validation reports, frontend source details, and any
   accepted exceptions with the release.
 
-GitHub private vulnerability reporting should be enabled when the repository is
-published. Buildx cache reuse may be checked for build performance, but it is
-not evidence that an image works correctly.
+Buildx cache reuse can be checked for build performance, but it is not
+evidence that an image works correctly.

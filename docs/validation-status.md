@@ -6,89 +6,88 @@ attempt made while reaching that result. Reusable test steps live in the
 [WSL2/NVIDIA](wsl2-nvidia-validation.md) validation guides. Dated completed
 results are kept in [validation history](validation-history.md).
 
+Each result applies only to the versions and environment recorded for its
+dated run. After any change to a pinned component, the Dockerfile, the Compose
+files, or the wrapper, repeat the relevant validation guide before reusing a
+result.
+
+## Status and evidence vocabulary
+
+These terms keep one meaning across the README support matrix and the
+documentation:
+
+- **Supported**: the project intends to maintain the stated feature, version,
+  or environment. This is a maintenance promise, not proof that it works.
+- **Expected**: technical evidence supports the claim, but no recorded
+  validation run has confirmed it.
+- **Validated**: a defined procedure passed, with a dated record in
+  [validation history](validation-history.md).
+- **Unverified**: no recorded evidence supports the claim yet.
+
 ## Validated
 
-### Native Arch Linux with RTX 5090
+### Native Arch Linux with RTX 5090 — 2026-08-17
 
-- `doctor current` and `doctor edge` passed without warnings using rootless
-  Podman 6.1.0, podman-compose 1.6.0, and `crun`. Driver 610.57.04, CDI device
-  discovery, compute capability 12.0, host identity, storage, and both CUDA
-  architecture lists were accepted.
-- The node-set helper installed all ten `latent-nodepack` repositories at their
-  declared commits. Standalone status reported every node ready, and a clean
-  sync made no changes.
-- The full third-party dependency snapshot and package build completed,
-  including the reviewed SAM2 and WAS Git rewrites. Packages installed offline
-  into the isolated runtime tree, and `pip check` passed.
-- The `edge-sage` and `current-sage` images built, started, and became healthy.
-  Reusing saved node dependencies also completed and reused the expected build
-  layers.
-- The final runtime used UID/GID 1000 with the supplementary model group. NVCC
-  and the node wheelhouse were absent; GCC, CMake, and Ninja remained available
-  for Triton and PyTorch JIT work. Runtime caches stayed below `/cache`.
-- GPU checks confirmed PyTorch 2.11 with CUDA 13.0, Triton 3.6, the RTX 5090
-  `sm120` SageAttention build, a real Sage kernel, required FFmpeg capabilities,
-  release-frontend provenance, edge TorchCodec decoding, and the expected
-  current-profile TorchCodec opt-out.
-- The complete `smoke-gpu current` command passed. It verified exact image and
-  frontend provenance, the real `sm120` Sage kernel, required FFmpeg features,
-  and a 1920x1080 H.264 NVENC encode.
-- The Sage opt-out image also built, started, and passed its matching smoke test.
-- Recreating the edge container preserved the tracked input, output, workflow,
-  and user-file inventory. UI-level contents and Manager database behavior still
-  need a manual check.
+The 2026-08-17 run on native Arch Linux with rootless Podman 6.1.0 and an RTX
+5090 passed `doctor`, the node-set install, the third-party dependency build,
+both Sage-variant image builds, the GPU checks, `smoke-gpu current`, the Sage
+opt-out smoke test, and the container-recreation state check. UI-level
+contents and Manager database behavior still need a manual check. The
+[2026-08-17 record](validation-history.md#arch-linux-and-rtx-5090--2026-08-17)
+is the main source for this result.
 
-### Windows no-GPU diagnostics
+### Windows/WSL model-set checks — 2026-08-19
 
-- The static suite passes in Ubuntu WSL with all 68 Python tests and no skips.
-  Repository policy, Bash syntax, CLI, lifecycle, entrypoint, doctor, frontend,
-  and exporter checks pass. The pinned ShellCheck and hadolint containers also
-  pass, as does the hermetic podman-compose 1.6 compatibility suite.
-- Model-set unit tests cover strict manifests, shared-file deduplication,
-  conflicting destinations, resumable staging, access preflight, checksum
-  cleanup, and atomic no-overwrite publication with a tiny local fixture. All
-  24 shipped file entries match the filename, size, and SHA-256 metadata at
-  their immutable Hugging Face revisions. All seven unique commit-pinned
-  official workflow files and all six immutable license references resolve.
-- The model-set image built and ran as UID/GID 1000 through rootless Podman
-  5.5.2 with `crun`. It downloaded and offline-verified a small public file.
-  Hugging Face dry-run checks confirmed token access to all 16 unique files in
-  the six shipped sets.
-- The gated `flux2-klein-9b-distilled` set downloaded all 18.3 GB through the
-  real Xet path. Every file passed size and SHA-256 verification. A separate
-  network-disabled, read-only status container verified the finished set.
-- A controlled interruption preserved a 775 MB partial FLUX file. The next run
-  resumed and completed it, followed by another offline checksum pass. A
-  network-disabled fetch then reused the complete set without a token.
-- Inspection of the live token-fed helper contained neither the token value nor
-  the `HF_TOKEN` and internal token variable names.
-- Docker-format Podman builds completed for current, current with SageAttention,
-  and edge. A hardened CPU container served ComfyUI and Manager on
-  `127.0.0.1:4207` and preserved user state across recreation.
-- Release, prebuilt-dist, public Git, and container-built local frontend paths
-  passed their available build or CPU-serving checks. The local source build
-  completed its network-disabled final phase.
+The 2026-08-19 run in Ubuntu WSL passed all 68 Python tests then present, with
+the static, ShellCheck, hadolint, and podman-compose gates. The model-set
+helper passed its download, gated 18.3 GB fetch, interruption-resume, offline
+verification, and token-hygiene checks through a rootless Podman connection,
+but its client ran on Windows, so this run did not validate the supported
+Linux wrapper path or a GPU runtime. The
+[2026-08-19 record](validation-history.md#windowswsl-model-set-validation--2026-08-19)
+is the main source for this result.
 
-Earlier full-image Windows runs used a rootful Podman WSL machine. The model-set
-checks above used its separate rootless connection. They validate the helper and
-Linux container behavior, but not the supported wrapper path because the client
-still ran on Windows rather than inside Linux.
+### Windows no-GPU build and CPU checks — 2026-08-08 to 2026-08-16
+
+The 2026-08-08 to 2026-08-16 runs used a rootful Podman WSL machine outside
+the supported runtime. They built the current, current-with-SageAttention, and
+edge images, served ComfyUI and Manager from a hardened CPU container that
+preserved user state across recreation, and passed the frontend build and
+provenance checks available at the time. The
+[2026-08-08 to 2026-08-16 record](validation-history.md#windows-no-gpu-validation--2026-08-08-to-2026-08-16)
+is the main source for this result.
+
+### Manager Extensions UI reachability — 2026-08-19
+
+The 2026-08-19 check confirmed that, with the default
+`COMFY_DISABLE_API_NODES=false`, Manager's Extensions UI reaches
+`https://api.comfy.org` on the native Arch Linux host and the Windows rootful
+Podman WSL setup. The
+[2026-08-19 record](validation-history.md#manager-extensions-ui-reachability--2026-08-19)
+is the main source for this result.
+
+### MiniMax H3 workflow run — 2026-08-19
+
+The 2026-08-19 check confirmed a full MiniMax H3 image-to-video workflow run
+on the native Arch Linux host and the Windows setup. A VRAM observation for
+the memory-efficient Sage path was not recorded. The
+[2026-08-19 record](validation-history.md#minimax-h3-workflow-run--2026-08-19)
+is the main source for this result.
 
 ## Still unverified
 
 Before calling a release fully GPU-validated:
 
 - run `models fetch` and `up --model-set` through the supported wrapper on
-  native Linux with rootless Podman and with Docker; complete full Krea-2 and
-  MiniMax H3 downloads when those workflows are validated;
+  native Linux with rootless Podman and with Docker, including the full
+  MiniMax H3 download; complete the full Krea-2 download when its workflow is
+  validated;
 - complete a clean-cache current build through the supported wrapper;
 - rebuild with the expanded OpenCV/image runtime libraries and canonical
   `opencv-contrib-python` requirement, then confirm every included third-party
   node imports and only one OpenCV distribution is installed;
-- adopt the new `COMFY_DISABLE_API_NODES=false` default on the existing host and
-  confirm Manager's Extensions UI can reach `https://api.comfy.org`;
-- run representative image, audio, video, third-party-node, and MiniMax H3
-  workflows, including a VRAM observation for the memory-efficient Sage path;
+- run representative image, audio, video, and third-party-node workflows, and
+  record a VRAM observation for the memory-efficient Sage path;
 - confirm UI-visible persistence, Manager database behavior, automatic Manager
   dependency refresh, dirty node-set refusal, and a real local-only node;
 - validate the remaining frontend modes on the NVIDIA host;

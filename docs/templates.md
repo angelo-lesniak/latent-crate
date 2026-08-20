@@ -3,6 +3,11 @@
 LatentCrate can inspect the official workflow templates installed in a selected
 ComfyUI image. It does not read a changing online catalog.
 
+Both commands first build the selected image when it is not built yet. A first
+build has the full time, download, and disk cost stated in the
+[README](../README.md) — up to several hours and about 75 GB of build space —
+and needs network access. Only the inspection itself runs offline.
+
 ## List local-compatible templates
 
 ```bash
@@ -10,8 +15,7 @@ bash bin/latentcrate templates list current
 bash bin/latentcrate templates list edge
 ```
 
-The first use builds the selected image if needed. The inspection itself runs
-offline. The list contains installed templates whose packaged metadata says:
+The list contains installed templates whose packaged metadata says:
 
 - `openSource` is true;
 - status is active or not set;
@@ -47,14 +51,19 @@ and a moving branch such as `main`. They may omit exact sizes, checksums, and
 licenses. LatentCrate marks those missing values with `TODO` instead of
 guessing them. A draft is intentionally rejected by `models fetch`.
 
-Before adding the file to `config/model-sets/`:
+To complete a draft:
 
 1. confirm every repository and ComfyUI destination;
 2. replace branch names with full 40-character repository commits;
 3. add exact byte sizes and lowercase SHA-256 checksums;
 4. add immutable license links;
 5. pin the official workflow link to a full commit;
-6. run `python3 scripts/verify-model-set-metadata.py` and the model-set tests.
+6. move the completed file into `config/model-sets/`;
+7. run `python3 scripts/verify-model-set-metadata.py` and the model-set unit
+   tests: `python3 -m unittest discover -s tests -p 'test_model_sets.py'`.
+
+Run the verifier and the tests after the move: both scan `config/model-sets/`
+only, so a draft left in `build/model-set-drafts/` is not checked.
 
 The current model-set format accepts Hugging Face files only. Unsupported model
 URLs remain as comments in the draft so they are not silently lost.

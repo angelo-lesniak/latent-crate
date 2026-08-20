@@ -3,8 +3,6 @@
 This page explains terms used in LatentCrate. The definitions are short on
 purpose.
 
-- **Build stage:** a temporary part of a container build. Compiler tools can be
-  used there without being copied into the final runtime image.
 - **CDI:** Container Device Interface. LatentCrate uses CDI names such as
   `nvidia.com/gpu=all` to give a container access to NVIDIA GPUs.
 - **ComfyUI Manager:** the extension that installs third-party nodes from inside

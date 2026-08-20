@@ -21,7 +21,8 @@ Every `up` captures requirements, builds the image, and recreates the container:
 bash bin/latentcrate up current --detach
 ```
 
-Use the profile and `--no-sage` choice that you normally run. To capture and
+Use the profile and `--no-sage` choice that you normally run; the
+[CLI reference](cli.md#up) is the main source for these flags. To capture and
 build without starting ComfyUI:
 
 ```bash
@@ -39,6 +40,10 @@ scan, resolution, or native compile restores the last buildable snapshot.
 
 Node-set files under `config/custom-nodes/sets/` provide repeatable source
 groups. Every repository uses public HTTPS and a full commit.
+
+> **Warning:** commit pinning improves repeatability. It is not a code audit.
+> Review the node source before using it with sensitive models, inputs, or
+> workflows.
 
 ```bash
 bash bin/latentcrate nodes list
@@ -62,10 +67,6 @@ Node sets install source only. Capture and rebuild dependencies afterward:
 ```bash
 bash bin/latentcrate up current --detach
 ```
-
-> **Warning:** commit pinning improves repeatability. It is not a code audit.
-> Review the node source before using it with sensitive models, inputs, or
-> workflows.
 
 ### Export a set from an existing installation
 
@@ -107,6 +108,12 @@ local/custom_nodes/
 The whole root is ignored by Git and the container build context. It is mounted
 read-only at `/local/custom_nodes` and included in dependency capture.
 
+Edit the source with your normal host tools, then run `up` again so ComfyUI
+loads the new code; there is no hot reload. Changed Python requirements rebuild
+the dependency layer, and unchanged dependencies reuse the build cache. A node
+that needs extra operating-system libraries can still need a reviewed
+Dockerfile change.
+
 Node directory names must be unique across managed and local storage, ignoring
 case. A duplicate stops capture and startup instead of loading an unclear node.
 Top-level symlinks are rejected; put the real checkout below the local-node root.
@@ -126,8 +133,9 @@ Add another deliberate filename pattern, such as `requirements-cuda.txt`, to:
 config/python/custom-node-requirements.include
 ```
 
-Every configured pattern must match. Development, documentation, and test
-requirements are not collected automatically.
+Every configured pattern must match at least one file; an unmatched pattern
+stops the capture. Development, documentation, and test requirements are not
+collected automatically.
 
 The capture helper has no network access. Node trees are read-only, and the
 helper receives no engine socket or credentials. Host Python is not required.

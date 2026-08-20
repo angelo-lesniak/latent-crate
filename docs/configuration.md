@@ -25,11 +25,11 @@ COMFY_PORT=4210 bash bin/latentcrate up current --detach
 | `HOST_MODEL_GID` | Host GID | Extra model-storage group used by Docker |
 | `UMASK` | `0002` | Permissions mask for created files |
 
-`HF_TOKEN` is optional and is needed for gated model sets such as FLUX.2 Klein.
-Put a read token in `.env` only after accepting the model license. The wrapper
-pipes it to the model downloader and removes it from the environment used by
-Compose. `latentcrate init` restricts `.env` to mode `0600`; run it again or
-use `chmod 600 .env` for an older file. See [Model sets](model-sets.md).
+`HF_TOKEN` is an optional Hugging Face read token for gated model sets. Put it
+only in the uncommitted `.env`; the wrapper removes it from the environment
+used by Compose. See
+[Model sets](model-sets.md#hugging-face-access-and-licenses) for setup and
+token handling.
 
 `MODEL_SET_EXTRA_WRITE_ROOTS` is an advanced, colon-separated list of absolute
 container paths that the model downloader may reach through model symlinks.
@@ -65,8 +65,10 @@ format for Podman builds because the Dockerfile relies on Bash `SHELL` metadata.
 | `LATENTCRATE_SAGE` | `true` | Build and run the Sage-capable image |
 | `COMFY_GLOBAL_SAGE` | `false` | Add ComfyUI's global `--use-sage-attention` flag |
 
-Command-line `--sage` and `--no-sage` override `LATENTCRATE_SAGE` for `doctor`,
-`up`, `build`, `config`, and `smoke-gpu`.
+The `--sage` and `--no-sage` flags override `LATENTCRATE_SAGE` for one
+command; see [shared variant flags](cli.md#shared-variant-flags).
+`COMFY_GLOBAL_SAGE=true` forces the Sage-capable image: while it is set,
+`--no-sage` and `LATENTCRATE_SAGE=false` have no effect.
 
 The default gives workflows access to SageAttention without forcing global
 replacement. Keep `COMFY_GLOBAL_SAGE=false` unless representative workflows
@@ -95,22 +97,14 @@ GPU. Use `unless-stopped` when automatic restart is wanted.
 For node dependency behavior, Git requirements, private nodes, and pinned node
 sets, see [third-party nodes](third-party-nodes.md).
 
-Every `up` and `build` saves and rebuilds node dependencies by default. Use
-`--use-saved-node-deps` when one command should reuse the last saved dependency
-snapshot.
+Every `up` and `build` saves and rebuilds node dependencies by default. The
+`--use-saved-node-deps` flag is described in the [CLI reference](cli.md#up).
 
 ## Frontend selection
 
-Prefer command-line options for temporary frontend work:
-
-```bash
---frontend-release
---frontend-git <https-url> <reference>
---frontend-source <source-directory>
---frontend-dist <dist-directory>
-```
-
-For a saved configuration, use:
+Prefer command-line options for temporary frontend work; they are listed in
+the CLI reference under [frontend flags](cli.md#frontend-flags). For a saved
+configuration, use:
 
 | Setting | Meaning |
 | --- | --- |
@@ -120,13 +114,7 @@ For a saved configuration, use:
 | `COMFY_FRONTEND_SOURCE_DIR` | Local source checkout built in containers |
 | `COMFY_FRONTEND_DIST_DIR` | Existing built frontend files mounted read-only |
 
-| Flag | Resulting mode |
-| --- | --- |
-| `--frontend-release` | `COMFY_FRONTEND_MODE=release` |
-| `--frontend-git` | `COMFY_FRONTEND_MODE=git` |
-| `--frontend-source` | `COMFY_FRONTEND_MODE=source` (local source mode) |
-| `--frontend-dist` | `COMFY_FRONTEND_MODE=dist` (prebuilt `dist/`) |
-
+Each frontend flag selects the matching `COMFY_FRONTEND_MODE` for one command.
 See [frontend modes](frontends.md) before using source that you do not control.
 
 ## Version profiles

@@ -14,7 +14,7 @@ services/
 ```
 
 Each trainer will own its image, upstream reference, Python environment, and
-compiled caches. Services may share only a predictable mount vocabulary:
+compiled caches. Services must share only a predictable mount vocabulary:
 
 ```text
 /models
@@ -29,5 +29,5 @@ different dependency and PyTorch release schedules. TensorBoard, when added, sho
 pinned CPU-only optional service with a localhost port and read-only log mount.
 
 Every trainer must use an explicit Compose profile and service-specific wrapper
-command. The ComfyUI startup and shutdown code names the `comfy` service directly so adding a
+command. The ComfyUI startup code starts only the `comfy` service, so adding a
 trainer cannot make a normal `latentcrate up` reserve another GPU accidentally.

@@ -2,6 +2,25 @@
 
 This page keeps dated successful validation results. It records the final
 evidence from each validation period, not each intermediate debugging attempt.
+Each result applies only to the versions and environment recorded with it;
+repeat the relevant validation guide after any change to a pinned component,
+the Dockerfile, the Compose files, or the wrapper before reusing a result.
+
+## Manager Extensions UI reachability — 2026-08-19
+
+With the default `COMFY_DISABLE_API_NODES=false`, Manager's Extensions UI
+reached `https://api.comfy.org` on both validation hosts: the native Arch Linux
+host with rootless Podman and the Windows rootful Podman WSL setup. The version
+profiles, the tested LatentCrate commit, and image digests were not captured
+for this record, so the result cannot be matched to a specific image.
+
+## MiniMax H3 workflow run — 2026-08-19
+
+A full MiniMax H3 image-to-video workflow run completed on both validation
+hosts: the native Arch Linux host with rootless Podman and the Windows setup.
+The version profiles, VRAM observations, the tested LatentCrate commit, and
+image digests were not captured for this record, so the result cannot be
+matched to a specific image.
 
 ## Windows/WSL model-set validation — 2026-08-19
 
@@ -23,7 +42,9 @@ evidence from each validation period, not each intermediate debugging attempt.
 
 The model helper used a rootless Linux Podman machine, but its client ran on
 Windows. This validates the helper image and bind-mounted data path, not the
-supported Linux wrapper integration or a GPU runtime.
+supported Linux wrapper integration or a GPU runtime. The tested LatentCrate
+commit and image digests were not captured for this record, so the result
+cannot be matched to a specific image.
 
 ## Arch Linux and RTX 5090 — 2026-08-17
 
@@ -56,7 +77,9 @@ supported Linux wrapper integration or a GPU runtime.
   and user-file inventory.
 
 The unconditional container-recreation change passed the static and CLI
-regression suites and the following native lifecycle run.
+regression suites and the following native lifecycle run. The tested
+LatentCrate commit and image digests were not captured for this record, so the
+result cannot be matched to a specific image.
 
 ## Windows no-GPU validation — 2026-08-08 to 2026-08-16
 
@@ -84,3 +107,6 @@ CPU evidence.
   the local build used a network-disabled final install, typecheck, build, and
   atomic publish. Release and prebuilt-dist frontends were served by the CPU
   application.
+
+The tested LatentCrate commit and image digests were not captured for this
+record, so the result cannot be matched to a specific image.

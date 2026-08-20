@@ -1,6 +1,6 @@
 # Contributing
 
-LatentCrate intentionally supports a narrow environment first. Changes should
+LatentCrate intentionally supports a narrow environment first. Changes must
 preserve the portable Docker/Podman Compose core, host-mounted data model, and
 independent backend/frontend pinned versions.
 
@@ -23,10 +23,11 @@ bash tests/static.sh
 Python unit tests, `tests/check-project.py` (repository invariants; requires
 PyYAML), `tests/cli.sh`, `tests/node-deps-lifecycle.sh`, `tests/entrypoint.sh`
 (container entrypoint policy, engine-free), `tests/doctor.sh` (host doctor
-checks against the fake binaries in `tests/fixtures/doctor-bin/`), and
+checks against the fake binaries in `tests/fixtures/doctor-bin/`),
 `tests/resolve-frontend.sh` (offline frontend-reference resolution against the
-fake git in `tests/fixtures/resolver-bin/`), and `tests/podman-compose.sh`
-(all Compose variants against podman-compose 1.6). Missing optional tools (ripgrep,
+fake git in `tests/fixtures/resolver-bin/`), `tests/export-node-set.sh` (the
+node-set exporter), and `tests/podman-compose.sh` (all Compose variants against
+podman-compose 1.6). Missing optional tools (ripgrep,
 ShellCheck, a container engine) skip their component with an explicit
 `SKIPPED:` line rather than silently passing. Set
 `LATENTCRATE_STATIC_STRICT=1`, as CI does, to turn every such skip into a hard
@@ -38,12 +39,16 @@ Use the [documentation guidelines](docs/documentation-guidelines.md) to decide
 what belongs in the documentation, how much detail it needs, and where it should
 live. Coding and documentation agents should also apply the focused
 [documentation agent checklist](docs/documentation-agent-checklist.md) when
-writing or reviewing documentation and when user-visible behavior changes.
+writing or reviewing documentation and for any user-visible change (see the
+checklist's "When to use this checklist" section).
 
 Prefer an existing canonical page over duplicated explanations. Update
 `docs/index.md` when a justified new page changes task-oriented navigation. Do
 not add pages, examples, or general tutorials solely to make the documentation
 appear complete.
+
+Record each user-visible change in `CHANGELOG.md` under `## Unreleased` in the
+matching `### Added`, `### Changed`, or `### Fixed` subsection.
 
 ## Adding a pinned version key
 
@@ -63,11 +68,9 @@ locations, or builds and checks will disagree about it:
    presence in every profile and the no-duplicate-default rules across the
    layers above for all registered keys.
 
-GPU-related changes should include the report produced by:
-
-```bash
-bash bin/latentcrate smoke-gpu <profile> [--no-sage]
-```
+GPU-related changes should include the report produced by
+`bash bin/latentcrate smoke-gpu`; see the
+[CLI reference](docs/cli.md#smoke-gpu) for its flags.
 
 Changes to GPU, storage, engine, Manager, dependency, or frontend behavior should
 also run the baseline and only the relevant feature checks in the Arch/NVIDIA or
@@ -82,15 +85,14 @@ a reviewed full commit. Keep sets small and purpose-specific, explain why each
 node belongs, and update dependency and GPU validation when changing a set.
 
 Model-set entries must use immutable Hugging Face repository commits and include
-the exact remote filename, byte size, SHA-256 checksum, license link, and a
+the exact remote filename, byte size, SHA-256 checksum, license link, and
 commit-pinned official workflow links. Run the model-set unit tests and verify
 remote metadata with `python3 scripts/verify-model-set-metadata.py` before
-changing a shipped pin. This checks file metadata, official workflow links, and
-license references using public metadata and no token. Do not add tokens or
-downloaded weights to the repository.
+changing a shipped pin. This script checks file metadata, official workflow
+links, and license references using public metadata and no token. Do not add
+tokens or downloaded weights to the repository.
 
-`bash bin/latentcrate templates create-model-set <template> [profile]` can
-extract the installed official template's model hints into
-`build/model-set-drafts/`. It deliberately leaves `TODO` values when upstream
-metadata is not immutable or complete. Review every field before moving a draft
-to `config/model-sets/`.
+`bash bin/latentcrate templates create-model-set` can create a reviewable
+model-set manifest draft from an installed official template; see the
+[CLI reference](docs/cli.md#templates) and
+[official template tools](docs/templates.md) for the draft and review steps.

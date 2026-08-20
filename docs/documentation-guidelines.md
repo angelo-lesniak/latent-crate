@@ -246,6 +246,12 @@ appear current.
 Describe expected results declaratively: "If startup succeeds, the status is
 `healthy`." Do not use "should" to hide uncertainty about actual behavior.
 
+State validated behavior as plain fact and keep the evidence in the project's
+validation records. Add an inline evidence label only when the evidence is
+weaker than the claim, for example "expected to work" for an unvalidated path.
+Do not attach "validated" tags or evidence links to ordinary factual
+statements; they duplicate the evidence pages and go stale.
+
 ## Write technical English for an international audience
 
 Some rules below are based on ASD-STE100 Simplified Technical English, but

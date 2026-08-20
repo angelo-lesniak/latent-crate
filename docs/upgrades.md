@@ -49,11 +49,13 @@ comments.
 
 When testing a frontend fork, replace a branch or pull-request reference that
 can change with its resolved full commit. Record the frontend content digest as
-well as the commit; release frontends are packaged files and may not have a Git
-checkout inside the image.
+well as the commit; release frontends are packaged files and might not have a
+Git checkout inside the image.
 
-Before upgrading the Python/CUDA base, clear or move incompatible compiled cache
-directories if `smoke-gpu` suggests stale Triton or Torch extensions.
+If `smoke-gpu` reports stale Triton or Torch extensions after a Python/CUDA
+base upgrade, clear or move the compiled cache directories `triton/` and
+`torch-extensions/` under `COMFY_CACHE_DIR` (see the
+[storage layout](storage.md)).
 
 BuildKit cache mounts retain apt, pip, frontend, third-party node wheel, and Sage
 build files without copying those caches into the final image. GitHub image builds

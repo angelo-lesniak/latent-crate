@@ -96,7 +96,8 @@ bash bin/latentcrate init
 
 Open `.env`. Check the storage paths and `GPU_DEVICE`. The defaults keep
 everything below the repository, which is useful for a first test. Point
-`COMFY_MODELS_DIR` at an existing model library if needed.
+`COMFY_MODELS_DIR` at an existing model library if needed. The
+[configuration guide](configuration.md) documents every setting.
 
 Check the host before downloading the large image layers:
 
@@ -124,10 +125,10 @@ bash bin/latentcrate doctor my-gpu
 bash bin/latentcrate up my-gpu --detach
 ```
 
-`LATENTCRATE_TAG` names the image that the profile builds; it must be the
-profile file name plus `-sage`. Use `my-gpu` instead of `current` in the later
-commands. That combination is not described as supported until you complete
-the GPU checks on the real host.
+Use `my-gpu` instead of `current` in the later commands. The
+[configuration guide](configuration.md) explains how profile names and image
+tags fit together. Do not describe the new profile as validated until the GPU
+checks pass on the real host.
 
 Build and start the default profile:
 
@@ -161,8 +162,8 @@ bash bin/latentcrate up current --detach
 bash bin/latentcrate wait current
 ```
 
-The workflow and output should still be present because `/data` is mounted from
-the host. Container images and user data have separate lifecycles.
+The workflow and output are still present because `/data` is mounted from the
+host. Container images and user data have separate lifecycles.
 
 ## Useful first commands
 
