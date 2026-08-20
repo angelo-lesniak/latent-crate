@@ -27,6 +27,9 @@ purpose.
 - **Node set:** a named group of third-party node repositories, pinned to exact
   commits, defined by a file under `config/custom-nodes/sets/` and managed
   with the `nodes` commands.
+- **Model set:** a named group of Hugging Face files for an official workflow.
+  Each file is pinned by repository commit, size, and SHA-256 checksum and is
+  managed with the `models` commands.
 - **NPP:** NVIDIA Performance Primitives, a set of CUDA libraries for image and
   video processing. LatentCrate includes the required NPP runtime libraries only
   when TorchCodec is enabled.

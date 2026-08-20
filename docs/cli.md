@@ -39,6 +39,11 @@ General rules:
 | `nodes install` | Install a node set into `COMFY_DATA_DIR/custom_nodes` |
 | `nodes sync` | Update an installed node set to its pinned commits |
 | `nodes status` | Compare an installed node set with its manifest |
+| `models list` | List the available pinned model-file sets |
+| `models fetch` | Download and verify one or more model sets |
+| `models status` | Verify selected model files without network access |
+| `templates list` | List local-compatible official templates in a selected image |
+| `templates create-model-set` | Create a model-set manifest draft from a template |
 | `versions` | Print the pinned values of every version profile |
 
 ## Shared variant flags
@@ -106,7 +111,7 @@ bash bin/latentcrate doctor my-gpu --no-sage
 ## up
 
 ```text
-bin/latentcrate up [profile] [--sage|--no-sage] [--detach] [--use-saved-node-deps] [frontend flag]
+bin/latentcrate up [profile] [--sage|--no-sage] [--detach] [--use-saved-node-deps] [--model-set name] [frontend flag]
 ```
 
 Captures the current third-party node requirements, builds the image, and starts
@@ -118,6 +123,7 @@ ComfyUI container so it always runs the image that was just built.
 | --- | --- |
 | `--detach`, `-d` | Start in the background; follow up with `wait` |
 | `--use-saved-node-deps` | Skip the dependency refresh for this command and build from the last saved requirements |
+| `--model-set <name>` | Download and verify this model set before building and starting; repeat for more sets |
 
 ```bash
 bash bin/latentcrate up current --detach
@@ -276,6 +282,59 @@ ComfyUI before `install` or `sync`; the wrapper checks this. See
 bash bin/latentcrate nodes list
 bash bin/latentcrate nodes install latent-nodepack current
 ```
+
+## models
+
+```text
+bin/latentcrate models list
+bin/latentcrate models fetch [--profile profile] <set> [<set> ...] | all
+bin/latentcrate models status [--profile profile] <set> [<set> ...] | all
+```
+
+`fetch` downloads pinned Hugging Face files into `COMFY_MODELS_DIR`, verifies
+their size and SHA-256 checksum, then publishes them atomically. Several sets
+may be named in one command; shared files are downloaded once. `all` selects
+every shipped set. `status` performs the same local verification without
+network access or file changes.
+
+The helper image follows the selected version profile; use `--profile edge`
+when wanted. It does not change which files a model set contains.
+
+```bash
+bash bin/latentcrate models list
+bash bin/latentcrate models fetch flux2-klein-9b-distilled
+bash bin/latentcrate models status --profile edge all
+```
+
+See [Model sets](model-sets.md) for licenses, token handling, included
+workflows, and storage behavior.
+
+## templates
+
+```text
+bin/latentcrate templates list [profile]
+bin/latentcrate templates create-model-set <template> [profile] [--name name]
+```
+
+`list` reads the official workflow-template package installed in the selected
+ComfyUI image and shows templates marked as open source and suitable for local
+distribution. It excludes archived, deprecated, cloud-only, and packaged API
+workflows. This offline metadata check does not prove that extra nodes or model
+files are installed.
+
+`create-model-set` extracts embedded Hugging Face model hints into a new draft
+below `build/model-set-drafts/`. `--name` selects the draft filename; otherwise
+the template ID is used. Existing drafts are not overwritten. Complete every
+`TODO` before moving the file to `config/model-sets/`.
+
+```bash
+bash bin/latentcrate templates list edge
+bash bin/latentcrate templates create-model-set video_minimax_h3_i2v edge \
+  --name minimax-h3-i2v-review
+```
+
+See [Official template tools](templates.md) for the filter rules and review
+steps.
 
 ## versions
 

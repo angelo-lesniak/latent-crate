@@ -17,6 +17,9 @@ from typing import NoReturn
 
 MAX_ARCHIVE_BYTES = 256 * 1024 * 1024
 MAX_EXTRACTED_BYTES = 1024 * 1024 * 1024
+RELEASE_ASSET_URL_TEMPLATE = (
+    "https://github.com/{owner}/{repo}/releases/download/{tag}/dist.zip"
+)
 RELEASE_RE = re.compile(
     r"^(?P<owner>[A-Za-z0-9][A-Za-z0-9-]{0,38})/"
     r"(?P<repo>[A-Za-z0-9_.-]+)@"
@@ -99,9 +102,10 @@ def main() -> None:
     if destination.exists():
         fail(f"frontend destination already exists: {destination}")
 
-    asset_url = (
-        f"https://github.com/{match['owner']}/{match['repo']}/releases/"
-        f"download/{match['tag']}/dist.zip"
+    asset_url = RELEASE_ASSET_URL_TEMPLATE.format(
+        owner=match["owner"],
+        repo=match["repo"],
+        tag=match["tag"],
     )
     destination.parent.mkdir(parents=True, exist_ok=True)
 

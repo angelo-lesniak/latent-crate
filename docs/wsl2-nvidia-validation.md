@@ -82,6 +82,8 @@ portable Compose file uses a CDI device name. Record whether the current
       an automatic dependency refresh after a Manager node update.
 - [ ] Install and inspect the `latent-nodepack` node set; confirm ownership remains
       usable from WSL and the exact pinned commit is present.
+- [ ] Fetch and verify one model set in WSL storage, then use its linked official
+      workflow. Confirm a gated token does not appear in container inspection.
 - [ ] Run `bash bin/latentcrate smoke-gpu current` and retain the report.
 - [ ] Confirm Torch CUDA initialization, the Sage kernel, and the real FFmpeg
       NVENC encode pass. The normal `current` build is Sage-capable.

@@ -18,6 +18,7 @@ Use it when you want to:
 - test a frontend fork or local frontend changes against a pinned backend;
 - develop and test local nodes against pinned ComfyUI versions;
 - rebuild third-party node dependencies instead of installing them on every start;
+- fetch verified model sets for selected official ComfyUI workflows;
 - use the same project with Docker Compose or rootless Podman.
 
 > **Project status:** community preview. Static checks, no-GPU image builds,
@@ -82,6 +83,28 @@ nvidia-smi --query-gpu=compute_cap --format=csv,noheader
 ```
 
 ## Start here
+
+### Short path to a first workflow
+
+If Docker or Podman and the NVIDIA Container Toolkit are already ready, run:
+
+```bash
+git clone https://github.com/angelo-lesniak/latent-crate.git latentcrate
+cd latentcrate
+bash bin/latentcrate init
+bash bin/latentcrate doctor edge
+bash bin/latentcrate up edge --model-set minimax-h3-i2v
+```
+
+The last command downloads the selected models, builds the image, and keeps
+ComfyUI in the foreground so you can see its logs. Open
+<http://127.0.0.1:4207> when it is ready, open the template browser, and choose
+**MiniMax H3: Image to Video**. Press **Ctrl+C** in the terminal to stop
+ComfyUI. There is no background process to remember for this path.
+
+MiniMax H3 downloads about 44 GB. The first image build can also take from
+tens of minutes to several hours. Continue below if the host is not prepared,
+`doctor` reports a problem, or your GPU is not an RTX 50-series card.
 
 ### 1. Prepare the host
 
@@ -190,6 +213,21 @@ bash bin/latentcrate wait current
 Open <http://127.0.0.1:4207> when `wait` reports that ComfyUI is healthy.
 Generated files appear below `COMFY_DATA_DIR/output` on the host.
 
+To start with a ready workflow, list the pinned model sets and fetch one before
+startup:
+
+```bash
+bash bin/latentcrate models list
+bash bin/latentcrate up current \
+  --model-set flux2-klein-9b-distilled \
+  --detach
+```
+
+FLUX.2 Klein needs a Hugging Face read token after you accept its license. Add
+`HF_TOKEN=...` to your uncommitted `.env`. Krea-2 INT8 and MiniMax H3 sets are
+also included. See [Model sets](docs/model-sets.md) for the full list, licenses,
+storage needs, and standalone download commands.
+
 The SageAttention-capable image is the default. This makes workflow-level Sage
 features available, including the KJNodes MiniMax H3 patch. It does **not** force
 every workflow to use Sage. Set `LATENTCRATE_SAGE=false` in `.env`, or add
@@ -211,6 +249,8 @@ If the first run fails, start with the [troubleshooting guide](docs/troubleshoot
 | Look up any command or flag | [CLI reference](docs/cli.md) |
 | Set up MiniMax H3 with SageAttention | [SageAttention guide](docs/sageattention.md) |
 | Add nodes with ComfyUI Manager or local-only nodes | [Third-party node guide](docs/third-party-nodes.md) |
+| Find official workflows intended for local ComfyUI | [Template tools](docs/templates.md) |
+| Download pinned files for an official workflow | [Model sets](docs/model-sets.md) |
 | Develop or test a local node | [Local node development](#local-node-development) |
 | Test a public frontend fork or pull request | [Frontend modes](docs/frontends.md) |
 | Build an uncommitted local frontend | [Local source mode](docs/frontends.md#local-source-mode) |

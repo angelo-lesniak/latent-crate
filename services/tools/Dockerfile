@@ -39,6 +39,30 @@ COPY scripts/manage-node-set.py /usr/local/bin/latentcrate-manage-node-set.py
 ENTRYPOINT ["python", "/usr/local/bin/latentcrate-manage-node-set.py"]
 
 
+# Download pinned Hugging Face model files without requiring host Python.
+# The hf_xet extra keeps large-file transfers resumable and efficient.
+# The base image is pinned through a required build argument (versions/*.env).
+# hadolint ignore=DL3006
+FROM ${TOOL_PYTHON_IMAGE} AS model-set-tool
+
+LABEL org.opencontainers.image.title="LatentCrate model-set tool" \
+      org.opencontainers.image.description="Downloads and verifies pinned Hugging Face model files"
+
+RUN python -m pip install --no-cache-dir "huggingface_hub[hf_xet]==1.26.0"
+
+COPY scripts/manage-model-sets.py /usr/local/bin/latentcrate-manage-model-sets.py
+
+ENV HF_HUB_DISABLE_TELEMETRY=1 \
+    HF_HUB_DISABLE_IMPLICIT_TOKEN=1 \
+    HF_HUB_DOWNLOAD_TIMEOUT=60 \
+    HF_HUB_ETAG_TIMEOUT=30 \
+    HF_HOME=/cache \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+ENTRYPOINT ["python", "/usr/local/bin/latentcrate-manage-model-sets.py"]
+
+
 # The base image is pinned through a required build argument (versions/*.env).
 # hadolint ignore=DL3006
 FROM ${FRONTEND_NODE_IMAGE} AS frontend-local-tool

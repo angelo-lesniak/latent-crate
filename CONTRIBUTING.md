@@ -67,3 +67,11 @@ Compose service, documentation, and basic verification are all present.
 Third-party node-set entries must use a public credential-free HTTPS repository and
 a reviewed full commit. Keep sets small and purpose-specific, explain why each
 node belongs, and update dependency and GPU validation when changing a set.
+
+Model-set entries must use immutable Hugging Face repository commits and include
+the exact remote filename, byte size, SHA-256 checksum, license link, and a
+commit-pinned official workflow links. Run the model-set unit tests and verify
+remote metadata with `python3 scripts/verify-model-set-metadata.py` before
+changing a shipped pin. This checks file metadata, official workflow links, and
+license references using public metadata and no token. Do not add tokens or
+downloaded weights to the repository.

@@ -40,10 +40,28 @@ results are kept in [validation history](validation-history.md).
 
 ### Windows no-GPU diagnostics
 
-- The static suite passes with 52 Python tests; three symbolic-link tests skip on
-  Windows and pass in Linux helper containers. Repository policy, Bash syntax,
-  CLI, lifecycle, entrypoint, doctor, frontend, exporter, Compose rendering,
-  ShellCheck, and hadolint checks have passed.
+- The static suite passes in Ubuntu WSL with all 68 Python tests and no skips.
+  Repository policy, Bash syntax, CLI, lifecycle, entrypoint, doctor, frontend,
+  and exporter checks pass. The pinned ShellCheck and hadolint containers also
+  pass, as does the hermetic podman-compose 1.6 compatibility suite.
+- Model-set unit tests cover strict manifests, shared-file deduplication,
+  conflicting destinations, resumable staging, access preflight, checksum
+  cleanup, and atomic no-overwrite publication with a tiny local fixture. All
+  24 shipped file entries match the filename, size, and SHA-256 metadata at
+  their immutable Hugging Face revisions. All seven unique commit-pinned
+  official workflow files and all six immutable license references resolve.
+- The model-set image built and ran as UID/GID 1000 through rootless Podman
+  5.5.2 with `crun`. It downloaded and offline-verified a small public file.
+  Hugging Face dry-run checks confirmed token access to all 16 unique files in
+  the six shipped sets.
+- The gated `flux2-klein-9b-distilled` set downloaded all 18.3 GB through the
+  real Xet path. Every file passed size and SHA-256 verification. A separate
+  network-disabled, read-only status container verified the finished set.
+- A controlled interruption preserved a 775 MB partial FLUX file. The next run
+  resumed and completed it, followed by another offline checksum pass. A
+  network-disabled fetch then reused the complete set without a token.
+- Inspection of the live token-fed helper contained neither the token value nor
+  the `HF_TOKEN` and internal token variable names.
 - Docker-format Podman builds completed for current, current with SageAttention,
   and edge. A hardened CPU container served ComfyUI and Manager on
   `127.0.0.1:4207` and preserved user state across recreation.
@@ -51,13 +69,18 @@ results are kept in [validation history](validation-history.md).
   passed their available build or CPU-serving checks. The local source build
   completed its network-disabled final phase.
 
-The Windows runs used a rootful Podman WSL machine. They are useful diagnostics,
-but they do not validate the supported rootless or GPU runtime.
+Earlier full-image Windows runs used a rootful Podman WSL machine. The model-set
+checks above used its separate rootless connection. They validate the helper and
+Linux container behavior, but not the supported wrapper path because the client
+still ran on Windows rather than inside Linux.
 
 ## Still unverified
 
 Before calling a release fully GPU-validated:
 
+- run `models fetch` and `up --model-set` through the supported wrapper on
+  native Linux with rootless Podman and with Docker; complete full Krea-2 and
+  MiniMax H3 downloads when those workflows are validated;
 - complete a clean-cache current build through the supported wrapper;
 - rebuild with the expanded OpenCV/image runtime libraries and canonical
   `opencv-contrib-python` requirement, then confirm every included third-party

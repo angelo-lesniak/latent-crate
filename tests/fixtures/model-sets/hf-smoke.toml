@@ -1,0 +1,15 @@
+schema = 1
+description = "Tiny public file for the real downloader CI smoke test"
+workflow_urls = ["https://github.com/Comfy-Org/workflow_templates/blob/3db6490611e6a16b84b09110e61a07264ce47cd3/templates/image_flux2_text_to_image_9b.json"]
+
+[[license]]
+name = "MIT license declared by the GPT-2 model card"
+url = "https://huggingface.co/openai-community/gpt2/blob/607a30d783dfa663caf39e06633721c8d4cfcd7e/README.md"
+
+[[file]]
+repository = "openai-community/gpt2"
+revision = "607a30d783dfa663caf39e06633721c8d4cfcd7e"
+source = "config.json"
+destination = "ci/gpt2-config.json"
+size = 665
+sha256 = "0daed7749b4f02b8f76240d5444551d7b08712dab4d0adb8239c56ba823bb7b4"

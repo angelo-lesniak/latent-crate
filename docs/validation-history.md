@@ -3,6 +3,28 @@
 This page keeps dated successful validation results. It records the final
 evidence from each validation period, not each intermediate debugging attempt.
 
+## Windows/WSL model-set validation — 2026-08-19
+
+- Ubuntu WSL passed all 68 Python tests without platform skips, plus the
+  repository, Bash, CLI, lifecycle, entrypoint, doctor, frontend, and exporter
+  checks. Pinned ShellCheck, hadolint, and podman-compose 1.6 checks also passed.
+- The model-set helper built and ran through a rootless Podman 5.5.2 connection
+  with `crun` as UID/GID 1000. A real public download and a separate offline,
+  read-only status check passed.
+- All 16 unique Hugging Face files across the six shipped sets passed
+  authenticated dry-run access checks. The gated 18.3 GB
+  `flux2-klein-9b-distilled` set completed through Xet and passed its size,
+  SHA-256, offline-status, and offline-reuse checks.
+- A controlled interruption retained a 775 MB partial file. The next helper run
+  resumed it, completed the set, and passed another independent offline status
+  check.
+- Live container inspection contained neither the supplied token value nor its
+  environment-variable names.
+
+The model helper used a rootless Linux Podman machine, but its client ran on
+Windows. This validates the helper image and bind-mounted data path, not the
+supported Linux wrapper integration or a GPU runtime.
+
 ## Arch Linux and RTX 5090 — 2026-08-17
 
 - `doctor current` and `doctor edge` passed without warnings on native Arch

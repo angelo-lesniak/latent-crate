@@ -14,6 +14,7 @@ build/.custom-node-requirements.staging-*
 build/.node-deps-lifecycle.lock
 build/.node-deps-buildable.*
 build/.node-set-lifecycle.lock
+build/model-set-drafts/
 
 __pycache__/
 *.py[cod]

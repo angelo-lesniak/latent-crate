@@ -1,0 +1,39 @@
+schema = 1
+description = "FLUX.2 Klein 9B distilled models for text-to-image and image-edit workflows"
+workflow_urls = [
+  "https://github.com/Comfy-Org/workflow_templates/blob/3db6490611e6a16b84b09110e61a07264ce47cd3/templates/image_flux2_text_to_image_9b.json",
+  "https://github.com/Comfy-Org/workflow_templates/blob/3db6490611e6a16b84b09110e61a07264ce47cd3/templates/image_flux2_klein_image_edit_9b_distilled.json",
+]
+
+[[license]]
+name = "FLUX.2 [klein] Non-Commercial License"
+url = "https://huggingface.co/black-forest-labs/FLUX.2-klein-9b-fp8/blob/902d9d510b51533e07729f19211414a3648b77d2/LICENSE.md"
+
+[[license]]
+name = "Apache License 2.0 (FLUX.2 small decoder)"
+url = "https://huggingface.co/black-forest-labs/FLUX.2-small-decoder/blob/a3efc24f613ef42d9428af62fdbd6f5fd8856c4a/README.md"
+
+[[file]]
+repository = "black-forest-labs/FLUX.2-klein-9b-fp8"
+revision = "902d9d510b51533e07729f19211414a3648b77d2"
+source = "flux-2-klein-9b-fp8.safetensors"
+destination = "diffusion_models/flux-2-klein-9b-fp8.safetensors"
+size = 9433061528
+sha256 = "865ba09f5b4c3cbd3468a4bd3acb9fcb2f8740c54317482f0bcd4ed1d3655cee"
+
+[[file]]
+# "encorder" is the upstream repository's published name.
+repository = "Comfy-Org/vae-text-encorder-for-flux-klein-9b"
+revision = "3f62d9d8ae1fec33c6e91453d5c712855b096b55"
+source = "split_files/text_encoders/qwen_3_8b_fp8mixed.safetensors"
+destination = "text_encoders/qwen_3_8b_fp8mixed.safetensors"
+size = 8664848742
+sha256 = "abad16806e0cbabc54e0325d6565847443fe396d5f0be38bb3cd3fe75a1201d6"
+
+[[file]]
+repository = "black-forest-labs/FLUX.2-small-decoder"
+revision = "a3efc24f613ef42d9428af62fdbd6f5fd8856c4a"
+source = "full_encoder_small_decoder.safetensors"
+destination = "vae/full_encoder_small_decoder.safetensors"
+size = 249519092
+sha256 = "ea4273f02d1fafbf8e1d1c2cf6018ed8748652eb0bf34f2dd91171f16f15ab62"

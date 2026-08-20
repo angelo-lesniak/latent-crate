@@ -42,3 +42,5 @@ tagged release is published. Until then, notable changes are collected under
   glossary for advanced users who are new to the project.
 - A shorter NVIDIA-host validation guide with one baseline, focused checks for
   changed features, and separate maintainer release checks.
+- Offline commands to list local-compatible official templates from a selected
+  image and create reviewable model-set manifest drafts from embedded hints.
