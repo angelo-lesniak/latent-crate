@@ -24,21 +24,25 @@ Org, NVIDIA, Docker, or Podman.
 
 ## Start here
 
-The first build can take from tens of minutes to several hours, the MiniMax H3
-model set downloads about 44 GB, and the build needs at least 75 GB of free
-disk space. If Docker or Podman and the NVIDIA Container Toolkit are already
-installed, run:
+The host needs Bash, Git, `flock`, and `sha256sum`; an NVIDIA driver for the
+selected CUDA version; Docker Engine with Compose v2 or rootless Podman with
+`crun`; and the NVIDIA Container Toolkit with CDI devices generated. The first
+build can take from tens of minutes to several hours, the MiniMax H3 model set
+downloads about 44 GB, and the build needs at least 75 GB of free disk space.
+On a prepared host, run:
 
 ```bash
 git clone https://github.com/angelo-lesniak/latent-crate.git latentcrate
 cd latentcrate
-bash bin/latentcrate init
+bash bin/latentcrate init --node-set latent-nodepack edge
 bash bin/latentcrate doctor edge
 bash bin/latentcrate up edge --model-set minimax-h3-i2v
 ```
 
-The last command downloads the selected models, builds the image, and keeps
-ComfyUI in the foreground so you can see its logs. In a second terminal,
+`init` creates `.env` and installs the pinned `latent-nodepack` node set,
+which includes the KJNodes patch that the MiniMax H3 workflow uses. The last
+command downloads the selected models, builds the image, and keeps ComfyUI in
+the foreground so you can see its logs. In a second terminal,
 `bash bin/latentcrate wait edge` exits when ComfyUI is healthy. Then open
 <http://127.0.0.1:4207>, open the template browser, and choose
 **MiniMax H3: Image to Video**. Press **Ctrl+C** in the first terminal to stop
@@ -144,15 +148,33 @@ the pinned values with `bash bin/latentcrate versions`; the
 
 ## Storage and privacy
 
-User data, models, and caches live in host directories that you choose in
-`.env`. ComfyUI uses these paths directly, and container recreation does not
-remove your workflows, outputs, models, or Manager state. See the
-[storage layout](docs/storage.md).
+Your work lives in host directories that you choose in `.env`:
+`COMFY_DATA_DIR` holds workflows, user settings, inputs, outputs, and managed
+nodes; `COMFY_MODELS_DIR` holds your model library; `COMFY_CACHE_DIR` holds
+downloads and compiled caches. ComfyUI uses these paths directly, and
+container recreation does not remove your workflows, outputs, models, or
+Manager state. See the [storage layout](docs/storage.md).
 
 The UI binds to `127.0.0.1` by default, and Manager sharing and direct
 unreviewed install paths are disabled. These defaults reduce accidental
 exposure; they do not make an unreviewed third-party node safe. Read
 [privacy and containment](docs/privacy.md) before enabling remote access.
+
+## Develop nodes and frontends
+
+ComfyUI Manager installs third-party nodes from inside the UI. Their source
+persists under `COMFY_DATA_DIR/custom_nodes`, and every `up` captures their
+Python requirements into a rebuilt image layer instead of reinstalling them on
+each start. Local or private nodes live below `local/custom_nodes`, mounted
+read-only and excluded from Git and the image build. Commit-pinned node sets
+such as `latent-nodepack` install a reviewed selection in one command. See the
+[third-party node guide](docs/third-party-nodes.md).
+
+The frontend is pinned independently of the backend and has four modes: the
+pinned release, a trusted public Git fork, branch, or pull request, a local
+source checkout built in a container, and a prebuilt `dist/` directory. This
+separation lets you test frontend changes against a stable pinned backend.
+See [frontend modes](docs/frontends.md).
 
 ## Verify a GPU setup
 
