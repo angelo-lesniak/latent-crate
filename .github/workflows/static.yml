@@ -71,6 +71,7 @@ jobs:
           docker build \
             --target version-update-tool \
             --build-arg "TOOL_PYTHON_IMAGE=${TOOL_PYTHON_IMAGE}" \
+            --build-arg "FRONTEND_NODE_IMAGE=${FRONTEND_NODE_IMAGE}" \
             --tag latentcrate/version-update-test \
             --file services/tools/Dockerfile \
             .
