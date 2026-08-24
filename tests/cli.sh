@@ -66,6 +66,8 @@ version_update=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
   bash bin/latentcrate versions update node edge 2>&1)
 [[ "$version_update" == *'build version-update'* ]]
 [[ "$version_update" == *'run --rm --no-deps -T version-update resolve node '* ]]
+[[ "$version_update" == *'FRONTEND_NODE_IMAGE='* ]]
+[[ "$version_update" != *'PYTORCH_DEVEL_IMAGE='* ]]
 [[ "$version_update" == *'already has the latest eligible node versions.'* ]]
 node_sets=$(bash bin/latentcrate nodes list)
 [[ "$node_sets" == *latent-nodepack* ]]

@@ -259,6 +259,7 @@ services:
       target: version-update-tool
       args:
         TOOL_PYTHON_IMAGE: "${TOOL_PYTHON_IMAGE:?select a version profile}"
+        FRONTEND_NODE_IMAGE: "${FRONTEND_NODE_IMAGE:?select a version profile}"
     read_only: true
     pids_limit: 64
     cap_drop: ["ALL"]
@@ -404,4 +405,5 @@ services:
         target: /tmp
 
 networks:
+  default:
   version-sources:

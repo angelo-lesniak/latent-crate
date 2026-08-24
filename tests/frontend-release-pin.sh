@@ -60,7 +60,7 @@ if FAKE_FRONTEND_RELEASE_DIGEST=$expected_digest pin_frontend_release edge \
   printf 'frontend release pin test: overlapping pin unexpectedly succeeded\n' >&2
   exit 1
 fi
-grep -Fq 'another version profile update is running for profile edge' \
+grep -Fq 'another version profile update is running' \
   "$TEST_ROOT/error"
 grep -Fxq 'COMFY_FRONTEND_DIST_SHA256=' "$PROJECT_ROOT/versions/edge.env"
 flock -u "$held_lock_fd"

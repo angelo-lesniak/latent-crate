@@ -9,6 +9,7 @@ import io
 import json
 import sys
 import unittest
+import urllib.request
 from pathlib import Path
 from unittest import mock
 
@@ -26,8 +27,12 @@ class VersionResolverTests(unittest.TestCase):
         values = {"COMFYUI_REF": "v1.2.0"}
 
         def response(url: str, **_kwargs: object) -> object:
-            if "/tags?" in url:
-                return [{"name": "v1.3.0-rc1"}, {"name": "v1.4.0"}, {"name": "v1.3.0"}]
+            if "/matching-refs/tags/" in url:
+                return [
+                    {"ref": "refs/tags/v1.3.0-rc1"},
+                    {"ref": "refs/tags/v1.4.0"},
+                    {"ref": "refs/tags/v1.3.0"},
+                ]
             return [
                 {"tag_name": "v1.4.0", "name": "Four", "html_url": "https://example/four"},
                 {"tag_name": "v1.3.0", "name": "Three", "html_url": "https://example/three"},
@@ -43,13 +48,16 @@ class VersionResolverTests(unittest.TestCase):
             ("  Three: https://example/three", "  Four: https://example/four"),
         )
 
-    def test_github_tags_and_release_notes_follow_pagination(self) -> None:
+    def test_github_refs_and_release_notes_follow_pagination(self) -> None:
         source = update_versions.GITHUB_SOURCES["comfyui"]
 
         def response(url: str, **_kwargs: object) -> object:
             page_one = "&page=1" in url
-            if "/tags?" in url:
-                return ([{"name": "v1.0.0-rc1"}] * 100) if page_one else [{"name": "v1.2.0"}]
+            if "/matching-refs/tags/" in url:
+                return [
+                    {"ref": "refs/tags/v1.0.0-rc1"},
+                    {"ref": "refs/tags/v1.2.0"},
+                ]
             return ([{"draft": True}] * 100) if page_one else [
                 {
                     "tag_name": "v1.2.0",
@@ -64,6 +72,91 @@ class VersionResolverTests(unittest.TestCase):
 
         self.assertIn("v1.2.0", tags)
         self.assertEqual(notes, ("  Second page: https://example/second-page",))
+
+    def test_failed_github_notes_are_reported_as_unavailable(self) -> None:
+        source = update_versions.GITHUB_SOURCES["comfyui"]
+        with mock.patch.object(
+            update_versions,
+            "request_json",
+            side_effect=update_versions.VersionUpdateError("HTTP 403, rate limit remaining 0"),
+        ):
+            notes = update_versions.github_release_notes(source, "v1.0.0", "v1.1.0")
+
+        self.assertEqual(
+            notes,
+            (
+                "  Release notes unavailable: HTTP 403, rate limit remaining 0",
+                "  Release history: https://github.com/comfyanonymous/ComfyUI/releases",
+            ),
+        )
+
+    def test_github_notes_stop_after_the_current_release(self) -> None:
+        source = update_versions.GITHUB_SOURCES["comfyui"]
+        page = [
+            {
+                "tag_name": "v1.1.0",
+                "name": "Latest",
+                "html_url": "https://example/latest",
+            },
+            {"tag_name": "v1.0.0"},
+            *({"draft": True} for _ in range(98)),
+        ]
+        with mock.patch.object(update_versions, "request_json", return_value=page) as request:
+            notes = update_versions.github_release_notes(source, "v1.0.0", "v1.1.0")
+
+        self.assertEqual(notes, ("  Latest: https://example/latest",))
+        request.assert_called_once()
+
+    def test_request_rejects_non_https_url_before_opening_it(self) -> None:
+        with (
+            mock.patch.object(urllib.request, "urlopen") as urlopen,
+            self.assertRaisesRegex(update_versions.VersionUpdateError, "must use HTTPS"),
+        ):
+            update_versions.request_bytes("http://packages.example/torchcodec/")
+        urlopen.assert_not_called()
+
+    def test_request_rejects_redirect_away_from_https(self) -> None:
+        response = mock.MagicMock()
+        response.__enter__.return_value = response
+        response.url = "http://packages.example/torchcodec/"
+        response.headers = {}
+        with (
+            mock.patch.object(urllib.request, "urlopen", return_value=response),
+            self.assertRaisesRegex(update_versions.VersionUpdateError, "redirected away"),
+        ):
+            update_versions.request_bytes("https://packages.example/torchcodec/")
+
+    def test_request_rejects_announced_oversize_response_before_reading(self) -> None:
+        response = mock.MagicMock()
+        response.__enter__.return_value = response
+        response.url = "https://packages.example/torchcodec/"
+        response.headers = {"Content-Length": str(update_versions.MAX_RESPONSE_BYTES + 1)}
+        with (
+            mock.patch.object(urllib.request, "urlopen", return_value=response),
+            self.assertRaisesRegex(update_versions.VersionUpdateError, "too large"),
+        ):
+            update_versions.request_bytes("https://packages.example/torchcodec/")
+        response.read.assert_not_called()
+
+    def test_profile_protocol_values_reject_field_and_line_delimiters(self) -> None:
+        for value in ("value|field", "value\nrecord", "value\rrecord", "value\0record"):
+            with self.subTest(value=value):
+                with self.assertRaisesRegex(update_versions.VersionUpdateError, "unsafe"):
+                    update_versions.parse_values([f"KEY={value}"])
+
+    def test_docker_hub_rejects_unsafe_pagination_link(self) -> None:
+        payload = {"results": [], "next": "http://hub.docker.com/next"}
+        with mock.patch.object(update_versions, "request_json", return_value=payload):
+            with self.assertRaisesRegex(update_versions.VersionUpdateError, "unsafe pagination"):
+                update_versions.docker_hub_tags("library", "node", "bookworm-slim")
+
+    def test_paginated_source_enforces_page_limit(self) -> None:
+        with (
+            mock.patch.object(update_versions, "MAX_API_PAGES", 2),
+            mock.patch.object(update_versions, "request_json", return_value=[{}] * 100),
+            self.assertRaisesRegex(update_versions.VersionUpdateError, "2-page safety limit"),
+        ):
+            update_versions.paginated_list("https://example.test/releases", "fixture")
 
     def test_frontend_updates_reference_and_archive_digest_together(self) -> None:
         values = {"COMFYUI_FRONTEND_REF": "Comfy-Org/ComfyUI_frontend@v1.2.0"}
@@ -263,6 +356,31 @@ class VersionResolverTests(unittest.TestCase):
         ):
             update_versions.main()
         self.assertEqual(stdout.getvalue(), "")
+
+    def test_resolve_emits_exact_host_protocol(self) -> None:
+        resolution = update_versions.Resolution(
+            "comfyui",
+            "v1.0.0",
+            "v1.1.0",
+            (("COMFYUI_REF", "v1.1.0"),),
+        )
+        with (
+            mock.patch.object(
+                sys,
+                "argv",
+                ["update-versions.py", "resolve", "comfyui", "COMFYUI_REF=v1.0.0"],
+            ),
+            mock.patch.object(update_versions, "resolve_component", return_value=resolution),
+            contextlib.redirect_stdout(io.StringIO()) as stdout,
+            contextlib.redirect_stderr(io.StringIO()),
+        ):
+            update_versions.main()
+
+        self.assertEqual(
+            stdout.getvalue(),
+            "LATENTCRATE_VERSION_UPDATE|comfyui|COMFYUI_REF|v1.1.0\n"
+            "LATENTCRATE_VERSION_RESULT|comfyui|1\n",
+        )
 
 
 if __name__ == "__main__":

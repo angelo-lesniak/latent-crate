@@ -4,6 +4,10 @@ set -Eeuo pipefail
 # podman-compose performs a real network existence probe even in dry-run mode.
 # All other engine calls are deliberately empty: the compatibility test checks
 # Compose parsing, service resolution, and container-argument generation only.
+if [[ -n "${FAKE_PODMAN_LOG:-}" ]]; then
+  printf ' %q' "$@" >> "$FAKE_PODMAN_LOG"
+  printf '\n' >> "$FAKE_PODMAN_LOG"
+fi
 if [[ "${1:-}" == version || "${1:-}" == --version || "${1:-}" == -v ]]; then
   printf 'podman version 5.5.2\n'
   exit 0

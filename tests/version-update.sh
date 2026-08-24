@@ -24,6 +24,11 @@ chmod +x "$fake_bin/docker"
 export PATH="$fake_bin:$PATH"
 export CONTAINER_ENGINE=docker
 
+python_components=$(python "$SOURCE_PROJECT_ROOT/services/tools/update-versions.py" list)
+bash_components=$(printf '%s\n' "${VERSION_COMPONENTS[@]}")
+[[ "$bash_components" == "$python_components" ]] \
+  || { printf 'version update test: Bash and Python component lists differ\n' >&2; exit 1; }
+
 write_profile() {
   printf '%s\n' \
     'PYTORCH_DEVEL_IMAGE=docker.io/pytorch/pytorch:2.8.0-cuda13.0-cudnn9-devel' \
@@ -39,6 +44,14 @@ write_profile() {
     'TORCHCODEC_INDEX_URL=https://download.pytorch.org/whl/cu130' \
     'FRONTEND_NODE_IMAGE=docker.io/library/node:24.0.0-bookworm-slim' \
     'FRONTEND_PNPM_VERSION=10.0.0' \
+    'TOOL_PYTHON_IMAGE=docker.io/library/python:3.13.0-slim-bookworm' \
+    > "$PROJECT_ROOT/versions/edge.env"
+}
+
+write_sparse_comfyui_profile() {
+  printf '%s\n' \
+    'COMFYUI_REF=v1.0.0' \
+    'FRONTEND_NODE_IMAGE=docker.io/library/node:24.0.0-bookworm-slim' \
     'TOOL_PYTHON_IMAGE=docker.io/library/python:3.13.0-slim-bookworm' \
     > "$PROJECT_ROOT/versions/edge.env"
 }
@@ -60,6 +73,12 @@ write_profile
 output=$(FAKE_VERSION_UPDATE_OUTPUT=$'LATENTCRATE_VERSION_UPDATE|comfyui|COMFYUI_REF|v1.1.0\nLATENTCRATE_VERSION_RESULT|comfyui|1' \
   update_versions comfyui edge)
 [[ "$output" == *'build version-update'* ]]
+[[ "$output" == *'Updated 1 version pin(s) in profile edge.'* ]]
+grep -Fxq 'COMFYUI_REF=v1.1.0' "$PROJECT_ROOT/versions/edge.env"
+
+write_sparse_comfyui_profile
+output=$(FAKE_VERSION_UPDATE_OUTPUT=$'LATENTCRATE_VERSION_UPDATE|comfyui|COMFYUI_REF|v1.1.0\nLATENTCRATE_VERSION_RESULT|comfyui|1' \
+  update_versions comfyui edge)
 [[ "$output" == *'Updated 1 version pin(s) in profile edge.'* ]]
 grep -Fxq 'COMFYUI_REF=v1.1.0' "$PROJECT_ROOT/versions/edge.env"
 
@@ -95,6 +114,74 @@ expect_unchanged_failure 'duplicate updates for COMFYUI_REF' \
   comfyui edge
 
 write_profile
+expect_unchanged_failure 'update count did not match' \
+  $'LATENTCRATE_VERSION_UPDATE|comfyui|COMFYUI_REF|v1.1.0\nLATENTCRATE_VERSION_RESULT|comfyui|0' \
+  comfyui edge
+
+write_profile
+expect_unchanged_failure 'mismatched PyTorch image pair' \
+  $'LATENTCRATE_VERSION_UPDATE|pytorch|PYTORCH_DEVEL_IMAGE|docker.io/pytorch/pytorch:2.9.0-cuda13.0-cudnn9-devel\nLATENTCRATE_VERSION_UPDATE|pytorch|PYTORCH_RUNTIME_IMAGE|docker.io/pytorch/pytorch:2.10.0-cuda13.0-cudnn9-runtime\nLATENTCRATE_VERSION_RESULT|pytorch|2' \
+  pytorch edge
+
+write_profile
+expect_unchanged_failure 'unexpected component: ffmpeg' \
+  $'LATENTCRATE_VERSION_UPDATE|ffmpeg|FFMPEG_REF|n7.1.0\nLATENTCRATE_VERSION_RESULT|comfyui|1' \
+  comfyui edge
+
+write_profile
+expect_unchanged_failure 'unexpected update key: comfyui/FFMPEG_REF' \
+  $'LATENTCRATE_VERSION_UPDATE|comfyui|FFMPEG_REF|n7.1.0\nLATENTCRATE_VERSION_RESULT|comfyui|1' \
+  comfyui edge
+
+write_profile
+expect_unchanged_failure 'unknown protocol record' \
+  $'LATENTCRATE_VERSION_UNKNOWN|comfyui|0\nLATENTCRATE_VERSION_RESULT|comfyui|0' \
+  comfyui edge
+
+write_profile
+expect_unchanged_failure 'exactly one result record' \
+  $'LATENTCRATE_VERSION_RESULT|comfyui|0\nLATENTCRATE_VERSION_RESULT|comfyui|0' \
+  comfyui edge
+
+write_profile
+sed -i -e 's/^COMFYUI_REF=.*/COMFYUI_REF/' "$PROJECT_ROOT/versions/edge.env"
+cp "$PROJECT_ROOT/versions/edge.env" "$TEST_ROOT/before.env"
+if FAKE_VERSION_UPDATE_OUTPUT=$'LATENTCRATE_VERSION_UPDATE|comfyui|COMFYUI_REF|v1.1.0\nLATENTCRATE_VERSION_RESULT|comfyui|1' \
+    update_versions comfyui edge 2>"$TEST_ROOT/error"; then
+  printf 'version update test: bare profile key was reported as updated\n' >&2
+  exit 1
+fi
+grep -Fq 'must define COMFYUI_REF exactly once' "$TEST_ROOT/error"
+cmp -s "$PROJECT_ROOT/versions/edge.env" "$TEST_ROOT/before.env"
+
+write_profile
+mv "$PROJECT_ROOT/versions/edge.env" "$TEST_ROOT/symlink-target.env"
+ln -s "$TEST_ROOT/symlink-target.env" "$PROJECT_ROOT/versions/edge.env"
+if FAKE_VERSION_UPDATE_OUTPUT='LATENTCRATE_VERSION_RESULT|comfyui|0' \
+    update_versions comfyui edge 2>"$TEST_ROOT/error"; then
+  printf 'version update test: symbolic-link profile unexpectedly succeeded\n' >&2
+  exit 1
+fi
+grep -Fq 'refusing symbolic link for version profile' "$TEST_ROOT/error"
+rm -f -- "$PROJECT_ROOT/versions/edge.env"
+
+write_profile
+snapshot=$(snapshot_version_profile \
+  "$PROJECT_ROOT/versions/edge.env" "$PROJECT_ROOT/versions/.edge.publish-test.XXXXXX")
+staged=$(stage_version_profile_update \
+  "$PROJECT_ROOT/versions/edge.env" "$snapshot" "$PROJECT_ROOT/versions/.edge.publish-test.XXXXXX")
+mv "$PROJECT_ROOT/versions/edge.env" "$TEST_ROOT/publish-target.env"
+ln -s "$TEST_ROOT/publish-target.env" "$PROJECT_ROOT/versions/edge.env"
+if (publish_version_profile_update \
+    "$PROJECT_ROOT/versions/edge.env" "$snapshot" "$staged" 'the test update') \
+    2>"$TEST_ROOT/error"; then
+  printf 'version update test: symbolic-link profile publication unexpectedly succeeded\n' >&2
+  exit 1
+fi
+grep -Fq 'refusing symbolic link for version profile' "$TEST_ROOT/error"
+rm -f -- "$PROJECT_ROOT/versions/edge.env" "$snapshot" "$staged"
+
+write_profile
 exec {held_lock_fd}<"$PROJECT_ROOT/versions"
 flock -n "$held_lock_fd"
 if FAKE_VERSION_UPDATE_OUTPUT='LATENTCRATE_VERSION_RESULT|node|0' \
@@ -102,7 +189,7 @@ if FAKE_VERSION_UPDATE_OUTPUT='LATENTCRATE_VERSION_RESULT|node|0' \
   printf 'version update test: overlapping update unexpectedly succeeded\n' >&2
   exit 1
 fi
-grep -Fq 'another version profile update is running for profile edge' "$TEST_ROOT/error"
+grep -Fq 'another version profile update is running' "$TEST_ROOT/error"
 flock -u "$held_lock_fd"
 exec {held_lock_fd}>&-
 
