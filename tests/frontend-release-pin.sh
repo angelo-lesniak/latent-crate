@@ -25,10 +25,9 @@ export PATH="$fake_bin:$PATH"
 export CONTAINER_ENGINE=docker
 
 write_profile() {
-  local digest=${1:-}
   printf '%s\n' \
     'COMFYUI_FRONTEND_REF=Comfy-Org/ComfyUI_frontend@v1.2.3' \
-    "COMFY_FRONTEND_DIST_SHA256=$digest" \
+    'COMFY_FRONTEND_DIST_SHA256=' \
     > "$PROJECT_ROOT/versions/edge.env"
 }
 
