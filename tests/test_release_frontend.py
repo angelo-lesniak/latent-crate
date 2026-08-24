@@ -104,13 +104,61 @@ def zip_bytes(member: str = "index.html", content: bytes = b"content") -> bytes:
 
 
 class ReleaseFrontendDigestTests(unittest.TestCase):
+    def test_release_digest_downloads_and_validates_archive(self) -> None:
+        archive = zip_bytes()
+        digest = hashlib.sha256(archive).hexdigest()
+        with serve(archive):
+            self.assertEqual(
+                INSTALLER.release_digest(
+                    "Comfy-Org/ComfyUI_frontend@v1.50.4"
+                ),
+                digest,
+            )
+
+    def test_digest_command_prints_a_labeled_digest(self) -> None:
+        archive = zip_bytes()
+        digest = hashlib.sha256(archive).hexdigest()
+        argv = [
+            "install-release-frontend.py",
+            "digest",
+            "Comfy-Org/ComfyUI_frontend@v1.50.4",
+        ]
+        output = io.StringIO()
+        with mock.patch.object(sys, "argv", argv), mock.patch.object(
+            sys, "stdout", output
+        ), serve(archive):
+            INSTALLER.main()
+        self.assertEqual(
+            output.getvalue(), f"COMFY_FRONTEND_DIST_SHA256={digest}\n"
+        )
+
+    def test_release_digest_rejects_archive_without_root_index(self) -> None:
+        archive = zip_bytes("nested/index.html")
+        with serve(archive):
+            with self.assertRaisesRegex(SystemExit, "no root index.html"):
+                INSTALLER.release_digest(
+                    "Comfy-Org/ComfyUI_frontend@v1.50.4"
+                )
+
+    def test_release_digest_rejects_corrupt_member(self) -> None:
+        archive = bytearray(zip_bytes())
+        archive[archive.index(b"content")] ^= 0xFF
+        with serve(bytes(archive)):
+            with self.assertRaisesRegex(SystemExit, "corrupt member"):
+                INSTALLER.release_digest(
+                    "Comfy-Org/ComfyUI_frontend@v1.50.4"
+                )
+
     def test_matching_digest_is_accepted(self) -> None:
         content = b"release archive bytes"
         digest = hashlib.sha256(content).hexdigest()
         with tempfile.TemporaryDirectory() as temporary:
             destination = Path(temporary) / "dist.zip"
             with serve(content):
-                INSTALLER.download("https://example.invalid/dist.zip", destination, digest)
+                actual = INSTALLER.download(
+                    "https://example.invalid/dist.zip", destination, digest
+                )
+            self.assertEqual(actual, digest)
             self.assertEqual(destination.read_bytes(), content)
 
     def test_mismatched_digest_is_rejected(self) -> None:

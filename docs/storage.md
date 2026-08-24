@@ -130,8 +130,9 @@ and its Compose network. It does not remove:
 LatentCrate builds local images named `latentcrate/comfy` (the runtime, one tag
 per profile and variant, for example `current-sage`) and `latentcrate/tools`
 (small helpers with tags such as `current-node-deps`, `current-node-set`,
-`current-model-set`, and `current-frontend`). The full tag scheme is described
-in [image names and tags](configuration.md#advanced-image-names-and-tags).
+`current-model-set`, `current-frontend-release`, and `current-frontend`). The
+full tag scheme is described in
+[image names and tags](configuration.md#advanced-image-names-and-tags).
 List and remove the images:
 
 ```bash

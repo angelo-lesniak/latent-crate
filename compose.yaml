@@ -228,6 +228,27 @@ services:
       - type: tmpfs
         target: /tmp
 
+  frontend-release-pin:
+    profiles: ["tools"]
+    image: "${LATENTCRATE_TOOLS_IMAGE:-latentcrate/tools}:${LATENTCRATE_TOOLS_TAG:-current}-frontend-release"
+    build:
+      context: .
+      dockerfile: services/tools/Dockerfile
+      target: frontend-release-tool
+      args:
+        TOOL_PYTHON_IMAGE: "${TOOL_PYTHON_IMAGE:?select a version profile}"
+        FRONTEND_NODE_IMAGE: "${FRONTEND_NODE_IMAGE:?select a version profile}"
+    read_only: true
+    pids_limit: 64
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
+    volumes:
+      - type: tmpfs
+        target: /tmp
+
   node-set:
     <<: *node-set-common
     command:

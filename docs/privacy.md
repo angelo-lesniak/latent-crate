@@ -110,6 +110,11 @@ configuration or a container environment. The downloaded files and Hugging
 Face cache are still untrusted input. Model licenses and repository access
 rules remain the user's responsibility.
 
+The frontend release pin helper has normal network access but no host bind
+mounts. It downloads the selected `dist.zip` into container tmpfs, validates
+the archive, and prints its digest. The wrapper validates that output before it
+updates the selected version profile on the host.
+
 Dependency isolation works like this:
 
 - **What enters the final image:** the isolated package tree built from the

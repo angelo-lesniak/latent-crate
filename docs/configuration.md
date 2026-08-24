@@ -131,7 +131,8 @@ under `versions/`.
 Important build selections include:
 
 - `PYTORCH_DEVEL_IMAGE` and `PYTORCH_RUNTIME_IMAGE`;
-- `COMFYUI_REF` and `COMFYUI_FRONTEND_REF`;
+- `COMFYUI_REF`, `COMFYUI_FRONTEND_REF`, and
+  `COMFY_FRONTEND_DIST_SHA256`;
 - `FFMPEG_REF`, codec-library references, and `CUDA_NPP_VERSION`;
 - `SAGEATTENTION_REF`, `SAGE_CUDA_ARCH_LIST`, and `SAGE_BUILD_JOBS`;
 - `CUSTOM_NODE_CUDA_ARCH_LIST`;
@@ -176,8 +177,8 @@ change them.
 | --- | --- | --- |
 | `LATENTCRATE_IMAGE` | `latentcrate/comfy` | Name of the ComfyUI runtime image |
 | `LATENTCRATE_TAG` | Set by the wrapper | Runtime image tag: the profile name plus variant suffixes, for example `current-sage` or `edge-frontend-git-sage` |
-| `LATENTCRATE_TOOLS_IMAGE` | `latentcrate/tools` | Name of the helper-tool images (dependency snapshot, node sets, frontend builds) |
-| `LATENTCRATE_TOOLS_TAG` | Set by the wrapper | Tool image tag prefix: the profile name; each tool appends its own suffix (`-node-deps`, `-node-set`, `-model-set`, `-frontend`) |
+| `LATENTCRATE_TOOLS_IMAGE` | `latentcrate/tools` | Name of the helper-tool images (dependency snapshot, node sets, release pinning, frontend builds) |
+| `LATENTCRATE_TOOLS_TAG` | Set by the wrapper | Tool image tag prefix: the profile name; each tool appends its own suffix (`-node-deps`, `-node-set`, `-model-set`, `-frontend-release`, `-frontend`) |
 
 The wrapper derives `LATENTCRATE_TAG` and `LATENTCRATE_TOOLS_TAG` from the
 selected profile and options. Do not override the tags in `.env` or on the

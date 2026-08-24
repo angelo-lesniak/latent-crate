@@ -18,6 +18,27 @@ COPY scripts/snapshot-node-deps.py /usr/local/bin/latentcrate-snapshot-node-deps
 ENTRYPOINT ["python", "/usr/local/bin/latentcrate-snapshot-node-deps.py"]
 
 
+# Download and validate a release archive without requiring host Python or a
+# writable repository mount.
+# The base image is pinned through a required build argument (versions/*.env).
+# hadolint ignore=DL3006
+FROM ${TOOL_PYTHON_IMAGE} AS frontend-release-tool
+
+LABEL org.opencontainers.image.title="LatentCrate frontend release tool" \
+      org.opencontainers.image.description="Calculates the digest of an exact ComfyUI frontend release archive"
+
+# Distribution packages track the pinned base image; per-package apt pins
+# would drift from its snapshot and are not maintained here.
+# hadolint ignore=DL3008
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY services/comfy/install-release-frontend.py /usr/local/bin/latentcrate-frontend-release.py
+
+ENTRYPOINT ["python", "/usr/local/bin/latentcrate-frontend-release.py"]
+
+
 # The base image is pinned through a required build argument (versions/*.env).
 # hadolint ignore=DL3006
 FROM ${TOOL_PYTHON_IMAGE} AS node-set-tool

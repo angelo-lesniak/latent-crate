@@ -10,8 +10,9 @@ The static workflow also renders every Compose variant with the pinned
 standalone podman-compose parser. This rendering check catches
 provider-specific YAML and profile handling without needing a Podman service
 in GitHub Actions.
-It also builds the real model-set helper, downloads one tiny public pinned
-file, and verifies that file again with networking disabled.
+It also builds the real frontend-release helper and checks the `current`
+profile's published archive digest. The model-set helper downloads one tiny
+public pinned file and verifies that file again with networking disabled.
 
 Standard GitHub-hosted `ubuntu-latest` runners might be too small for the CUDA
 development/runtime bases, intermediate BuildKit state, and cache export. The
