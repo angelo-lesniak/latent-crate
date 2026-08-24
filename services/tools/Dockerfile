@@ -18,14 +18,11 @@ COPY scripts/snapshot-node-deps.py /usr/local/bin/latentcrate-snapshot-node-deps
 ENTRYPOINT ["python", "/usr/local/bin/latentcrate-snapshot-node-deps.py"]
 
 
-# Download and validate a release archive without requiring host Python or a
-# writable repository mount.
+# Shared CA-enabled base for read-only maintenance tools that query public
+# version sources without requiring host Python or repository mounts.
 # The base image is pinned through a required build argument (versions/*.env).
 # hadolint ignore=DL3006
-FROM ${TOOL_PYTHON_IMAGE} AS frontend-release-tool
-
-LABEL org.opencontainers.image.title="LatentCrate frontend release tool" \
-      org.opencontainers.image.description="Calculates the digest of an exact ComfyUI frontend release archive"
+FROM ${TOOL_PYTHON_IMAGE} AS network-python-tool
 
 # Distribution packages track the pinned base image; per-package apt pins
 # would drift from its snapshot and are not maintained here.
@@ -34,9 +31,30 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
+
+# Download and validate a release archive without requiring host Python or a
+# writable repository mount.
+FROM network-python-tool AS frontend-release-tool
+
+LABEL org.opencontainers.image.title="LatentCrate frontend release tool" \
+      org.opencontainers.image.description="Calculates the digest of an exact ComfyUI frontend release archive"
+
 COPY services/comfy/install-release-frontend.py /usr/local/bin/latentcrate-frontend-release.py
 
 ENTRYPOINT ["python", "/usr/local/bin/latentcrate-frontend-release.py"]
+
+
+# Resolve stable upstream versions. The wrapper validates the labeled output
+# and remains solely responsible for updating the host profile atomically.
+FROM network-python-tool AS version-update-tool
+
+LABEL org.opencontainers.image.title="LatentCrate version update tool" \
+      org.opencontainers.image.description="Resolves eligible releases and image or package versions from public sources"
+
+COPY services/comfy/install-release-frontend.py /usr/local/bin/latentcrate-frontend-release.py
+COPY services/tools/update-versions.py /usr/local/bin/latentcrate-update-versions.py
+
+ENTRYPOINT ["python", "/usr/local/bin/latentcrate-update-versions.py"]
 
 
 # The base image is pinned through a required build argument (versions/*.env).

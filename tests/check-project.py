@@ -58,6 +58,7 @@ VERSION_KEYS = {
 NON_BUILD_VERSION_KEYS = {"CUDA_MIN_DRIVER_MAJOR"}
 CLI_MODULES = (
     "lib/latentcrate/core.sh",
+    "lib/latentcrate/versions.sh",
     "lib/latentcrate/frontend.sh",
     "lib/latentcrate/node-deps.sh",
     "lib/latentcrate/nodes.sh",
@@ -370,9 +371,23 @@ def check_frontend_helper_services() -> None:
 
     release_pin = compose_service(compose, "frontend-release-pin")
     require_service_hardening("frontend-release-pin", release_pin)
+    if release_pin.get("networks") != ["version-sources"]:
+        fail("the networked frontend release pin helper must use only the version-sources network")
     for mount in release_pin.get("volumes") or []:
         if isinstance(mount, dict) and mount.get("type") == "bind":
             fail("the networked frontend release pin helper must not receive host bind mounts")
+
+    version_update = compose_service(compose, "version-update")
+    require_service_hardening("version-update", version_update)
+    if version_update.get("networks") != ["version-sources"]:
+        fail("the networked version update helper must use only the version-sources network")
+    for mount in version_update.get("volumes") or []:
+        if isinstance(mount, dict) and mount.get("type") == "bind":
+            fail("the networked version update helper must not receive host bind mounts")
+    if "version-sources" in (compose_service(compose, "comfy").get("networks") or []):
+        fail("the ComfyUI runtime must not share the version-sources helper network")
+    if "version-sources" not in (compose.get("networks") or {}):
+        fail("compose.yaml must define the isolated version-sources helper network")
 
 
 # --- Build and runtime hardening ---------------------------------------------
@@ -688,6 +703,8 @@ def check_tools_image_targets() -> None:
         fail("model sets must use their containerized downloader (model-set-tool)")
     if "frontend-release-tool" not in tools_dockerfile:
         fail("frontend release digests must use their containerized helper (frontend-release-tool)")
+    if "version-update-tool" not in tools_dockerfile:
+        fail("version resolution must use its containerized helper (version-update-tool)")
     if not (ROOT / "scripts" / "verify-model-set-metadata.py").is_file():
         fail("model-set maintainers need the remote metadata verifier")
 
@@ -710,6 +727,16 @@ def check_tools_image_targets() -> None:
             fail(
                 "static CI must build and verify the frontend release helper: "
                 f"{frontend_release_contract}"
+            )
+    for version_update_contract in (
+        "--target version-update-tool",
+        "latentcrate/version-update-test",
+        "list | grep -Fxq torchcodec",
+    ):
+        if version_update_contract not in workflow_text:
+            fail(
+                "static CI must build and run the version update helper: "
+                f"{version_update_contract}"
             )
 
 
@@ -912,6 +939,7 @@ def check_cli_node_workflows() -> None:
     tool_services = (
         "node-deps-snapshot",
         "frontend-release-pin",
+        "version-update",
         "node-set",
         "node-set-status",
         "model-set",
@@ -935,6 +963,16 @@ def check_cli_node_workflows() -> None:
         fail("frontend release digest generation must use compose_tool")
     if "python" in frontend_pin_function.lower():
         fail("frontend release pinning must not require host Python")
+    version_update_function = read_text("lib/latentcrate/versions.sh")
+    if "version-update" not in version_update_function or "compose_tool" not in version_update_function:
+        fail("version updates must run through the version-update helper via compose_tool")
+    if re.search(r"(^|[;&|]\s*)python[0-9]*\s", version_update_function, re.MULTILINE):
+        fail("version updates must not require host Python")
+    core = read_text("lib/latentcrate/core.sh")
+    if ".version-profile-" in core:
+        fail("version profile locking must not use predictable writable lock files")
+    if 'exec {VERSION_PROFILE_LOCK_FD}<"$PROJECT_ROOT/versions"' not in core:
+        fail("version profile updates must lock the trusted versions directory")
     for node_contract in (
         "nodes install",
         "nodes sync",

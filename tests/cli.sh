@@ -25,6 +25,8 @@ unset \
   TEMPLATE_DRAFT_OUTPUT_DIR \
   FAKE_FRONTEND_PROFILE_TO_CHANGE \
   FAKE_FRONTEND_RELEASE_DIGEST \
+  FAKE_VERSION_PROFILE_TO_CHANGE \
+  FAKE_VERSION_UPDATE_OUTPUT \
   FAKE_DOCKER_COMFY_RUNNING
 fake_bin="$PROJECT_ROOT/tests/fixtures/fake-bin"
 chmod +x "$fake_bin/docker" "$fake_bin/flock"
@@ -57,6 +59,12 @@ pin_frontend_release=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
   bash bin/latentcrate frontend pin-release edge)
 [[ "$pin_frontend_release" == *'build frontend-release-pin'* ]]
 [[ "$pin_frontend_release" == *'Already pinned '*' for profile edge:'* ]]
+version_update=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
+  FAKE_VERSION_UPDATE_OUTPUT='LATENTCRATE_VERSION_RESULT|node|0' \
+  bash bin/latentcrate versions update node edge)
+[[ "$version_update" == *'build version-update'* ]]
+[[ "$version_update" == *'run --rm --no-deps -T version-update resolve node '* ]]
+[[ "$version_update" == *'already has the latest eligible node versions.'* ]]
 node_sets=$(bash bin/latentcrate nodes list)
 [[ "$node_sets" == *latent-nodepack* ]]
 model_sets=$(bash bin/latentcrate models list)
@@ -123,6 +131,9 @@ expect_failure 'all cannot be combined' models status all krea2-t2i-int8
 expect_failure 'at most one version profile' templates list current edge
 expect_failure 'at most one version profile' frontend pin-release current edge
 expect_failure 'unknown version profile' frontend pin-release missing
+expect_failure 'usage: bin/latentcrate versions update' versions update node
+expect_failure 'unknown version component' versions update unknown edge
+expect_failure 'unknown version profile' versions update node missing
 expect_failure 'unsafe template name' templates create-model-set ../unsafe
 expect_failure 'unsafe model-set name' templates create-model-set fixture --name all
 

@@ -43,3 +43,19 @@ where the executable is named `python`, use `python tests/check-project.py`.
 
 For executable code, configuration, Compose, or runtime changes, follow the
 verification requirements in `CONTRIBUTING.md`.
+
+## Codex WSL and rootless Podman
+
+The Codex WSL launcher can expose an unusable systemd user bus even when
+rootless Podman itself is healthy. The characteristic failure is
+`aardvark-dns failed to start` together with `Failed to start transient scope
+unit` or an inaccessible user bus. Treat this as a test-host failure, not a
+repository failure, after confirming the exact error.
+
+For an explicitly requested real network test of the isolated version helpers,
+an empty network created by that test may be recreated with Podman's
+`--disable-dns` option. The helpers need outbound DNS, which Podman supplies
+from the container's resolver configuration; they do not need Compose service
+discovery. Do not apply this workaround to the ComfyUI runtime network or to a
+network with containers. Preserve and restore any tested version profile by
+hash, then remove temporary provider scripts and test-created networks.

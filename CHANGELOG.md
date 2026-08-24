@@ -52,5 +52,16 @@ tagged release is published. Until then, notable changes are collected under
   `up --model-set`).
 - A containerized `frontend pin-release` maintenance command that downloads and
   validates a profile's frontend `dist.zip` without host Python or repository
-  mounts, prevents overlapping pin commands for the same profile, then
+  mounts, prevents overlapping version-profile maintenance commands, then
   atomically refreshes its pinned SHA-256.
+- A containerized `versions update <component|all> <profile>` workflow that
+  resolves stable upstream releases, package versions, and compatible image
+  tags, reports available intervening release links, and atomically updates
+  only allowlisted profile pins.
+
+### Fixed
+
+- Hardened version maintenance against lock-file symlinks, direct runtime
+  network access, paginated release omissions, empty frontend digests,
+  unexpected same-tag asset replacement, yanked packages, source rollbacks,
+  and terminal control characters in upstream release text.

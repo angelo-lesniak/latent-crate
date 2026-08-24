@@ -8,7 +8,8 @@ skip its checks.
 General rules:
 
 - `[profile]` is a version profile: a file under `versions/` without the
-  `.env` suffix. It defaults to `current` everywhere.
+  `.env` suffix. It defaults to `current`; `versions update` instead requires
+  an explicit profile because it changes that file.
 - The wrapper loads `.env` first. Shell environment variables override `.env`
   for one command, for example
   `COMFY_PORT=4210 bash bin/latentcrate up current --detach`.
@@ -34,6 +35,7 @@ General rules:
 | `shell` | Open a Bash shell inside the running container |
 | `smoke-gpu` | Run the real GPU and media checks and save a report |
 | `frontend pin-release` | Refresh a profile's pinned frontend release archive digest |
+| `versions update` | Resolve and atomically update one or all eligible external version pins |
 | `node-deps snapshot` | Capture third-party node requirements without building the runtime image |
 | `node-deps clear` | Reset the saved third-party node requirements |
 | `nodes list` | List the available commit-pinned node sets |
@@ -268,10 +270,11 @@ into tmpfs and validate the archive. The helper has no host bind mounts and
 prints the SHA-256 for the wrapper to validate and atomically write to
 `COMFY_FRONTEND_DIST_SHA256`. The archive disappears with the container. The
 profile is not changed after a failed download or invalid helper output. Only
-one pin command can run for a profile at a time. Do not edit that profile until
-the command finishes. The wrapper checks for edits before publication and
-aborts when it detects one; the final rename prevents a partially written
-profile but cannot coordinate an editor that does not use the command's lock.
+one version-profile maintenance command can run at a time. Do not edit that
+profile until the command finishes. The wrapper checks for edits before
+publication and aborts when it detects one; the final rename prevents a
+partially written profile but cannot coordinate an editor that does not use the
+command's lock.
 
 Run this after changing a profile's frontend release reference:
 
@@ -383,10 +386,56 @@ steps.
 
 ```text
 bin/latentcrate versions
+bin/latentcrate versions update <component|all> <profile>
 ```
 
-Prints the pinned, non-comment values of every profile under `versions/`.
+With no arguments, prints the pinned, non-comment values of every profile
+under `versions/`.
 
 ```bash
 bash bin/latentcrate versions
+```
+
+`versions update` builds a short-lived tool container, queries the relevant
+public upstream source, and updates the named profile. The profile is required;
+there is no implicit `current` for a command that writes a checked-in file.
+
+| Component | Updated profile values | Selection policy |
+| --- | --- | --- |
+| `comfyui` | `COMFYUI_REF` | Latest stable `comfyanonymous/ComfyUI` tag |
+| `frontend` | `COMFYUI_FRONTEND_REF`, `COMFY_FRONTEND_DIST_SHA256` | Latest stable frontend tag and that release's verified `dist.zip` digest |
+| `ffmpeg` | `FFMPEG_REF` | Latest stable FFmpeg tag |
+| `nv-codec-headers` | `NV_CODEC_HEADERS_REF` | Latest stable nv-codec-headers tag |
+| `svt-av1` | `SVT_AV1_REF` | Latest stable GitLab release |
+| `sageattention` | `SAGEATTENTION_REF` | Latest stable SageAttention tag |
+| `pytorch` | `PYTORCH_DEVEL_IMAGE`, `PYTORCH_RUNTIME_IMAGE` | Latest complete image pair in the existing CUDA/cuDNN family |
+| `node` | `FRONTEND_NODE_IMAGE` | Latest stable Docker Hub tag with the existing suffix and version granularity |
+| `pnpm` | `FRONTEND_PNPM_VERSION` | npm's stable `latest` version |
+| `tool-python` | `TOOL_PYTHON_IMAGE` | Latest stable Docker Hub tag with the existing suffix and version granularity |
+| `torchcodec` | `TORCHCODEC_VERSION` | Latest version with the existing build suffix from `TORCHCODEC_INDEX_URL`; an empty pin stays disabled |
+
+For `frontend`, an empty digest is populated when the tag is already current.
+A different non-empty digest at the same tag aborts the update; investigate the
+asset change, then run `frontend pin-release` only to accept it deliberately.
+
+Use `all` to resolve every component in that order. All sources must resolve
+successfully before the wrapper changes the profile, and every accepted key is
+written in one atomic replacement. A failure leaves the profile unchanged.
+The wrapper rejects unexpected keys, malformed values, incomplete frontend or
+PyTorch pairs, overlapping update commands, and detected manual edits while a
+command is running.
+
+For GitHub and GitLab sources, the command prints titles and links for known
+stable releases between the old and new pins. npm, Python-index, and image
+updates print the corresponding package, index, or image-history page; they do
+not synthesize changelogs.
+
+Compatibility and local policy remain manual: the updater does not change CUDA
+architecture lists, CUDA NPP, minimum driver policy, build parallelism,
+TorchCodec's index URL, build targets, or local image tags. Review and validate
+an update before promoting it.
+
+```bash
+bash bin/latentcrate versions update comfyui edge
+bash bin/latentcrate versions update all edge
 ```

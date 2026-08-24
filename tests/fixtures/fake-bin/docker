@@ -15,7 +15,7 @@ case "${1:-}" in
     else
       [[ " $* " != *' ps comfy '* ]] \
         || { printf 'fake Compose provider: ps does not accept a service argument\n' >&2; exit 1; }
-      for tool_service in node-set node-set-status model-set model-set-status template-inspector template-draft node-deps-snapshot frontend-release-pin frontend-fetch frontend-build; do
+      for tool_service in node-set node-set-status model-set model-set-status template-inspector template-draft node-deps-snapshot frontend-release-pin version-update frontend-fetch frontend-build; do
         if [[ " $* " == *" build $tool_service "* \
             || " $* " == *" run "*" $tool_service "* ]]; then
           [[ " $* " == *' --profile tools '* ]] \
@@ -29,6 +29,14 @@ case "${1:-}" in
         printf '%064d\n' 0
         printf 'COMFY_FRONTEND_DIST_SHA256=%s\n' \
           "${FAKE_FRONTEND_RELEASE_DIGEST:-invalid-digest}"
+        exit 0
+      fi
+      if [[ " $* " == *" run "*" version-update resolve "* ]]; then
+        if [[ -n "${FAKE_VERSION_PROFILE_TO_CHANGE:-}" ]]; then
+          printf 'CHANGED_DURING_RESOLUTION=true\n' >> "$FAKE_VERSION_PROFILE_TO_CHANGE"
+        fi
+        printf '%064d\n' 0
+        printf '%b\n' "${FAKE_VERSION_UPDATE_OUTPUT:-LATENTCRATE_VERSION_RESULT|all|0}"
         exit 0
       fi
       printf 'target=%s mode=%s sage=%s args=' \

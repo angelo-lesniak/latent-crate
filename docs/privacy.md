@@ -113,7 +113,18 @@ rules remain the user's responsibility.
 The frontend release pin helper has normal network access but no host bind
 mounts. It downloads the selected `dist.zip` into container tmpfs, validates
 the archive, and prints its digest. The wrapper validates that output before it
-updates the selected version profile on the host.
+updates the selected version profile on the host. This helper and the version
+update helper use a dedicated Compose network that is not shared with ComfyUI.
+
+The version update helper likewise has normal network access and no host bind
+mounts or engine credentials. It receives only the checked-in version values
+needed for resolution and queries public GitHub, GitLab, npm, PyTorch package
+index, and Docker Hub endpoints. For a frontend update it also downloads the
+release archive into tmpfs. The helper cannot edit the repository: it prints a
+labeled proposal, and the host wrapper allowlists the keys and value formats
+before atomically updating the selected profile. Version profiles are not a
+place for secrets; the supplied values appear in the short-lived container's
+command arguments.
 
 Dependency isolation works like this:
 

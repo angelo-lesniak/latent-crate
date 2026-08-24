@@ -37,6 +37,12 @@ well as its release tag. After changing `COMFYUI_FRONTEND_REF`, refresh that
 digest with `bash bin/latentcrate frontend pin-release <profile>`. The command
 downloads and validates the archive in a short-lived helper container with
 tmpfs storage and no host bind mounts, then updates the profile on the host.
+To resolve the latest stable frontend and refresh both values together, use
+`bash bin/latentcrate versions update frontend <profile>`.
+If the tag is already current, this command fills an empty digest but rejects a
+different non-empty digest as a replaced release asset. Investigate the change.
+Run `frontend pin-release` only when you intend to accept the new bytes at the
+same tag.
 
 ```bash
 bash bin/latentcrate up current --detach
