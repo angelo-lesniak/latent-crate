@@ -225,6 +225,62 @@ A troubleshooting entry normally contains a symptom, likely cause, diagnostic
 step, fix, and success check. Add instructions for asking for help only where
 a support channel actually exists.
 
+## Decide whether a diagram earns its place
+
+For every central concept introduced, substantially changed, or reviewed,
+decide whether a diagram is required. Do not wait for the task to request one.
+
+Create or update a Mermaid diagram when all of these conditions apply:
+
+1. **The concept is difficult to understand from prose alone.** The reader
+   must trace relationships, boundaries, hand-offs, branching decisions, state
+   transitions, parallel paths, feedback loops, or movement across several
+   components.
+2. **The concept is important to the project.** It is Core or Required when
+   relevant, affects a reader's ability to change, operate, diagnose, or use
+   the system safely, or its omission could cause a realistic misunderstanding.
+3. **The diagram improves comprehension.** It answers a specific reader
+   question more directly than a short paragraph, list, or table, and its facts
+   can be verified against the page's main sources.
+
+Do not add a diagram only to decorate a page, repeat nearby prose, summarize a
+simple procedure, or represent exact values that a table communicates more
+clearly. Prefer updating an existing diagram over creating a second view of the
+same concept.
+
+Before drawing, state the question the diagram must answer. Select the Mermaid
+form that matches that question:
+
+- Use a flowchart for topology, dependencies, data flow, control flow, or
+  decisions.
+- Use a sequence diagram when the important information is the order of
+  interactions between participants.
+- Use a state diagram when the important information is the allowed states and
+  transitions.
+- Use prose or a table when order and relationships are not the main source of
+  difficulty.
+
+Design diagrams for the limited content width of the rendered documentation:
+
+- Use `LR` only when the concept has a clear progression through a small number
+  of visual layers, such as source → processing → state → consumers. Keep each
+  layer coherent and attach side branches near the layer they belong to.
+- Use `TB` when the diagram branches, contains decisions or feedback, has long
+  labels, or would require too many horizontal layers.
+- Keep labels short and wrap them at meaningful phrases with `<br/>`. Put
+  qualifications and implementation detail in the surrounding prose.
+- Split a dense diagram into an overview and a focused detail diagram when
+  changing direction does not make it readable.
+- Do not rely on color alone. Labels, shapes, line styles, and surrounding text
+  must communicate the meaning.
+- Introduce the diagram in prose and explain its important consequence after
+  it. The diagram must not be the only location of a safety-critical fact.
+
+Before finishing, inspect each changed diagram for width risks in its source:
+too many left-to-right layers, long unwrapped labels, excessive fan-out,
+cross-layer edges, or too many sequence-diagram participants. Change the
+diagram to `TB`, shorten labels, or split it when one of these risks is present.
+
 ## Separate promises from evidence
 
 Status words answer different questions. One feature can be supported,
