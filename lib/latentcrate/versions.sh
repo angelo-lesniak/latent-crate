@@ -17,13 +17,27 @@ readonly -a VERSION_PROFILE_INPUT_KEYS=(
   TOOL_PYTHON_IMAGE
 )
 
+readonly -a VERSION_COMPONENTS=(
+  comfyui
+  frontend
+  ffmpeg
+  nv-codec-headers
+  svt-av1
+  sageattention
+  pytorch
+  node
+  pnpm
+  tool-python
+  torchcodec
+)
+
 version_component_supported() {
-  case "$1" in
-    comfyui|frontend|ffmpeg|nv-codec-headers|svt-av1|sageattention|pytorch|node|pnpm|tool-python|torchcodec|all)
-      return 0
-      ;;
-    *) return 1 ;;
-  esac
+  local candidate
+  [[ "$1" == all ]] && return 0
+  for candidate in "${VERSION_COMPONENTS[@]}"; do
+    [[ "$1" != "$candidate" ]] || return 0
+  done
+  return 1
 }
 
 version_update_key_allowed() {
@@ -87,23 +101,19 @@ version_update_value_valid() {
   esac
 }
 
-profile_assignment() {
-  local path=$1
+version_component_input_key_required() {
+  local component=$1
   local key=$2
-  local count value
 
-  count=$(awk -F= -v wanted="$key" '$1 == wanted {count++} END {print count + 0}' "$path")
-  [[ "$count" == 1 ]] || die "version profile must define $key exactly once: $path"
-  value=$(awk -F= -v wanted="$key" '$1 == wanted {sub(/^[^=]*=/, ""); print; exit}' "$path")
-  [[ "$value" != *$'\r'* && "$value" != *$'\n'* && "$value" != *'|'* ]] \
-    || die "version profile has an unsafe value for $key: $path"
-  printf '%s\n' "$value"
+  [[ "$component" == all ]] \
+    || version_update_key_allowed "$component" "$key" \
+    || [[ "$component:$key" == torchcodec:TORCHCODEC_INDEX_URL ]]
 }
 
 update_versions() (
   local selection=$1
   local profile=$2
-  local path snapshot updated engine resolver_output line marker component key value extra result_selection result_count
+  local path snapshot updated engine resolver_output line marker component key value extra result_selection result_count input_value
   local record_count=0 result_records=0 count
   local -a assignments=()
   local -a update_keys=()
@@ -114,12 +124,10 @@ update_versions() (
 
   version_component_supported "$selection" \
     || die "unknown version component: $selection"
-  path=$(profile_file "$profile")
-  acquire_version_profile_lock "$profile"
-  [[ ! -L "$path" ]] || die "refusing symbolic link for version profile: $path"
-
-  snapshot=$(mktemp "$PROJECT_ROOT/versions/.${profile}.version-update.XXXXXX") \
-    || die 'could not create a temporary version-profile snapshot'
+  path=$(profile_file "$profile") || return
+  acquire_version_profile_lock
+  snapshot=$(snapshot_version_profile \
+    "$path" "$PROJECT_ROOT/versions/.${profile}.version-update.XXXXXX") || return
   updated=
   cleanup_version_update() {
     rm -f -- "$snapshot"
@@ -127,18 +135,18 @@ update_versions() (
     release_version_profile_lock
   }
   trap cleanup_version_update EXIT
-  cp -p -- "$path" "$snapshot" \
-    || die "could not snapshot version profile: $path"
 
   for key in "${VERSION_PROFILE_INPUT_KEYS[@]}"; do
-    assignments+=("$key=$(profile_assignment "$snapshot" "$key")")
+    version_component_input_key_required "$selection" "$key" || continue
+    input_value=$(profile_assignment "$snapshot" "$key") || return
+    assignments+=("$key=$input_value")
   done
 
   export LATENTCRATE_TOOLS_TAG=$profile
-  engine=$(detect_engine)
-  compose_tool "$engine" "$profile" build version-update
+  engine=$(detect_engine) || return
+  compose_tool "$engine" "$profile" build version-update || return
   resolver_output=$(compose_tool "$engine" "$profile" run --rm --no-deps -T \
-    version-update resolve "$selection" "${assignments[@]}")
+    version-update resolve "$selection" "${assignments[@]}") || return
 
   while IFS= read -r line; do
     case "$line" in
@@ -189,31 +197,23 @@ update_versions() (
       || die 'version resolver returned a mismatched PyTorch image pair'
   fi
 
-  [[ ! -L "$path" ]] || die "refusing symbolic link for version profile: $path"
-  cmp -s -- "$path" "$snapshot" \
-    || die "version profile changed while the version update was running: $path"
+  assert_version_profile_unchanged "$path" "$snapshot" 'the version update'
   if ((record_count == 0)); then
     printf 'Profile %s already has the latest eligible %s versions.\n' "$profile" "$selection"
     return
   fi
 
-  updated=$(mktemp "$PROJECT_ROOT/versions/.${profile}.version-update.XXXXXX") \
-    || die 'could not create a temporary version-profile update'
-  cp -p -- "$snapshot" "$updated" \
-    || die "could not stage version profile update: $path"
+  updated=$(stage_version_profile_update \
+    "$path" "$snapshot" "$PROJECT_ROOT/versions/.${profile}.version-update.XXXXXX") || return
   for ((count = 0; count < record_count; count++)); do
     key=${update_keys[$count]}
     value=${update_values[$count]}
-    [[ $(awk -F= -v wanted="$key" '$1 == wanted {count++} END {print count + 0}' "$updated") == 1 ]] \
-      || die "version profile must define $key exactly once: $path"
+    profile_assignment "$updated" "$key" >/dev/null
     sed -i -e "s|^${key}=.*|${key}=${value}|" "$updated"
   done
 
-  [[ ! -L "$path" ]] || die "refusing symbolic link for version profile: $path"
-  cmp -s -- "$path" "$snapshot" \
-    || die "version profile changed while the version update was running: $path"
-  mv -f -- "$updated" "$path" \
-    || die "could not update version profile: $path"
+  publish_version_profile_update \
+    "$path" "$snapshot" "$updated" 'the version update'
   updated=
   printf 'Updated %s version pin(s) in profile %s.\n' "$record_count" "$profile"
 )

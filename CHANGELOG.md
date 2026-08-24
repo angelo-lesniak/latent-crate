@@ -57,11 +57,13 @@ tagged release is published. Until then, notable changes are collected under
 - A containerized `versions update <component|all> <profile>` workflow that
   resolves stable upstream releases, package versions, and compatible image
   tags, reports available intervening release links, and atomically updates
-  only allowlisted profile pins.
+  only allowlisted profile pins. It rejects incomplete paired updates, replaced
+  same-tag frontend assets, yanked packages, source rollbacks, unsafe upstream
+  text, and malformed resolver output. GitHub tag enumeration uses one API
+  request per repository, and release-note lookup failures are reported
+  separately from an empty release interval.
 
 ### Fixed
 
-- Hardened version maintenance against lock-file symlinks, direct runtime
-  network access, paginated release omissions, empty frontend digests,
-  unexpected same-tag asset replacement, yanked packages, source rollbacks,
-  and terminal control characters in upstream release text.
+- Hardened version maintenance against lock-file symlinks and direct runtime
+  network access.

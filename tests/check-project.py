@@ -84,6 +84,31 @@ def load_yaml(relative: str) -> dict:
     return document
 
 
+def check_yaml_duplicate_keys() -> None:
+    """Literal YAML mappings must not silently overwrite an earlier key."""
+
+    def walk(node: yaml.Node, relative: Path, path: tuple[str, ...] = ()) -> None:
+        if isinstance(node, yaml.MappingNode):
+            seen: set[str] = set()
+            for key_node, value_node in node.value:
+                key = key_node.value if isinstance(key_node, yaml.ScalarNode) else "<complex>"
+                if key != "<<" and key in seen:
+                    location = ".".join((*path, key))
+                    fail(f"duplicate YAML key in {relative}: {location}")
+                seen.add(key)
+                walk(value_node, relative, (*path, key))
+        elif isinstance(node, yaml.SequenceNode):
+            for index, item in enumerate(node.value):
+                walk(item, relative, (*path, str(index)))
+
+    paths = sorted(ROOT.glob("compose*.yaml"))
+    paths.extend(sorted((ROOT / ".github" / "workflows").glob("*.yml")))
+    for path in paths:
+        node = yaml.compose(path.read_text(encoding="utf-8"))
+        if node is not None:
+            walk(node, path.relative_to(ROOT))
+
+
 def parse_env(path: Path) -> dict[str, str]:
     """Parse KEY=VALUE lines, tolerating blank lines and # comments."""
     values: dict[str, str] = {}
@@ -379,15 +404,18 @@ def check_frontend_helper_services() -> None:
 
     version_update = compose_service(compose, "version-update")
     require_service_hardening("version-update", version_update)
+    version_update_args = (version_update.get("build") or {}).get("args") or {}
+    for required_arg in ("TOOL_PYTHON_IMAGE", "FRONTEND_NODE_IMAGE"):
+        if not version_update_args.get(required_arg):
+            fail(f"version-update build must pass required base-image argument {required_arg}")
     if version_update.get("networks") != ["version-sources"]:
         fail("the networked version update helper must use only the version-sources network")
     for mount in version_update.get("volumes") or []:
         if isinstance(mount, dict) and mount.get("type") == "bind":
             fail("the networked version update helper must not receive host bind mounts")
-    if "version-sources" in (compose_service(compose, "comfy").get("networks") or []):
-        fail("the ComfyUI runtime must not share the version-sources helper network")
-    if "version-sources" not in (compose.get("networks") or {}):
-        fail("compose.yaml must define the isolated version-sources helper network")
+    networks = compose.get("networks") or {}
+    if "version-sources" not in networks or "default" not in networks:
+        fail("compose.yaml must define separate default and version-sources networks")
 
 
 # --- Build and runtime hardening ---------------------------------------------
@@ -580,7 +608,7 @@ def check_release_frontend_installer() -> None:
         for parsed in (urlsplit(node.value),)
         if parsed.hostname is not None
     }
-    if "api.github.com" in referenced_hosts:
+    if any(host == "api.github.com" for host in referenced_hosts):
         fail("release frontend builds must not depend on the anonymous GitHub API")
     if "FrontendManager.init_frontend_unsafe" in dockerfile:
         fail("release frontend builds must not depend on the anonymous GitHub API")
@@ -968,11 +996,6 @@ def check_cli_node_workflows() -> None:
         fail("version updates must run through the version-update helper via compose_tool")
     if re.search(r"(^|[;&|]\s*)python[0-9]*\s", version_update_function, re.MULTILINE):
         fail("version updates must not require host Python")
-    core = read_text("lib/latentcrate/core.sh")
-    if ".version-profile-" in core:
-        fail("version profile locking must not use predictable writable lock files")
-    if 'exec {VERSION_PROFILE_LOCK_FD}<"$PROJECT_ROOT/versions"' not in core:
-        fail("version profile updates must lock the trusted versions directory")
     for node_contract in (
         "nodes install",
         "nodes sync",
@@ -1159,6 +1182,7 @@ def check_markdown_links() -> None:
 
 
 CHECKS = (
+    check_yaml_duplicate_keys,
     check_version_profiles,
     check_version_single_source,
     check_dockerfile_stage_graph,

@@ -12,11 +12,14 @@ unset \
   COMFY_BUILD_TARGET \
   COMFY_FRONTEND_DIST_DIR \
   COMFY_FRONTEND_MODE \
+  COMPOSE_PROJECT_NAME \
+  FAKE_PODMAN_LOG \
   FRONTEND_GIT_REF \
   FRONTEND_GIT_REQUESTED_REF \
   FRONTEND_GIT_URL
 
 unset CUSTOM_NODE_CACHE_KEY
+export COMPOSE_PROJECT_NAME=latentcrate
 export NODE_SET_FILE="$PROJECT_ROOT/config/custom-nodes/sets/latent-nodepack.toml"
 export NODE_SET_TARGET_DIR="$PROJECT_ROOT/data/comfy/custom_nodes"
 export NODE_DEPS_SOURCE_DIR="$PROJECT_ROOT/data/comfy/custom_nodes"
@@ -27,6 +30,12 @@ export FRONTEND_OUTPUT_DIR="$PROJECT_ROOT/data/cache/frontend-builds/test"
 export FRONTEND_PNPM_CACHE_DIR="$PROJECT_ROOT/data/cache/frontend-pnpm"
 export FRONTEND_WORK_DIR="$PROJECT_ROOT/data/cache/frontend-work/test"
 export TEMPLATE_DRAFT_OUTPUT_DIR="$PROJECT_ROOT/build/model-set-drafts"
+network_log="$PROJECT_ROOT/build/podman-compose-network.log"
+rm -f -- "$network_log"
+cleanup() {
+  rm -f -- "$network_log"
+}
+trap cleanup EXIT
 
 mkdir -p \
   "$NODE_SET_TARGET_DIR" \
@@ -40,8 +49,10 @@ mkdir -p \
 compose_files=(--file compose.yaml --file compose.podman.yaml)
 if [[ "${OS:-}" == Windows_NT ]]; then
   fake_engine=$(cygpath -w "$PROJECT_ROOT/tests/fixtures/podman-compose-bin/podman.cmd")
+  fake_network_log=$(cygpath -w "$network_log")
 else
   fake_engine="$PROJECT_ROOT/tests/fixtures/podman-compose-bin/podman"
+  fake_network_log=$network_log
   chmod +x "$fake_engine"
 fi
 
@@ -140,6 +151,20 @@ done
 podman_compose_tool_dry_run run --rm --no-deps -T template-inspector list
 podman_compose_tool_dry_run run --rm --no-deps -T template-draft \
   create-model-set fixture --name fixture
+
+(
+  export FAKE_PODMAN_LOG=$fake_network_log
+  podman-compose "${compose_files[@]}" \
+    --env-file versions/edge.env \
+    --podman-path "$fake_engine" \
+    run --rm --no-deps comfy >/dev/null
+)
+grep -Fq -- '--network=latentcrate_default:alias=comfy' "$network_log" \
+  || { printf 'podman-compose compatibility: comfy does not use the default network\n' >&2; exit 1; }
+if grep -Fq -- '--network=latentcrate_version-sources:alias=comfy' "$network_log"; then
+  printf 'podman-compose compatibility: comfy joined the version-sources helper network\n' >&2
+  exit 1
+fi
 
 podman_compose_dry_run build comfy
 podman_compose_dry_run up --no-build --detach comfy

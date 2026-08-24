@@ -23,11 +23,14 @@ Upgrade and validate each independent component or compatibility group
 separately.
 
 1. Copy the currently validated version profile.
-2. Run `bash bin/latentcrate versions update <component> <profile>`. It resolves
-   the latest eligible stable version, prints available intervening release
-   links, and atomically updates the profile. For `frontend`, the same command
-   downloads and validates the new release `dist.zip`, updates its SHA-256, and
-   removes the temporary archive.
+2. For a component listed in the [version updater](cli.md#versions), run
+   `bash bin/latentcrate versions update <component> <profile>`. It resolves the
+   latest eligible stable version, prints available intervening release links,
+   and atomically updates the profile. A frontend resolution always downloads
+   and validates the selected `dist.zip`, updates its SHA-256 when needed, and
+   removes the temporary archive. For a setting outside the updater's table,
+   edit the copied profile directly and use its entry in
+   [configuration](configuration.md#version-profiles) to preserve compatibility.
 3. Review the profile diff and the upstream release information. If you change
    `COMFYUI_FRONTEND_REF` manually instead, run
    `bash bin/latentcrate frontend pin-release <profile>` to refresh only the
@@ -52,10 +55,9 @@ remain exact.
 `bash bin/latentcrate versions update all <profile>` is available for an
 intentional coordinated refresh. The command writes resolved updates after all
 sources succeed; review the resulting profile diff. It does not replace the
-one-group-at-a-time validation workflow above. The updater keeps
-compatibility policy such as CUDA architecture lists, CUDA NPP, minimum driver
-versions, and TorchCodec's index URL unchanged; review those manually when a
-toolchain family changes.
+one-group-at-a-time validation workflow above. Review the updater's documented
+[manual compatibility settings](cli.md#versions) when a toolchain family
+changes.
 
 Friendly Git tags and OCI tags can be moved upstream, so the checked-in profiles
 are stable version selections rather than byte-for-byte supply-chain locks.

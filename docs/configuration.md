@@ -147,11 +147,9 @@ measured free memory.
 The external release and tool pins can be refreshed with
 `bash bin/latentcrate versions update <component|all> <profile>`; see the
 [version updater](cli.md#versions) for the component names and exact policy.
-The updater changes only allowlisted upstream-version keys. Architecture lists,
-CUDA NPP, minimum driver policy, build parallelism, index URLs, build targets,
-and local image tags remain deliberate manual settings. PyTorch development
-and runtime images are always updated as one pair within their existing
-CUDA/cuDNN family.
+Values outside that documented allowlist remain deliberate manual settings.
+PyTorch development and runtime images are always updated as one pair within
+their existing CUDA/cuDNN family.
 
 ### TorchCodec and CUDA NPP
 

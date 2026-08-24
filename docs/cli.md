@@ -8,8 +8,9 @@ skip its checks.
 General rules:
 
 - `[profile]` is a version profile: a file under `versions/` without the
-  `.env` suffix. It defaults to `current`; `versions update` instead requires
-  an explicit profile because it changes that file.
+  `.env` suffix. Optional profile arguments default to `current`.
+  `versions update` requires an explicit profile. `frontend pin-release` also
+  changes a profile and uses `current` when the optional argument is omitted.
 - The wrapper loads `.env` first. Shell environment variables override `.env`
   for one command, for example
   `COMFY_PORT=4210 bash bin/latentcrate up current --detach`.
@@ -414,9 +415,16 @@ there is no implicit `current` for a command that writes a checked-in file.
 | `tool-python` | `TOOL_PYTHON_IMAGE` | Latest stable Docker Hub tag with the existing suffix and version granularity |
 | `torchcodec` | `TORCHCODEC_VERSION` | Latest version with the existing build suffix from `TORCHCODEC_INDEX_URL`; an empty pin stays disabled |
 
-For `frontend`, an empty digest is populated when the tag is already current.
-A different non-empty digest at the same tag aborts the update; investigate the
-asset change, then run `frontend pin-release` only to accept it deliberately.
+For GitHub tag-backed components, "stable" means that the tag matches the
+numeric pattern shown by the current pin and has no prerelease suffix. Some of
+these upstreams do not publish GitHub Releases, so Release metadata supplies
+review links but does not define tag eligibility.
+
+For `frontend`, every resolution downloads and validates the selected archive,
+including when the tag is already current. This verification populates an empty
+digest and detects a replaced asset. A different non-empty digest at the same
+tag aborts the update; investigate the asset change, then run
+`frontend pin-release` only to accept it deliberately.
 
 Use `all` to resolve every component in that order. All sources must resolve
 successfully before the wrapper changes the profile, and every accepted key is
@@ -428,7 +436,9 @@ command is running.
 For GitHub and GitLab sources, the command prints titles and links for known
 stable releases between the old and new pins. npm, Python-index, and image
 updates print the corresponding package, index, or image-history page; they do
-not synthesize changelogs.
+not synthesize changelogs. If GitHub release-note lookup fails, the command
+reports that the notes are unavailable and prints the repository's release
+history link; it does not present the failure as an empty release interval.
 
 Compatibility and local policy remain manual: the updater does not change CUDA
 architecture lists, CUDA NPP, minimum driver policy, build parallelism,

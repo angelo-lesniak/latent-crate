@@ -74,15 +74,26 @@ profile_value() {
   awk -F= -v wanted="$key" '$1 == wanted {sub(/^[^=]*=/, ""); print; exit}' "$path"
 }
 
-acquire_version_profile_lock() {
-  local profile=$1
+profile_assignment() {
+  local path=$1
+  local key=$2
+  local count value
 
+  count=$(awk -v wanted="$key" 'index($0, wanted "=") == 1 {count++} END {print count + 0}' "$path")
+  [[ "$count" == 1 ]] || die "version profile must define $key exactly once: $path"
+  value=$(awk -v wanted="$key" 'index($0, wanted "=") == 1 {sub(/^[^=]*=/, ""); print; exit}' "$path")
+  [[ "$value" != *$'\r'* && "$value" != *$'\n'* && "$value" != *'|'* ]] \
+    || die "version profile has an unsafe value for $key: $path"
+  printf '%s\n' "$value"
+}
+
+acquire_version_profile_lock() {
   command -v flock >/dev/null 2>&1 \
     || die 'flock (util-linux) is required for version profile updates'
   exec {VERSION_PROFILE_LOCK_FD}<"$PROJECT_ROOT/versions" \
     || die 'could not open the version profile directory lock'
   flock -n "$VERSION_PROFILE_LOCK_FD" \
-    || die "another version profile update is running for profile $profile"
+    || die 'another version profile update is running'
 }
 
 release_version_profile_lock() {
@@ -90,6 +101,53 @@ release_version_profile_lock() {
   flock -u "$VERSION_PROFILE_LOCK_FD" 2>/dev/null || true
   exec {VERSION_PROFILE_LOCK_FD}>&-
   unset VERSION_PROFILE_LOCK_FD
+}
+
+assert_version_profile_unchanged() {
+  local path=$1
+  local snapshot=$2
+  local activity=$3
+
+  [[ ! -L "$path" ]] || die "refusing symbolic link for version profile: $path"
+  cmp -s -- "$path" "$snapshot" \
+    || die "version profile changed while $activity was running: $path"
+}
+
+snapshot_version_profile() {
+  local path=$1
+  local template=$2
+  local snapshot
+
+  [[ ! -L "$path" ]] || die "refusing symbolic link for version profile: $path"
+  snapshot=$(mktemp "$template") \
+    || die 'could not create a temporary version-profile snapshot'
+  cp -p -- "$path" "$snapshot" \
+    || { rm -f -- "$snapshot"; die "could not snapshot version profile: $path"; }
+  printf '%s\n' "$snapshot"
+}
+
+stage_version_profile_update() {
+  local path=$1
+  local snapshot=$2
+  local template=$3
+  local staged
+
+  staged=$(mktemp "$template") \
+    || die 'could not create a temporary version-profile update'
+  cp -p -- "$snapshot" "$staged" \
+    || { rm -f -- "$staged"; die "could not stage version profile update: $path"; }
+  printf '%s\n' "$staged"
+}
+
+publish_version_profile_update() {
+  local path=$1
+  local snapshot=$2
+  local staged=$3
+  local activity=$4
+
+  assert_version_profile_unchanged "$path" "$snapshot" "$activity"
+  mv -f -- "$staged" "$path" \
+    || die "could not update version profile: $path"
 }
 
 effective_profile_value() {

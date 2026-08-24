@@ -114,6 +114,8 @@ def clean_text(value: object) -> str:
 
 
 def request_bytes(url: str, *, accept: str = "application/json") -> bytes:
+    if urllib.parse.urlsplit(url).scheme.lower() != "https":
+        raise VersionUpdateError(f"version source URL must use HTTPS: {url}")
     request = urllib.request.Request(
         url,
         headers={"Accept": accept, "User-Agent": USER_AGENT},
@@ -126,6 +128,16 @@ def request_bytes(url: str, *, accept: str = "application/json") -> bytes:
             if announced and announced.isdigit() and int(announced) > MAX_RESPONSE_BYTES:
                 raise VersionUpdateError(f"version source response is too large: {url}")
             content = response.read(MAX_RESPONSE_BYTES + 1)
+    except urllib.error.HTTPError as error:
+        detail = f"HTTP {error.code}"
+        headers = error.headers or {}
+        remaining = headers.get("X-RateLimit-Remaining")
+        retry_after = headers.get("Retry-After")
+        if remaining is not None:
+            detail += f", rate limit remaining {remaining}"
+        if retry_after is not None:
+            detail += f", retry after {retry_after} seconds"
+        raise VersionUpdateError(f"could not read version source {url}: {detail}") from error
     except (OSError, urllib.error.URLError) as error:
         raise VersionUpdateError(f"could not read version source {url}: {error}") from error
     if len(content) > MAX_RESPONSE_BYTES:
@@ -191,12 +203,22 @@ def current_is_latest(
 
 
 def github_tags(source: GitHubSource) -> list[str]:
-    payload = paginated_list(
-        f"https://api.github.com/repos/{source.owner}/{source.repository}/tags",
-        f"GitHub tags for {source.owner}/{source.repository}",
+    payload = request_json(
+        f"https://api.github.com/repos/{source.owner}/{source.repository}/git/"
+        "matching-refs/tags/",
         accept="application/vnd.github+json",
     )
-    return [item.get("name", "") for item in payload if isinstance(item, dict)]
+    if not isinstance(payload, list):
+        raise VersionUpdateError(
+            f"GitHub tags for {source.owner}/{source.repository} returned an invalid response"
+        )
+    prefix = "refs/tags/"
+    return [
+        ref.removeprefix(prefix)
+        for item in payload
+        if isinstance(item, dict)
+        and (ref := str(item.get("ref", ""))).startswith(prefix)
+    ]
 
 
 def github_release_notes(
@@ -204,31 +226,49 @@ def github_release_notes(
 ) -> tuple[str, ...]:
     url = f"https://api.github.com/repos/{source.owner}/{source.repository}/releases"
     fallback = f"https://github.com/{source.owner}/{source.repository}/releases"
-    try:
-        payload = paginated_list(
-            url,
-            f"GitHub releases for {source.owner}/{source.repository}",
-            accept="application/vnd.github+json",
-        )
-    except VersionUpdateError:
-        return (f"  Release history: {fallback}",)
-    if not isinstance(payload, list):
-        return (f"  Release history: {fallback}",)
     current_key = version_key(current, source.tag_pattern)
     latest_key = version_key(latest, source.tag_pattern)
     if current_key is None or latest_key is None:
         return (f"  Release history: {fallback}",)
     releases: list[tuple[tuple[int, ...], str]] = []
-    for item in payload:
-        if not isinstance(item, dict) or item.get("draft") or item.get("prerelease"):
-            continue
-        tag = item.get("tag_name", "")
-        parsed = version_key(tag, source.tag_pattern)
-        if parsed is None or not (current_key < parsed <= latest_key):
-            continue
-        title = clean_text(item.get("name") or tag) or tag
-        link = clean_text(item.get("html_url") or fallback) or fallback
-        releases.append((parsed, f"  {title}: {link}"))
+    separator = "&" if "?" in url else "?"
+    try:
+        for page in range(1, MAX_API_PAGES + 1):
+            payload = request_json(
+                f"{url}{separator}per_page={API_PAGE_SIZE}&page={page}",
+                accept="application/vnd.github+json",
+            )
+            if not isinstance(payload, list):
+                raise VersionUpdateError(
+                    f"GitHub releases for {source.owner}/{source.repository} "
+                    "returned an invalid paginated response"
+                )
+            found_current = False
+            for item in payload:
+                if not isinstance(item, dict):
+                    continue
+                tag = item.get("tag_name", "")
+                found_current = found_current or tag == current
+                if item.get("draft") or item.get("prerelease"):
+                    continue
+                parsed = version_key(tag, source.tag_pattern)
+                if parsed is None or not (current_key < parsed <= latest_key):
+                    continue
+                title = clean_text(item.get("name") or tag) or tag
+                link = clean_text(item.get("html_url") or fallback) or fallback
+                releases.append((parsed, f"  {title}: {link}"))
+            if found_current or len(payload) < API_PAGE_SIZE:
+                break
+        else:
+            raise VersionUpdateError(
+                f"GitHub releases for {source.owner}/{source.repository} exceeded "
+                f"the {MAX_API_PAGES}-page safety limit"
+            )
+    except VersionUpdateError as error:
+        return (
+            f"  Release notes unavailable: {clean_text(error)}",
+            f"  Release history: {fallback}",
+        )
     if not releases:
         return (f"  Release history: {fallback}",)
     return tuple(line for _, line in sorted(releases))
