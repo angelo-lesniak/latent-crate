@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install an exact ComfyUI frontend release asset without GitHub API calls."""
+"""Install or inspect an exact frontend release without GitHub API calls."""
 
 from __future__ import annotations
 
@@ -50,7 +50,27 @@ def validate_archive(archive: zipfile.ZipFile) -> None:
             fail("frontend release expands beyond the size limit")
 
 
-def download(url: str, destination: Path, expected_sha256: str = "") -> None:
+def release_asset_url(reference: str) -> str:
+    match = RELEASE_RE.fullmatch(reference)
+    if match is None:
+        fail("release frontend must be an exact OWNER/REPO@vVERSION reference")
+    return RELEASE_ASSET_URL_TEMPLATE.format(
+        owner=match["owner"],
+        repo=match["repo"],
+        tag=match["tag"],
+    )
+
+
+def require_root_index(archive: zipfile.ZipFile) -> None:
+    try:
+        index = archive.getinfo("index.html")
+    except KeyError:
+        fail("frontend release archive has no root index.html")
+    if index.is_dir():
+        fail("frontend release archive has no root index.html")
+
+
+def download(url: str, destination: Path, expected_sha256: str = "") -> str:
     request = urllib.request.Request(url, headers={"User-Agent": "LatentCrate-build"})
     digest = hashlib.sha256()
     with urllib.request.urlopen(request, timeout=60) as response, destination.open("wb") as output:
@@ -74,23 +94,44 @@ def download(url: str, destination: Path, expected_sha256: str = "") -> None:
                 fail("frontend release archive exceeds the size limit")
             digest.update(chunk)
             output.write(chunk)
-    if expected_sha256 and digest.hexdigest() != expected_sha256:
+    actual_sha256 = digest.hexdigest()
+    if expected_sha256 and actual_sha256 != expected_sha256:
         fail(
             "frontend release archive digest mismatch: "
-            f"expected sha256 {expected_sha256} but downloaded {digest.hexdigest()}"
+            f"expected sha256 {expected_sha256} but downloaded {actual_sha256}"
         )
+    return actual_sha256
+
+
+def release_digest(reference: str) -> str:
+    asset_url = release_asset_url(reference)
+    try:
+        with tempfile.TemporaryDirectory(prefix="latentcrate-frontend-pin-") as temporary:
+            archive_path = Path(temporary) / "dist.zip"
+            digest = download(asset_url, archive_path)
+            with zipfile.ZipFile(archive_path) as archive:
+                validate_archive(archive)
+                require_root_index(archive)
+                corrupt_member = archive.testzip()
+                if corrupt_member is not None:
+                    fail(f"corrupt member in frontend release archive: {corrupt_member!r}")
+    except (OSError, RuntimeError, zipfile.BadZipFile) as error:
+        fail(f"could not download a valid frontend release archive: {error}")
+    return digest
 
 
 def main() -> None:
+    if sys.argv[1:2] == ["digest"]:
+        if len(sys.argv) != 3:
+            fail("usage: install-release-frontend.py digest OWNER/REPO@vVERSION")
+        print(f"COMFY_FRONTEND_DIST_SHA256={release_digest(sys.argv[2])}")
+        return
+
     if len(sys.argv) not in (3, 4):
         fail(
             "usage: install-release-frontend.py OWNER/REPO@vVERSION DESTINATION"
             " [EXPECTED_DIST_SHA256]"
         )
-
-    match = RELEASE_RE.fullmatch(sys.argv[1])
-    if match is None:
-        fail("release frontend must be an exact OWNER/REPO@vVERSION reference")
 
     # An empty digest skips verification; a non-empty one must be a full
     # lowercase-normalized SHA-256 of the release dist.zip asset.
@@ -102,11 +143,7 @@ def main() -> None:
     if destination.exists():
         fail(f"frontend destination already exists: {destination}")
 
-    asset_url = RELEASE_ASSET_URL_TEMPLATE.format(
-        owner=match["owner"],
-        repo=match["repo"],
-        tag=match["tag"],
-    )
+    asset_url = release_asset_url(sys.argv[1])
     destination.parent.mkdir(parents=True, exist_ok=True)
 
     with tempfile.TemporaryDirectory(prefix="latentcrate-frontend-") as temporary:
@@ -117,6 +154,7 @@ def main() -> None:
         download(asset_url, archive_path, expected_sha256)
         with zipfile.ZipFile(archive_path) as archive:
             validate_archive(archive)
+            require_root_index(archive)
             archive.extractall(staging)
         if not (staging / "index.html").is_file():
             fail("frontend release archive has no root index.html")

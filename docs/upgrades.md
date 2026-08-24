@@ -23,10 +23,11 @@ Upgrade and validate each upstream component independently.
 
 1. Copy the currently validated version profile.
 2. Change one reference.
-3. When the change is `COMFYUI_FRONTEND_REF`, refresh the pinned archive
-   digest: download the new release `dist.zip`, run `sha256sum dist.zip`, and
-   write the value into `COMFY_FRONTEND_DIST_SHA256`. The build then fails if
-   the published archive is ever replaced.
+3. When the change is `COMFYUI_FRONTEND_REF`, run
+   `bash bin/latentcrate frontend pin-release <profile>`. It downloads and
+   validates the new release `dist.zip`, updates
+   `COMFY_FRONTEND_DIST_SHA256`, and removes the temporary archive. The build
+   then fails if the published archive is ever replaced.
 4. Build from a clean third-party node dependency snapshot.
 5. Run static checks.
 6. Run `doctor` and `smoke-gpu` on a supported Arch/NVIDIA host.

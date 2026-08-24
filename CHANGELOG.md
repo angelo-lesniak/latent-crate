@@ -50,3 +50,7 @@ tagged release is published. Until then, notable changes are collected under
 - Checksum-verified downloads of pinned model sets for selected official
   workflows (`models list`, `models fetch`, `models status`, and repeatable
   `up --model-set`).
+- A containerized `frontend pin-release` maintenance command that downloads and
+  validates a profile's frontend `dist.zip` without host Python or repository
+  mounts, prevents overlapping pin commands for the same profile, then
+  atomically refreshes its pinned SHA-256.

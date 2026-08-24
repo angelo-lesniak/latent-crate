@@ -88,6 +88,7 @@ tool_services=$(podman-compose "${compose_files[@]}" \
 for service in \
   comfy \
   node-deps-snapshot \
+  frontend-release-pin \
   node-set \
   node-set-status \
   model-set \
@@ -105,6 +106,7 @@ done
 # a directly targeted helper as missing.
 for service in \
   node-deps-snapshot \
+  frontend-release-pin \
   node-set \
   node-set-status \
   model-set \
@@ -119,12 +121,15 @@ done
 # in dry-run mode; no container engine or network is used.
 for service in \
   node-deps-snapshot \
+  frontend-release-pin \
   node-set \
   node-set-status \
   frontend-fetch \
   frontend-build; do
   podman_compose_tool_dry_run run --rm --no-deps "$service"
 done
+podman_compose_tool_dry_run run --rm --no-deps -T frontend-release-pin \
+  digest Comfy-Org/ComfyUI_frontend@v1.50.4
 for service in model-set model-set-status; do
   podman_compose_tool_dry_run run --rm --no-deps -T "$service" status all
 done

@@ -33,6 +33,7 @@ General rules:
 | `logs` | Follow the ComfyUI logs |
 | `shell` | Open a Bash shell inside the running container |
 | `smoke-gpu` | Run the real GPU and media checks and save a report |
+| `frontend pin-release` | Refresh a profile's pinned frontend release archive digest |
 | `node-deps snapshot` | Capture third-party node requirements without building the runtime image |
 | `node-deps clear` | Reset the saved third-party node requirements |
 | `nodes list` | List the available commit-pinned node sets |
@@ -253,6 +254,29 @@ selected image.
 ```bash
 bash bin/latentcrate smoke-gpu current
 bash bin/latentcrate smoke-gpu edge --frontend-git https://github.com/your-name/ComfyUI_frontend.git your-branch
+```
+
+## frontend pin-release
+
+```text
+bin/latentcrate frontend pin-release [profile]
+```
+
+Reads `COMFYUI_FRONTEND_REF` from the selected `versions/*.env` profile, then
+uses a short-lived Compose helper to download that exact release's `dist.zip`
+into tmpfs and validate the archive. The helper has no host bind mounts and
+prints the SHA-256 for the wrapper to validate and atomically write to
+`COMFY_FRONTEND_DIST_SHA256`. The archive disappears with the container. The
+profile is not changed after a failed download or invalid helper output. Only
+one pin command can run for a profile at a time. Do not edit that profile until
+the command finishes. The wrapper checks for edits before publication and
+aborts when it detects one; the final rename prevents a partially written
+profile but cannot coordinate an editor that does not use the command's lock.
+
+Run this after changing a profile's frontend release reference:
+
+```bash
+bash bin/latentcrate frontend pin-release edge
 ```
 
 ## node-deps

@@ -35,6 +35,33 @@ jobs:
               hadolint --failure-threshold warning - < "$dockerfile"
           done
 
+      - name: Build and verify the frontend release helper
+        run: |
+          set -Eeuo pipefail
+          set -a
+          source versions/current.env
+          set +a
+          docker build \
+            --target frontend-release-tool \
+            --build-arg "TOOL_PYTHON_IMAGE=${TOOL_PYTHON_IMAGE}" \
+            --build-arg "FRONTEND_NODE_IMAGE=${FRONTEND_NODE_IMAGE}" \
+            --tag latentcrate/frontend-release-test \
+            --file services/tools/Dockerfile \
+            .
+          frontend_digest=$(docker run \
+            --rm \
+            --read-only \
+            --pids-limit 64 \
+            --cap-drop ALL \
+            --security-opt no-new-privileges \
+            --tmpfs /tmp:rw,nosuid,nodev,noexec,mode=1777 \
+            latentcrate/frontend-release-test \
+            digest "$COMFYUI_FRONTEND_REF")
+          [[ "$frontend_digest" == "COMFY_FRONTEND_DIST_SHA256=$COMFY_FRONTEND_DIST_SHA256" ]] || {
+            printf 'frontend release helper returned an unexpected digest\n' >&2
+            exit 1
+          }
+
       - name: Build and verify the model-set helper
         run: |
           set -Eeuo pipefail

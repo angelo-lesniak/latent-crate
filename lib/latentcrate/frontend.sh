@@ -11,6 +11,73 @@ resolve_frontend_git_ref() {
   bash "$PROJECT_ROOT/scripts/resolve-frontend.sh" ref "$url" "$requested"
 }
 
+pin_frontend_release() (
+  local profile=$1
+  local path reference previous_digest digest engine snapshot updated count key lock_fd
+
+  path=$(profile_file "$profile")
+  command -v flock >/dev/null 2>&1 \
+    || die 'flock (util-linux) is required for frontend release pinning'
+  mkdir -p "$PROJECT_ROOT/build"
+  exec {lock_fd}>"$PROJECT_ROOT/build/.frontend-pin-${profile}.lock" \
+    || die "could not open frontend release pin lock for profile $profile"
+  flock -n "$lock_fd" \
+    || die "another frontend release pin is running for profile $profile"
+  [[ ! -L "$path" ]] || die "refusing symbolic link for version profile: $path"
+
+  snapshot=$(mktemp "$PROJECT_ROOT/versions/.${profile}.frontend-pin.XXXXXX") \
+    || die 'could not create a temporary version-profile snapshot'
+  updated=
+  cleanup_frontend_pin() {
+    rm -f -- "$snapshot"
+    [[ -z "$updated" ]] || rm -f -- "$updated"
+  }
+  trap cleanup_frontend_pin EXIT
+  cp -p -- "$path" "$snapshot" \
+    || die "could not snapshot version profile: $path"
+
+  for key in COMFYUI_FRONTEND_REF COMFY_FRONTEND_DIST_SHA256; do
+    count=$(awk -F= -v wanted="$key" '$1 == wanted {count++} END {print count + 0}' "$snapshot")
+    [[ "$count" == 1 ]] \
+      || die "version profile must define $key exactly once: $path"
+  done
+  reference=$(awk -F= '$1 == "COMFYUI_FRONTEND_REF" {sub(/^[^=]*=/, ""); print; exit}' "$snapshot")
+  previous_digest=$(awk -F= '$1 == "COMFY_FRONTEND_DIST_SHA256" {sub(/^[^=]*=/, ""); print; exit}' "$snapshot")
+
+  export LATENTCRATE_TOOLS_TAG=$profile
+  engine=$(detect_engine)
+  compose_tool "$engine" "$profile" build frontend-release-pin
+  digest=$(compose_tool "$engine" "$profile" run --rm --no-deps -T \
+    frontend-release-pin digest "$reference" \
+    | sed -n 's/^COMFY_FRONTEND_DIST_SHA256=\([0-9a-f]\{64\}\)$/\1/p')
+  [[ "$digest" =~ ^[0-9a-f]{64}$ ]] \
+    || die 'frontend release helper returned an invalid SHA-256'
+
+  [[ ! -L "$path" ]] || die "refusing symbolic link for version profile: $path"
+  cmp -s -- "$path" "$snapshot" \
+    || die "version profile changed while the frontend release pin was running: $path"
+  if [[ "$digest" == "$previous_digest" ]]; then
+    printf 'Already pinned %s dist.zip for profile %s: %s\n' "$reference" "$profile" "$digest"
+    return
+  fi
+
+  updated=$(mktemp "$PROJECT_ROOT/versions/.${profile}.frontend-pin.XXXXXX") \
+    || die 'could not create a temporary version-profile update'
+  cp -p -- "$snapshot" "$updated" \
+    || die "could not stage version profile update: $path"
+  sed -i \
+    -e "s/^COMFY_FRONTEND_DIST_SHA256=.*/COMFY_FRONTEND_DIST_SHA256=$digest/" \
+    "$updated"
+
+  [[ ! -L "$path" ]] || die "refusing symbolic link for version profile: $path"
+  cmp -s -- "$path" "$snapshot" \
+    || die "version profile changed while the frontend release pin was running: $path"
+  mv -f -- "$updated" "$path" \
+    || die "could not update version profile: $path"
+  updated=
+  printf 'Pinned %s dist.zip for profile %s: %s\n' "$reference" "$profile" "$digest"
+)
+
 prepare_frontend_mode() {
   local profile=$1
   local mode url requested resolved dist source source_id cache_root output

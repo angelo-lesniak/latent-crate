@@ -368,6 +368,12 @@ def check_frontend_helper_services() -> None:
     if find_mount(build, "/output") is None:
         fail("the offline frontend-build service must receive the generated-output mount at /output")
 
+    release_pin = compose_service(compose, "frontend-release-pin")
+    require_service_hardening("frontend-release-pin", release_pin)
+    for mount in release_pin.get("volumes") or []:
+        if isinstance(mount, dict) and mount.get("type") == "bind":
+            fail("the networked frontend release pin helper must not receive host bind mounts")
+
 
 # --- Build and runtime hardening ---------------------------------------------
 
@@ -680,6 +686,8 @@ def check_tools_image_targets() -> None:
         fail("custom-node sets must use their containerized installer (node-set-tool)")
     if "model-set-tool" not in tools_dockerfile:
         fail("model sets must use their containerized downloader (model-set-tool)")
+    if "frontend-release-tool" not in tools_dockerfile:
+        fail("frontend release digests must use their containerized helper (frontend-release-tool)")
     if not (ROOT / "scripts" / "verify-model-set-metadata.py").is_file():
         fail("model-set maintainers need the remote metadata verifier")
 
@@ -693,6 +701,16 @@ def check_tools_image_targets() -> None:
     for model_tool_contract in ("--target model-set-tool", "fetch --token-stdin hf-smoke", "status hf-smoke"):
         if model_tool_contract not in workflow_text:
             fail(f"static CI must build and run the model-set helper: {model_tool_contract}")
+    for frontend_release_contract in (
+        "--target frontend-release-tool",
+        'digest "$COMFYUI_FRONTEND_REF"',
+        '"$frontend_digest" == "COMFY_FRONTEND_DIST_SHA256=$COMFY_FRONTEND_DIST_SHA256"',
+    ):
+        if frontend_release_contract not in workflow_text:
+            fail(
+                "static CI must build and verify the frontend release helper: "
+                f"{frontend_release_contract}"
+            )
 
 
 def check_node_deps_snapshot_service() -> None:
@@ -893,6 +911,7 @@ def check_cli_node_workflows() -> None:
         fail("helper commands must render without preparing a custom-node cache key")
     tool_services = (
         "node-deps-snapshot",
+        "frontend-release-pin",
         "node-set",
         "node-set-status",
         "model-set",
@@ -907,6 +926,15 @@ def check_cli_node_workflows() -> None:
             f" {service}" in line for service in tool_services
         ):
             fail(f"helper service bypasses compose_tool: {line.strip()}")
+    frontend_pin_function = cli.split("pin_frontend_release()", 1)[1].split(
+        "prepare_frontend_mode()", 1
+    )[0]
+    if "frontend-release-pin" not in frontend_pin_function:
+        fail("frontend release digests must run through the frontend-release-pin helper")
+    if "compose_tool" not in frontend_pin_function:
+        fail("frontend release digest generation must use compose_tool")
+    if "python" in frontend_pin_function.lower():
+        fail("frontend release pinning must not require host Python")
     for node_contract in (
         "nodes install",
         "nodes sync",

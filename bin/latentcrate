@@ -55,6 +55,8 @@ Usage:
       Open a bash shell in the running container.
   bin/latentcrate smoke-gpu [profile] [--sage mode] [frontend flag]
       Run the GPU verification suite in the running container and save a report.
+  bin/latentcrate frontend pin-release [profile]
+      Download and pin the selected profile's frontend release archive digest.
   bin/latentcrate node-deps snapshot [profile]
       Capture custom-node Python dependencies for the next image build.
   bin/latentcrate node-deps clear
@@ -401,6 +403,15 @@ main() {
       configure_variant "$PROFILE" "$SAGE_MODE"
       engine=$(detect_engine)
       run_gpu_smoke "$engine" "$PROFILE" "$SAGE"
+      ;;
+    frontend)
+      case "${1:-}" in
+        pin-release)
+          (($# <= 2)) || die 'frontend pin-release accepts at most one version profile'
+          pin_frontend_release "${2:-current}"
+          ;;
+        *) die 'usage: bin/latentcrate frontend pin-release [profile]' ;;
+      esac
       ;;
     node-deps)
       case "${1:-}" in
