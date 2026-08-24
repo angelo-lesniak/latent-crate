@@ -25,6 +25,7 @@ unset \
   TEMPLATE_DRAFT_OUTPUT_DIR \
   FAKE_FRONTEND_PROFILE_TO_CHANGE \
   FAKE_FRONTEND_RELEASE_DIGEST \
+  FAKE_DOCKER_TRACE_STDERR \
   FAKE_VERSION_PROFILE_TO_CHANGE \
   FAKE_VERSION_UPDATE_OUTPUT \
   FAKE_DOCKER_COMFY_RUNNING
@@ -60,8 +61,9 @@ pin_frontend_release=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
 [[ "$pin_frontend_release" == *'build frontend-release-pin'* ]]
 [[ "$pin_frontend_release" == *'Already pinned '*' for profile edge:'* ]]
 version_update=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
+  FAKE_DOCKER_TRACE_STDERR=true \
   FAKE_VERSION_UPDATE_OUTPUT='LATENTCRATE_VERSION_RESULT|node|0' \
-  bash bin/latentcrate versions update node edge)
+  bash bin/latentcrate versions update node edge 2>&1)
 [[ "$version_update" == *'build version-update'* ]]
 [[ "$version_update" == *'run --rm --no-deps -T version-update resolve node '* ]]
 [[ "$version_update" == *'already has the latest eligible node versions.'* ]]

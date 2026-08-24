@@ -22,6 +22,15 @@ case "${1:-}" in
             || { printf 'fake Compose provider: missing tools profile for %s\n' "$tool_service" >&2; exit 1; }
         fi
       done
+      trace_fd=1
+      [[ "${FAKE_DOCKER_TRACE_STDERR:-false}" != true ]] || trace_fd=2
+      {
+        printf 'target=%s mode=%s sage=%s args=' \
+          "${COMFY_BUILD_TARGET:-unset}" "${COMFY_FRONTEND_MODE:-unset}" \
+          "${LATENTCRATE_SAGE_MODE:-unset}"
+        printf ' %q' "$@"
+        printf '\n'
+      } >&"$trace_fd"
       if [[ " $* " == *" run "*" frontend-release-pin digest "* ]]; then
         if [[ -n "${FAKE_FRONTEND_PROFILE_TO_CHANGE:-}" ]]; then
           printf 'CHANGED_DURING_DOWNLOAD=true\n' >> "$FAKE_FRONTEND_PROFILE_TO_CHANGE"
@@ -39,11 +48,6 @@ case "${1:-}" in
         printf '%b\n' "${FAKE_VERSION_UPDATE_OUTPUT:-LATENTCRATE_VERSION_RESULT|all|0}"
         exit 0
       fi
-      printf 'target=%s mode=%s sage=%s args=' \
-        "${COMFY_BUILD_TARGET:-unset}" "${COMFY_FRONTEND_MODE:-unset}" \
-        "${LATENTCRATE_SAGE_MODE:-unset}"
-      printf ' %q' "$@"
-      printf '\n'
     fi
     ;;
   ps)
