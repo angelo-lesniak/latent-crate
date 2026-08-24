@@ -58,6 +58,7 @@ bash tests/entrypoint.sh
 bash tests/doctor.sh
 bash tests/resolve-frontend.sh
 bash tests/frontend-release-pin.sh
+bash tests/version-update.sh
 bash tests/export-node-set.sh
 
 if command -v podman-compose >/dev/null 2>&1; then

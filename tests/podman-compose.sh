@@ -89,6 +89,7 @@ for service in \
   comfy \
   node-deps-snapshot \
   frontend-release-pin \
+  version-update \
   node-set \
   node-set-status \
   model-set \
@@ -107,6 +108,7 @@ done
 for service in \
   node-deps-snapshot \
   frontend-release-pin \
+  version-update \
   node-set \
   node-set-status \
   model-set \
@@ -122,6 +124,7 @@ done
 for service in \
   node-deps-snapshot \
   frontend-release-pin \
+  version-update \
   node-set \
   node-set-status \
   frontend-fetch \
@@ -130,6 +133,7 @@ for service in \
 done
 podman_compose_tool_dry_run run --rm --no-deps -T frontend-release-pin \
   digest Comfy-Org/ComfyUI_frontend@v1.50.4
+podman_compose_tool_dry_run run --rm --no-deps -T version-update list
 for service in model-set model-set-status; do
   podman_compose_tool_dry_run run --rm --no-deps -T "$service" status all
 done

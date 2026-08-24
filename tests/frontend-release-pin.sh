@@ -53,15 +53,14 @@ grep -Fq 'frontend release helper returned an invalid SHA-256' "$TEST_ROOT/error
 cmp -s "$PROJECT_ROOT/versions/edge.env" "$TEST_ROOT/before-invalid.env"
 
 write_profile
-mkdir -p "$PROJECT_ROOT/build"
-exec {held_lock_fd}>"$PROJECT_ROOT/build/.frontend-pin-edge.lock"
+exec {held_lock_fd}<"$PROJECT_ROOT/versions"
 flock -n "$held_lock_fd"
 if FAKE_FRONTEND_RELEASE_DIGEST=$expected_digest pin_frontend_release edge \
     2>"$TEST_ROOT/error"; then
   printf 'frontend release pin test: overlapping pin unexpectedly succeeded\n' >&2
   exit 1
 fi
-grep -Fq 'another frontend release pin is running for profile edge' \
+grep -Fq 'another version profile update is running for profile edge' \
   "$TEST_ROOT/error"
 grep -Fxq 'COMFY_FRONTEND_DIST_SHA256=' "$PROJECT_ROOT/versions/edge.env"
 flock -u "$held_lock_fd"

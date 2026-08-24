@@ -15,6 +15,8 @@ readonly PROJECT_ROOT
 # Load only fixed, repository-relative implementation modules.
 # shellcheck source=lib/latentcrate/core.sh
 source "$PROJECT_ROOT/lib/latentcrate/core.sh"
+# shellcheck source=lib/latentcrate/versions.sh
+source "$PROJECT_ROOT/lib/latentcrate/versions.sh"
 # shellcheck source=lib/latentcrate/frontend.sh
 source "$PROJECT_ROOT/lib/latentcrate/frontend.sh"
 # shellcheck source=lib/latentcrate/node-deps.sh
@@ -57,6 +59,8 @@ Usage:
       Run the GPU verification suite in the running container and save a report.
   bin/latentcrate frontend pin-release [profile]
       Download and pin the selected profile's frontend release archive digest.
+  bin/latentcrate versions update <component|all> <profile>
+      Update one or all eligible external version pins in an explicit profile.
   bin/latentcrate node-deps snapshot [profile]
       Capture custom-node Python dependencies for the next image build.
   bin/latentcrate node-deps clear
@@ -223,12 +227,13 @@ main() {
       return
       ;;
     versions)
-      (($# == 0)) || die 'versions accepts no arguments'
-      for file in "$PROJECT_ROOT"/versions/*.env; do
-        printf '\n== %s ==\n' "$(basename "$file" .env)"
-        sed '/^[[:space:]]*#/d; /^[[:space:]]*$/d' "$file"
-      done
-      return
+      if (($# == 0)); then
+        for file in "$PROJECT_ROOT"/versions/*.env; do
+          printf '\n== %s ==\n' "$(basename "$file" .env)"
+          sed '/^[[:space:]]*#/d; /^[[:space:]]*$/d' "$file"
+        done
+        return
+      fi
       ;;
   esac
 
@@ -412,6 +417,11 @@ main() {
           ;;
         *) die 'usage: bin/latentcrate frontend pin-release [profile]' ;;
       esac
+      ;;
+    versions)
+      [[ "${1:-}" == update && $# == 3 ]] \
+        || die 'usage: bin/latentcrate versions update <component|all> <profile>'
+      update_versions "$2" "$3"
       ;;
     node-deps)
       case "${1:-}" in

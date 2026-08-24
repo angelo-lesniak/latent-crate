@@ -13,16 +13,10 @@ resolve_frontend_git_ref() {
 
 pin_frontend_release() (
   local profile=$1
-  local path reference previous_digest digest engine snapshot updated count key lock_fd
+  local path reference previous_digest digest engine snapshot updated count key
 
   path=$(profile_file "$profile")
-  command -v flock >/dev/null 2>&1 \
-    || die 'flock (util-linux) is required for frontend release pinning'
-  mkdir -p "$PROJECT_ROOT/build"
-  exec {lock_fd}>"$PROJECT_ROOT/build/.frontend-pin-${profile}.lock" \
-    || die "could not open frontend release pin lock for profile $profile"
-  flock -n "$lock_fd" \
-    || die "another frontend release pin is running for profile $profile"
+  acquire_version_profile_lock "$profile"
   [[ ! -L "$path" ]] || die "refusing symbolic link for version profile: $path"
 
   snapshot=$(mktemp "$PROJECT_ROOT/versions/.${profile}.frontend-pin.XXXXXX") \
@@ -31,6 +25,7 @@ pin_frontend_release() (
   cleanup_frontend_pin() {
     rm -f -- "$snapshot"
     [[ -z "$updated" ]] || rm -f -- "$updated"
+    release_version_profile_lock
   }
   trap cleanup_frontend_pin EXIT
   cp -p -- "$path" "$snapshot" \

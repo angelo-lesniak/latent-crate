@@ -15,13 +15,22 @@ case "${1:-}" in
     else
       [[ " $* " != *' ps comfy '* ]] \
         || { printf 'fake Compose provider: ps does not accept a service argument\n' >&2; exit 1; }
-      for tool_service in node-set node-set-status model-set model-set-status template-inspector template-draft node-deps-snapshot frontend-release-pin frontend-fetch frontend-build; do
+      for tool_service in node-set node-set-status model-set model-set-status template-inspector template-draft node-deps-snapshot frontend-release-pin version-update frontend-fetch frontend-build; do
         if [[ " $* " == *" build $tool_service "* \
             || " $* " == *" run "*" $tool_service "* ]]; then
           [[ " $* " == *' --profile tools '* ]] \
             || { printf 'fake Compose provider: missing tools profile for %s\n' "$tool_service" >&2; exit 1; }
         fi
       done
+      trace_fd=1
+      [[ "${FAKE_DOCKER_TRACE_STDERR:-false}" != true ]] || trace_fd=2
+      {
+        printf 'target=%s mode=%s sage=%s args=' \
+          "${COMFY_BUILD_TARGET:-unset}" "${COMFY_FRONTEND_MODE:-unset}" \
+          "${LATENTCRATE_SAGE_MODE:-unset}"
+        printf ' %q' "$@"
+        printf '\n'
+      } >&"$trace_fd"
       if [[ " $* " == *" run "*" frontend-release-pin digest "* ]]; then
         if [[ -n "${FAKE_FRONTEND_PROFILE_TO_CHANGE:-}" ]]; then
           printf 'CHANGED_DURING_DOWNLOAD=true\n' >> "$FAKE_FRONTEND_PROFILE_TO_CHANGE"
@@ -31,11 +40,14 @@ case "${1:-}" in
           "${FAKE_FRONTEND_RELEASE_DIGEST:-invalid-digest}"
         exit 0
       fi
-      printf 'target=%s mode=%s sage=%s args=' \
-        "${COMFY_BUILD_TARGET:-unset}" "${COMFY_FRONTEND_MODE:-unset}" \
-        "${LATENTCRATE_SAGE_MODE:-unset}"
-      printf ' %q' "$@"
-      printf '\n'
+      if [[ " $* " == *" run "*" version-update resolve "* ]]; then
+        if [[ -n "${FAKE_VERSION_PROFILE_TO_CHANGE:-}" ]]; then
+          printf 'CHANGED_DURING_RESOLUTION=true\n' >> "$FAKE_VERSION_PROFILE_TO_CHANGE"
+        fi
+        printf '%064d\n' 0
+        printf '%b\n' "${FAKE_VERSION_UPDATE_OUTPUT:-LATENTCRATE_VERSION_RESULT|all|0}"
+        exit 0
+      fi
     fi
     ;;
   ps)

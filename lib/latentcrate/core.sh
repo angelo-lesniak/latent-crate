@@ -74,6 +74,24 @@ profile_value() {
   awk -F= -v wanted="$key" '$1 == wanted {sub(/^[^=]*=/, ""); print; exit}' "$path"
 }
 
+acquire_version_profile_lock() {
+  local profile=$1
+
+  command -v flock >/dev/null 2>&1 \
+    || die 'flock (util-linux) is required for version profile updates'
+  exec {VERSION_PROFILE_LOCK_FD}<"$PROJECT_ROOT/versions" \
+    || die 'could not open the version profile directory lock'
+  flock -n "$VERSION_PROFILE_LOCK_FD" \
+    || die "another version profile update is running for profile $profile"
+}
+
+release_version_profile_lock() {
+  [[ -n "${VERSION_PROFILE_LOCK_FD:-}" ]] || return
+  flock -u "$VERSION_PROFILE_LOCK_FD" 2>/dev/null || true
+  exec {VERSION_PROFILE_LOCK_FD}>&-
+  unset VERSION_PROFILE_LOCK_FD
+}
+
 effective_profile_value() {
   local profile=$1
   local key=$2

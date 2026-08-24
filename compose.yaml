@@ -245,6 +245,28 @@ services:
       - no-new-privileges:true
     environment:
       PYTHONDONTWRITEBYTECODE: "1"
+    networks: [version-sources]
+    volumes:
+      - type: tmpfs
+        target: /tmp
+
+  version-update:
+    profiles: ["tools"]
+    image: "${LATENTCRATE_TOOLS_IMAGE:-latentcrate/tools}:${LATENTCRATE_TOOLS_TAG:-current}-version-update"
+    build:
+      context: .
+      dockerfile: services/tools/Dockerfile
+      target: version-update-tool
+      args:
+        TOOL_PYTHON_IMAGE: "${TOOL_PYTHON_IMAGE:?select a version profile}"
+    read_only: true
+    pids_limit: 64
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
+    networks: [version-sources]
     volumes:
       - type: tmpfs
         target: /tmp
@@ -380,3 +402,6 @@ services:
         target: /work
       - type: tmpfs
         target: /tmp
+
+networks:
+  version-sources:

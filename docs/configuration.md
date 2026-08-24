@@ -144,6 +144,15 @@ Change one dependency group at a time. `SAGE_BUILD_JOBS=2` is a low-memory
 default for typical 16 GB builders. Raise it only when the builder has enough
 measured free memory.
 
+The external release and tool pins can be refreshed with
+`bash bin/latentcrate versions update <component|all> <profile>`; see the
+[version updater](cli.md#versions) for the component names and exact policy.
+The updater changes only allowlisted upstream-version keys. Architecture lists,
+CUDA NPP, minimum driver policy, build parallelism, index URLs, build targets,
+and local image tags remain deliberate manual settings. PyTorch development
+and runtime images are always updated as one pair within their existing
+CUDA/cuDNN family.
+
 ### TorchCodec and CUDA NPP
 
 An empty `TORCHCODEC_VERSION` disables TorchCodec for that profile. In the
@@ -177,8 +186,8 @@ change them.
 | --- | --- | --- |
 | `LATENTCRATE_IMAGE` | `latentcrate/comfy` | Name of the ComfyUI runtime image |
 | `LATENTCRATE_TAG` | Set by the wrapper | Runtime image tag: the profile name plus variant suffixes, for example `current-sage` or `edge-frontend-git-sage` |
-| `LATENTCRATE_TOOLS_IMAGE` | `latentcrate/tools` | Name of the helper-tool images (dependency snapshot, node sets, release pinning, frontend builds) |
-| `LATENTCRATE_TOOLS_TAG` | Set by the wrapper | Tool image tag prefix: the profile name; each tool appends its own suffix (`-node-deps`, `-node-set`, `-model-set`, `-frontend-release`, `-frontend`) |
+| `LATENTCRATE_TOOLS_IMAGE` | `latentcrate/tools` | Name of the helper-tool images (dependency snapshot, node sets, release pinning, version updates, frontend builds) |
+| `LATENTCRATE_TOOLS_TAG` | Set by the wrapper | Tool image tag prefix: the profile name; each tool appends its own suffix (`-node-deps`, `-node-set`, `-model-set`, `-frontend-release`, `-version-update`, `-frontend`) |
 
 The wrapper derives `LATENTCRATE_TAG` and `LATENTCRATE_TOOLS_TAG` from the
 selected profile and options. Do not override the tags in `.env` or on the

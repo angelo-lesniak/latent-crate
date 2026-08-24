@@ -120,6 +120,13 @@ the documentation look complete. Do not delete information only because the
 guidelines mark it "Required when relevant." If a deletion candidate is
 outside the current task, report it; do not change it.
 
+## Consider diagrams
+
+For each central concept affected by the task, apply the guidelines' section
+"Decide whether a diagram earns its place" before finalizing the page. When
+that policy requires a diagram, create or update the Mermaid diagram as part
+of the documentation change.
+
 ## Write only what the reader needs
 
 Apply the guidelines' sections "Include only the procedure details readers
