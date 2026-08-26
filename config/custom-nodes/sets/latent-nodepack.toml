@@ -14,7 +14,7 @@ commit = "9ece3de914214c5f581d725167bc9d0eeb0d1120"
 [[node]]
 name = "comfyui-frame-interpolation"
 repository = "https://github.com/Fannovel16/ComfyUI-Frame-Interpolation"
-commit = "0d4525ba40c3f43773b7cb1c997c50c7549c84c7"
+commit = "26545cc2dd95bc3d27f056016300673bdeee78f5"
 
 [[node]]
 name = "comfyui-impact-pack"
@@ -24,7 +24,7 @@ commit = "429d0159ad429e64d2b3916e6e7be9c22d025c3c"
 [[node]]
 name = "comfyui-inpaint-cropandstitch"
 repository = "https://github.com/lquesada/ComfyUI-Inpaint-CropAndStitch"
-commit = "8e59ab12d6709616528279c85c0648ca8441684d"
+commit = "606e2b4fd83fc44e1f0b403e1f076501db8c3749"
 
 [[node]]
 name = "comfyui-kjnodes"
@@ -34,7 +34,7 @@ commit = "3f20054214fec9f9234fd3841ae6f1e4287948f6"
 [[node]]
 name = "comfyui-videohelpersuite"
 repository = "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite"
-commit = "449839959f0153fb8a57211a9364c55163935ca9"
+commit = "115de7a9d9e34410cffb9ecfd268e993b11a50fb"
 
 [[node]]
 name = "comfyui_controlnet_aux"
@@ -44,7 +44,7 @@ commit = "e8b689a513c3e6b63edc44066560ca5919c0576e"
 [[node]]
 name = "rgthree-comfy"
 repository = "https://github.com/rgthree/rgthree-comfy"
-commit = "6b76ee6f2c5a007710b5a16f97c94330d6ecc871"
+commit = "13b4399c00b5ef5a97b1b6800fc1185874740f5d"
 
 [[node]]
 name = "was-ns"

@@ -1,6 +1,6 @@
 schema = 1
 description = "MiniMax H3 reference-to-video models for the official ComfyUI workflow"
-workflow_urls = ["https://github.com/Comfy-Org/workflow_templates/blob/3db6490611e6a16b84b09110e61a07264ce47cd3/templates/video_minimax_h3_r2v.json"]
+workflow_urls = ["https://github.com/Comfy-Org/workflow_templates/blob/66abae5205f7c5105281146fa109f7c12801d268/templates/video_minimax_h3_r2v.json"]
 
 [[license]]
 name = "MiniMax-H3 Model License"
@@ -8,7 +8,7 @@ url = "https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/42ed227ee7df40d41602854a
 
 [[file]]
 repository = "Comfy-Org/MiniMax-H3"
-revision = "dc559027db79c174125df4d827db55cd11178860"
+revision = "4cc1d817b6184899b41293954329f576cb5ae86b"
 source = "diffusion_models/minimax_h3_ref2va_pruned_int8_convrot.safetensors"
 destination = "diffusion_models/minimax_h3_ref2va_pruned_int8_convrot.safetensors"
 size = 20970379616
@@ -16,7 +16,7 @@ sha256 = "9255f52b6677845ad238f20dfaafa94727053694127ab7f255c048f0f9365779"
 
 [[file]]
 repository = "Comfy-Org/MiniMax-H3"
-revision = "dc559027db79c174125df4d827db55cd11178860"
+revision = "4cc1d817b6184899b41293954329f576cb5ae86b"
 source = "text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors"
 destination = "text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors"
 size = 15687142551
@@ -24,7 +24,7 @@ sha256 = "35a88d51044231fe332301d7a62aa81e3f2cba62febeb446e2c1e3e0ef76f2c6"
 
 [[file]]
 repository = "Comfy-Org/MiniMax-H3"
-revision = "dc559027db79c174125df4d827db55cd11178860"
+revision = "4cc1d817b6184899b41293954329f576cb5ae86b"
 source = "vae/minimax_h3_audio_vae_fp32.safetensors"
 destination = "vae/minimax_h3_audio_vae_fp32.safetensors"
 size = 605254808
@@ -32,7 +32,7 @@ sha256 = "8e505d95dd1561d47abd43d4238fd40d9bb1ae9e147ed0a4cba778d76ae4db48"
 
 [[file]]
 repository = "Comfy-Org/MiniMax-H3"
-revision = "dc559027db79c174125df4d827db55cd11178860"
+revision = "4cc1d817b6184899b41293954329f576cb5ae86b"
 source = "vae/minimax_h3_video_vae_fp16.safetensors"
 destination = "vae/minimax_h3_video_vae_fp16.safetensors"
 size = 5207808496
@@ -40,7 +40,7 @@ sha256 = "7c1f131492e7eddacaac9069a61b81bdd39de5cc96561e677c5eab1cdce5e522"
 
 [[file]]
 repository = "Comfy-Org/MiniMax-H3"
-revision = "dc559027db79c174125df4d827db55cd11178860"
+revision = "4cc1d817b6184899b41293954329f576cb5ae86b"
 source = "loras/minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors"
 destination = "loras/minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors"
 size = 1956193000

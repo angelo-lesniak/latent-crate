@@ -74,6 +74,8 @@ node_sets=$(bash bin/latentcrate nodes list)
 model_sets=$(bash bin/latentcrate models list)
 [[ "$model_sets" == *flux2-klein-9b-distilled* ]]
 [[ "$model_sets" == *minimax-h3-r2v* ]]
+[[ "$model_sets" == *minimax-h3-i2v-turbo-4step-v1-1* ]]
+[[ "$model_sets" == *minimax-h3-prompt-embeddings* ]]
 
 template_list=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
   bash bin/latentcrate templates list edge)

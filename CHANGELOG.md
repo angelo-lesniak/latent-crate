@@ -62,6 +62,8 @@ tagged release is published. Until then, notable changes are collected under
   text, and malformed resolver output. GitHub tag enumeration uses one API
   request per repository, and release-note lookup failures are reported
   separately from an empty release interval.
+- Optional pinned MiniMax H3 add-on sets for the LightX2V Turbo 4-step v1.1
+  LoRA and ten prompt embeddings.
 
 ### Fixed
 
