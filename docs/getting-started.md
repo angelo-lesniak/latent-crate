@@ -1,7 +1,7 @@
 # Getting started
 
-This guide takes you from a prepared NVIDIA host to a running, Sage-capable
-ComfyUI container. The short version is in the [README](../README.md#start-here).
+This guide takes you from a prepared NVIDIA host to a running ComfyUI
+container. The short version is in the [README](../README.md#start-here).
 
 ## Before you begin
 
@@ -119,8 +119,9 @@ If your GPU reports another value, copy a profile once and edit it:
 
 ```bash
 cp versions/current.env versions/my-gpu.env
-# Edit CUSTOM_NODE_CUDA_ARCH_LIST and SAGE_CUDA_ARCH_LIST to your capability.
-# Edit LATENTCRATE_TAG to my-gpu-sage so it matches the new profile name.
+# Edit CUSTOM_NODE_CUDA_ARCH_LIST to your capability.
+# Also edit SAGE_CUDA_ARCH_LIST if you plan to opt in to SageAttention.
+# Edit LATENTCRATE_TAG to my-gpu so it matches the new profile name.
 bash bin/latentcrate doctor my-gpu
 bash bin/latentcrate up my-gpu --detach
 ```
@@ -141,16 +142,16 @@ The first command may be quiet for long periods while native components
 compile. It ends by starting the container. The second command exits when the
 health check passes. Open <http://127.0.0.1:4207>.
 
-The default image includes SageAttention. Workflow-level Sage features are
-available, but ComfyUI does not replace attention globally. To build without
-Sage, use:
+The default image does not include SageAttention. To build a Sage-capable image
+that lets individual workflows opt in, use:
 
 ```bash
-bash bin/latentcrate up current --sage off --detach
+bash bin/latentcrate up current --sage available --detach
 ```
 
-You can make that choice persistent with `LATENTCRATE_SAGE=off` in `.env`.
-Use `doctor current --sage off` when checking a one-off opt-out build.
+You can make that choice persistent with `LATENTCRATE_SAGE=available` in
+`.env`. Use `doctor current --sage available` and repeat the same mode with
+`config` or `smoke-gpu` when checking that variant.
 
 ## Confirm persistence
 
@@ -175,7 +176,7 @@ bash bin/latentcrate smoke-gpu current    # Run the real GPU and media checks
 bash bin/latentcrate down current         # Stop and remove the container
 ```
 
-For MiniMax H3, continue with the [SageAttention guide](sageattention.md). For
-Manager or private nodes, continue with the
-[third-party node guide](third-party-nodes.md). To fetch the pinned files for a
-ready workflow, see [Model sets](model-sets.md).
+For KJNodes' MiniMax H3 Sage patch, continue with the
+[SageAttention guide](sageattention.md). For Manager or private nodes, continue
+with the [third-party node guide](third-party-nodes.md). To fetch the pinned
+files for a ready workflow, see [Model sets](model-sets.md).

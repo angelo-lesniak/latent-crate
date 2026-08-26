@@ -35,6 +35,18 @@ chmod +x "$fake_bin/docker" "$fake_bin/flock"
 # The parser checks run engine-free on macOS and Windows dev machines, so
 # bypass the wrapper's Linux-only platform guard.
 export LATENTCRATE_SKIP_PLATFORM_CHECK=1
+# A user's ignored .env may preserve the former Sage default. Keep the default
+# routing tests hermetic; tests/check-project.py asserts the code fallback.
+export LATENTCRATE_SAGE=off
+export COMFY_DATA_DIR="$PROJECT_ROOT/data/comfy"
+export COMFY_MODELS_DIR="$PROJECT_ROOT/data/models"
+export COMFY_CACHE_DIR="$PROJECT_ROOT/data/cache"
+export COMFY_LOCAL_NODES_DIR="$PROJECT_ROOT/local/custom_nodes"
+mkdir -p \
+  "$COMFY_DATA_DIR/custom_nodes" \
+  "$COMFY_MODELS_DIR" \
+  "$COMFY_CACHE_DIR" \
+  "$COMFY_LOCAL_NODES_DIR"
 
 expect_failure() {
   local expected=$1
@@ -54,6 +66,14 @@ expect_failure() {
 
 bash bin/latentcrate --help >/dev/null
 bash bin/latentcrate versions >/dev/null
+doctor_default=$(PATH="$PROJECT_ROOT/tests/fixtures/doctor-bin:$PATH" \
+  CONTAINER_ENGINE=podman bash bin/latentcrate doctor current)
+[[ "$doctor_default" == *'checking the smaller image without SageAttention'* ]]
+
+doctor_sage=$(PATH="$PROJECT_ROOT/tests/fixtures/doctor-bin:$PATH" \
+  CONTAINER_ENGINE=podman bash bin/latentcrate doctor current --sage available)
+[[ "$doctor_sage" == *'checking the SageAttention-capable image'* ]]
+
 edge_frontend_digest=$(awk -F= '$1 == "COMFY_FRONTEND_DIST_SHA256" {print $2}' versions/edge.env)
 pin_frontend_release=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
   FAKE_FRONTEND_RELEASE_DIGEST="$edge_frontend_digest" \
@@ -80,6 +100,7 @@ model_sets=$(bash bin/latentcrate models list)
 template_list=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
   bash bin/latentcrate templates list edge)
 [[ "$template_list" == *'build comfy'* ]]
+[[ "$template_list" == *'target=runtime mode=release sage=off'* ]]
 [[ "$template_list" == *'run --rm --no-deps -T template-inspector list'* ]]
 
 template_draft=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
@@ -88,7 +109,6 @@ template_draft=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
 [[ "$template_draft" == *'build comfy'* ]]
 [[ "$template_draft" == *'template-draft create-model-set video_minimax_h3_i2v --name minimax-h3-i2v-draft'* ]]
 
-mkdir -p "$PROJECT_ROOT/data/comfy/custom_nodes"
 node_set_install=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
   bash bin/latentcrate nodes install latent-nodepack current)
 [[ "$node_set_install" == *'build node-set'* ]]
@@ -111,7 +131,6 @@ status_output=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
   bash bin/latentcrate status current)
 [[ "$status_output" == *' ps'* ]]
 
-mkdir -p "$PROJECT_ROOT/data/models"
 model_status=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
   bash bin/latentcrate models status --profile edge krea2-t2i-int8)
 [[ "$model_status" == *'build model-set-status'* ]]
@@ -155,16 +174,25 @@ remote_output=$(PATH="$fake_bin:$PATH" \
   COMFY_BIND_ADDRESS=0.0.0.0 \
   COMFY_ALLOW_REMOTE=true \
   bash bin/latentcrate up current --use-saved-node-deps --detach)
-[[ "$remote_output" == *'target=runtime-sage mode=release'* ]]
+[[ "$remote_output" == *'target=runtime mode=release'* ]]
 [[ "$remote_output" == *'up --no-build --force-recreate --detach comfy'* ]]
 
 release_config=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
   bash bin/latentcrate config current --frontend-release)
-[[ "$release_config" == *'target=runtime-sage mode=release sage=available'* ]]
+[[ "$release_config" == *'target=runtime mode=release sage=off'* ]]
+
+release_sage_config=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
+  bash bin/latentcrate config current --sage available --frontend-release)
+[[ "$release_sage_config" == *'target=runtime-sage mode=release sage=available'* ]]
 
 release_no_sage_config=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
   bash bin/latentcrate config current --sage off --frontend-release)
 [[ "$release_no_sage_config" == *'target=runtime mode=release sage=off'* ]]
+
+release_persistent_sage_override=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
+  LATENTCRATE_SAGE=available \
+  bash bin/latentcrate config current --sage off --frontend-release)
+[[ "$release_persistent_sage_override" == *'target=runtime mode=release sage=off'* ]]
 
 if removed_no_sage_output=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
     bash bin/latentcrate config current --no-sage --frontend-release 2>&1); then
@@ -176,6 +204,10 @@ fi
 release_env_no_sage_config=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
   LATENTCRATE_SAGE=off bash bin/latentcrate config current --frontend-release)
 [[ "$release_env_no_sage_config" == *'target=runtime mode=release'* ]]
+
+release_env_sage_config=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
+  LATENTCRATE_SAGE=available bash bin/latentcrate config current --frontend-release)
+[[ "$release_env_sage_config" == *'target=runtime-sage mode=release sage=available'* ]]
 
 release_global_config=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
   bash bin/latentcrate config current --sage global --frontend-release)
@@ -210,7 +242,7 @@ git_config=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
   bash bin/latentcrate config edge --frontend-git \
     https://github.com/Comfy-Org/ComfyUI_frontend.git \
     0000000000000000000000000000000000000000)
-[[ "$git_config" == *'target=runtime-frontend-git-sage mode=git'* ]]
+[[ "$git_config" == *'target=runtime-frontend-git mode=git'* ]]
 
 git_sage_config=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
   bash bin/latentcrate config edge --sage available --frontend-git \
@@ -220,13 +252,23 @@ git_sage_config=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
 
 local_config=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
   bash bin/latentcrate config current --frontend-dist tests/fixtures/frontend-dist)
-[[ "$local_config" == *'target=runtime-sage mode=dist'* ]]
+[[ "$local_config" == *'target=runtime mode=dist'* ]]
 [[ "$local_config" == *'compose.frontend-dist.yaml'* ]]
+
+local_sage_config=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
+  bash bin/latentcrate config current --sage available \
+    --frontend-dist tests/fixtures/frontend-dist)
+[[ "$local_sage_config" == *'target=runtime-sage mode=dist sage=available'* ]]
 
 source_config=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
   bash bin/latentcrate config current --frontend-source tests/fixtures/frontend-source)
-[[ "$source_config" == *'target=runtime-sage mode=dist'* ]]
+[[ "$source_config" == *'target=runtime mode=dist'* ]]
 [[ "$source_config" == *'compose.frontend-dist.yaml'* ]]
+
+source_sage_config=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
+  bash bin/latentcrate config current --sage available \
+    --frontend-source tests/fixtures/frontend-source)
+[[ "$source_sage_config" == *'target=runtime-sage mode=dist sage=available'* ]]
 
 local_up=$(PATH="$fake_bin:$PATH" CONTAINER_ENGINE=docker \
   bash bin/latentcrate up current --use-saved-node-deps \

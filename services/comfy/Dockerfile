@@ -3,7 +3,7 @@
 # This file moves from shared build inputs to ready-to-run image targets.
 # Build-only stages compile or prepare artifacts that later stages use. Shared
 # runtime stages assemble ComfyUI once, then the final stages add a frontend
-# and, by default, SageAttention. See docs/build-flow.md for the full map.
+# and optional SageAttention. See docs/build-flow.md for the full map.
 
 ARG PYTORCH_DEVEL_IMAGE
 ARG PYTORCH_RUNTIME_IMAGE
@@ -708,5 +708,5 @@ ENV LATENTCRATE_SAGE_ENABLED=1 \
 # Default target
 #
 # When the required build arguments are supplied, the default target is the
-# Sage-capable release image. The wrapper selects opt-out and Git targets.
-FROM runtime-sage AS default
+# release image without SageAttention. The wrapper selects Sage and Git targets.
+FROM runtime AS default

@@ -221,7 +221,7 @@ expect_sage_rejection() {
   fi
 }
 
-expect_sage_args 'default mode adds no Sage argument' ''
+expect_sage_args 'default off mode adds no Sage argument' ''
 expect_sage_args 'off mode adds no Sage argument' '' \
   LATENTCRATE_SAGE_MODE=off
 expect_sage_args 'global mode on a Sage image adds --use-sage-attention' \

@@ -16,7 +16,7 @@ General rules:
   `COMFY_PORT=4210 bash bin/latentcrate up current --detach`.
 - `CONTAINER_ENGINE=docker` or `CONTAINER_ENGINE=podman` overrides engine
   detection. Podman must be rootless and use `crun`.
-- `LATENTCRATE_SAGE` (default `available`) selects the Sage mode. The
+- `LATENTCRATE_SAGE` (default `off`) selects the Sage mode. The
   command-line flag `--sage <mode>` overrides it for one command.
 
 ## Command summary
@@ -57,8 +57,8 @@ General rules:
 
 | Mode | Effect |
 | --- | --- |
-| `off` | Smaller image without SageAttention |
-| `available` | Sage-capable image; workflows opt in (the default) |
+| `off` | Smaller image without SageAttention (the default) |
+| `available` | Sage-capable image; workflows opt in |
 | `global` | Sage-capable image; ComfyUI applies Sage globally (`--use-sage-attention`) |
 
 One mode drives both the image variant and the runtime behavior, so an
@@ -121,7 +121,7 @@ Fix every `[fail]` line before building.
 
 ```bash
 bash bin/latentcrate doctor current
-bash bin/latentcrate doctor my-gpu --sage off
+bash bin/latentcrate doctor my-gpu --sage available
 ```
 
 ## up
@@ -184,7 +184,7 @@ Prints the fully rendered Compose configuration for inspection. Repeat the
 same variant and frontend flags that you use with `up`.
 
 ```bash
-bash bin/latentcrate config current --sage off
+bash bin/latentcrate config current --sage available
 ```
 
 ## status
@@ -249,10 +249,10 @@ bin/latentcrate smoke-gpu [profile] [--sage mode] [frontend flag]
 ```
 
 Runs the real GPU and media checks inside the running container: CUDA, Torch,
-Triton, SageAttention, FFmpeg codecs, a Sage kernel, and a short NVENC encode.
-Saves a report below `reports/`. Repeat the same variant and frontend flags
-used for `up`; the command verifies that the running container matches the
-selected image.
+Triton, FFmpeg codecs, and a short NVENC encode. For a Sage-capable variant, it
+also checks SageAttention and runs a Sage kernel. Saves a report below
+`reports/`. Repeat the same variant and frontend flags used for `up`; the
+command verifies that the running container matches the selected image.
 
 ```bash
 bash bin/latentcrate smoke-gpu current

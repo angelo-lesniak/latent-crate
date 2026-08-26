@@ -83,6 +83,7 @@ expect_success
 expect_output '[ok] podman engine is reachable'
 expect_output '[ok] Podman engine is rootless'
 expect_output '[ok] Podman uses crun, which supports keep-groups'
+expect_output '[ok] checking the smaller image without SageAttention'
 expect_output 'custom-node CUDA architecture list covers compute capability 12.0'
 expect_output 'SageAttention CUDA architecture list covers compute capability 12.0'
 expect_output "engine storage at $STORAGE_ROOT has 100 GB free"
@@ -120,7 +121,8 @@ expect_output "engine storage at $STORAGE_ROOT has 100 GB free"
 # --- GPU capability: the architecture lists do not cover the detected GPU.
 case_label='gpu arch mismatch'
 run_doctor "$bin_full" FAKE_COMPUTE_CAP=8.6 \
-  --engine podman --custom-node-arch-list 12.0 --sage-arch-list 12.0
+  --engine podman --custom-node-arch-list 12.0 --sage-arch-list 12.0 \
+  --sage true
 expect_failure_status
 expect_output '[fail] CUSTOM_NODE_CUDA_ARCH_LIST=12.0 does not cover compute capability 8.6'
 expect_output '[fail] SAGE_CUDA_ARCH_LIST=12.0 does not cover compute capability 8.6'
@@ -132,10 +134,10 @@ run_doctor "$bin_full" FAKE_COMPUTE_CAP=8.6 \
 expect_success
 expect_output 'custom-node CUDA architecture list covers compute capability 8.6'
 
-# --- GPU capability: Sage list mismatch is only a warning when Sage is off.
-case_label='sage disabled mismatch'
+# --- GPU capability: Sage list mismatch is only a warning by default.
+case_label='default sage disabled mismatch'
 run_doctor "$bin_full" \
-  --engine podman --custom-node-arch-list 12.0 --sage-arch-list 9.0 --sage false
+  --engine podman --custom-node-arch-list 12.0 --sage-arch-list 9.0
 expect_success
 expect_output 'the Sage image is disabled'
 

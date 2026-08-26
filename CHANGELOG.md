@@ -12,8 +12,8 @@ tagged release is published. Until then, notable changes are collected under
 - Pinned `current` and forward-looking `edge` version profiles.
 - Release, trusted Git, containerized local-source, and prebuilt-dist frontend
   modes.
-- SageAttention-capable images by default, with one
-  `LATENTCRATE_SAGE=off|available|global` mode selecting the smaller opt-out
+- Opt-in SageAttention-capable images, with one
+  `LATENTCRATE_SAGE=off|available|global` mode selecting the default no-Sage
   image, workflow-level Sage, or global Sage, plus GPU smoke verification.
 - Host-mounted storage, saved custom-node dependencies, and source/build
   records.
@@ -64,8 +64,5 @@ tagged release is published. Until then, notable changes are collected under
   separately from an empty release interval.
 - Optional pinned MiniMax H3 add-on sets for the LightX2V Turbo 4-step v1.1
   LoRA and ten prompt embeddings.
-
-### Fixed
-
-- Hardened version maintenance against lock-file symlinks and direct runtime
+- Version-maintenance safeguards against lock-file symlinks and direct runtime
   network access.

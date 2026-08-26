@@ -224,10 +224,10 @@ def check_version_profiles() -> None:
             fail(f"{path.relative_to(ROOT)} must pin the CUDA 13 NPP runtime for TorchCodec")
         if not values["TORCHCODEC_INDEX_URL"].startswith("https://download.pytorch.org/whl/"):
             fail(f"{path.relative_to(ROOT)} uses an unexpected TorchCodec index")
-        if values.get("COMFY_BUILD_TARGET") != "runtime-sage":
-            fail(f"{path.relative_to(ROOT)} must default to the Sage-capable runtime")
-        if values.get("LATENTCRATE_TAG") != f"{path.stem}-sage":
-            fail(f"{path.relative_to(ROOT)} must default to its Sage image tag")
+        if values.get("COMFY_BUILD_TARGET") != "runtime":
+            fail(f"{path.relative_to(ROOT)} must default to the runtime without Sage")
+        if values.get("LATENTCRATE_TAG") != path.stem:
+            fail(f"{path.relative_to(ROOT)} must default to its plain image tag")
 
     if profiles.get("current", {}).get("TORCHCODEC_VERSION"):
         fail("the default current profile must not enable edge-only TorchCodec")
@@ -250,8 +250,11 @@ def check_version_single_source() -> None:
     compose = compose_document()
     compose_strings = list(walk_strings(compose))
     comfy = compose_service(compose, "comfy")
-    if comfy.get("build", {}).get("target") != "${COMFY_BUILD_TARGET:-runtime-sage}":
-        fail("the comfy service build target must default to the Sage-capable runtime (${COMFY_BUILD_TARGET:-runtime-sage})")
+    default_image = "${LATENTCRATE_IMAGE:-latentcrate/comfy}:${LATENTCRATE_TAG:-current}"
+    if comfy.get("image") != default_image:
+        fail(f"the comfy service image must default to the non-Sage current tag ({default_image})")
+    if comfy.get("build", {}).get("target") != "${COMFY_BUILD_TARGET:-runtime}":
+        fail("the comfy service build target must default to the runtime without Sage (${COMFY_BUILD_TARGET:-runtime})")
     for key in VERSION_KEYS - NON_BUILD_VERSION_KEYS:
         pattern = re.compile(rf"\$\{{{re.escape(key)}:-([^}}]*)\}}")
         for value in compose_strings:
@@ -273,7 +276,7 @@ def check_dockerfile_stage_graph() -> None:
     """The image must expose the four runtime variants with the documented
     inheritance: Git frontends never inherit the packaged release frontend,
     Sage stages inherit their frontend stage, and the default target is the
-    Sage-capable release image."""
+    release image without Sage."""
     dockerfile = read_text("services/comfy/Dockerfile")
     for stage in (
         "runtime",
@@ -283,8 +286,8 @@ def check_dockerfile_stage_graph() -> None:
     ):
         if not re.search(rf"^FROM .+ AS {re.escape(stage)}$", dockerfile, re.MULTILINE):
             fail(f"missing frontend/runtime target: {stage}")
-    if not re.search(r"^FROM runtime-sage AS default$", dockerfile, re.MULTILINE):
-        fail("plain image builds must default to the Sage-capable release runtime (FROM runtime-sage AS default)")
+    if not re.search(r"^FROM runtime AS default$", dockerfile, re.MULTILINE):
+        fail("plain image builds must default to the release runtime without Sage (FROM runtime AS default)")
     if not re.search(r"^FROM comfy-runtime AS runtime-frontend-git$", dockerfile, re.MULTILINE):
         fail("Git frontend images must build from comfy-runtime so they never inherit the packaged release frontend")
     if not re.search(r"^FROM runtime AS runtime-sage$", dockerfile, re.MULTILINE):
@@ -658,12 +661,16 @@ def check_entrypoint_sage_contract() -> None:
     stay guarded by the Sage-capable image marker."""
     entrypoint = read_text("services/comfy/entrypoint.sh")
     for sage_contract in (
-        "LATENTCRATE_SAGE_MODE:-available",
+        "LATENTCRATE_SAGE_MODE:-off",
         "args+=(--use-sage-attention)",
         "LATENTCRATE_SAGE_ENABLED:-0",
     ):
         if sage_contract not in entrypoint:
             fail(f"runtime Sage contract is missing: {sage_contract}")
+
+    gpu_smoke = read_text("services/comfy/gpu-smoke.sh")
+    if 'find_spec("sageattention") is not None' not in gpu_smoke:
+        fail("GPU verification must prove SageAttention is absent from the default image")
 
 
 def check_comfy_service_hardened() -> None:
@@ -688,14 +695,14 @@ def check_comfy_service_hardened() -> None:
     for variable, expected in (
         ("COMFY_DISABLE_API_NODES", "${COMFY_DISABLE_API_NODES:-false}"),
         ("COMFY_DISABLE_METADATA", "${COMFY_DISABLE_METADATA:-false}"),
-        ("LATENTCRATE_SAGE_MODE", "${LATENTCRATE_SAGE_MODE:-available}"),
+        ("LATENTCRATE_SAGE_MODE", "${LATENTCRATE_SAGE_MODE:-off}"),
     ):
         if environment.get(variable) != expected:
             fail(f"ComfyUI environment must pass {variable} through with default {expected}")
 
 
 def check_env_example_defaults() -> None:
-    """.env.example must document the privacy and containment defaults."""
+    """The environment template and CLI must carry the documented defaults."""
     env_example = read_text(".env.example")
     for default in (
         "COMFY_DISABLE_API_NODES=false",
@@ -703,10 +710,14 @@ def check_env_example_defaults() -> None:
         "COMFY_ALLOW_REMOTE=false",
         "COMFY_PIDS_LIMIT=2048",
         "COMFY_LOCAL_NODES_DIR=./local/custom_nodes",
-        "LATENTCRATE_SAGE=available",
+        "LATENTCRATE_SAGE=off",
     ):
         if default not in env_example:
             fail(f"privacy/containment default is undocumented: {default}")
+
+    cli = read_text("bin/latentcrate")
+    if "local value=${LATENTCRATE_SAGE:-off}" not in cli:
+        fail("the CLI must default LATENTCRATE_SAGE to off when no setting exists")
 
 
 def check_excluded_default_features() -> None:

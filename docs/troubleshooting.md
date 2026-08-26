@@ -8,8 +8,8 @@ bash bin/latentcrate logs current
 ```
 
 Use the same version profile that you used when starting the container. Repeat
-`--sage off` with `doctor`, `config`, or `smoke-gpu` when you started the
-opt-out image. The sections below cover common first-run problems.
+the same `--sage` mode with `doctor`, `config`, or `smoke-gpu` when you opted in
+to a Sage-capable image. The sections below cover common first-run problems.
 
 ## `doctor` cannot find an NVIDIA CDI device
 
@@ -38,8 +38,9 @@ query form:
 nvidia-smi --query-gpu=compute_cap --format=csv,noheader
 ```
 
-Copy `versions/current.env` to a new profile and change both architecture
-lists to that value. The
+Copy `versions/current.env` to a new profile and change
+`CUSTOM_NODE_CUDA_ARCH_LIST` to that value. If you use Sage with that profile,
+also change `SAGE_CUDA_ARCH_LIST`. The
 [getting-started guide](getting-started.md#first-launch) shows the exact
 commands. Native packages must be rebuilt for the selected capability.
 Complete the relevant GPU validation guide before describing that profile as
@@ -69,14 +70,11 @@ confirm that no `[fail]` line mentions the engine or Compose.
 
 ## The first build runs out of disk or memory
 
-The CUDA bases, FFmpeg stages, Sage compilation, and build cache are large.
-Keep at least 75 GB free for a first release build and more when building several
-profiles. Sage uses a low-memory default of two compiler jobs. Reduce
-`SAGE_BUILD_JOBS` in the selected profile if the compiler is killed for memory.
-
-If Sage is not needed for a diagnostic build, use `--sage off`. The mode is an
-opt-out from LatentCrate's normal feature set, not a separate compatibility
-mode.
+The CUDA bases, FFmpeg stages, and build cache are large. Keep at least 75 GB
+free for a first release build and more when building several profiles. An
+opted-in Sage build adds compilation work and uses a low-memory default of two
+compiler jobs. Reduce `SAGE_BUILD_JOBS` in the selected profile if that compiler
+is killed for memory.
 
 ## The UI does not become healthy
 

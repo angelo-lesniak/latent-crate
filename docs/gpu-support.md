@@ -34,11 +34,12 @@ card's capability with:
 nvidia-smi --query-gpu=compute_cap --format=csv,noheader
 ```
 
-Set both architecture lists for another GPU. `doctor` compares the
-detected capability with the selected profile. It rejects an incompatible
-custom-node or default Sage build. When Sage is explicitly disabled, a Sage-only
-mismatch becomes a warning. Other architectures must not be described as
-validated until `smoke-gpu` and a representative workflow pass on real hardware.
+Set both architecture lists for another GPU when you use both native-package
+variants. `doctor` compares the detected capability with the selected profile.
+It rejects an incompatible custom-node build and an incompatible opted-in Sage
+build. With Sage off, a Sage-only mismatch is a warning. Other architectures
+must not be described as validated until `smoke-gpu` and a representative
+workflow pass on real hardware.
 
 FFmpeg is built with NVENC plus CPU AV1 support. A listed encoder proves only
 that FFmpeg compiled against its headers; `bash bin/latentcrate smoke-gpu`

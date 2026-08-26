@@ -229,7 +229,7 @@ if is_true "${COMFY_ENABLE_MANAGER:-true}"; then
 fi
 
 append_sage_args() {
-  case "${LATENTCRATE_SAGE_MODE:-available}" in
+  case "${LATENTCRATE_SAGE_MODE:-off}" in
     off|available) ;;
     global)
       if [[ "${LATENTCRATE_SAGE_ENABLED:-0}" != 1 ]]; then

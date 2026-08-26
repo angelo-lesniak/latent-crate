@@ -183,6 +183,13 @@ assert torch.isfinite(result).all()
 print(f"sageattention_result={tuple(result.shape)}")
 PY
 else
+  python - <<'PY'
+import importlib.util
+
+if importlib.util.find_spec("sageattention") is not None:
+    raise SystemExit("SageAttention is installed in an image target that disables it")
+print("sageattention_absent=true")
+PY
   printf '\nSageAttention is not installed in this image target; skipping its kernel test.\n'
 fi
 
