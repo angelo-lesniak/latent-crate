@@ -1,0 +1,90 @@
+schema = 1
+description = "Optional prompt embeddings for official MiniMax H3 workflows"
+workflow_urls = [
+  "https://github.com/Comfy-Org/workflow_templates/blob/66abae5205f7c5105281146fa109f7c12801d268/templates/video_minimax_h3_i2v.json",
+  "https://github.com/Comfy-Org/workflow_templates/blob/66abae5205f7c5105281146fa109f7c12801d268/templates/video_minimax_h3_r2v.json",
+]
+
+[[license]]
+name = "MiniMax-H3 Model License"
+url = "https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/42ed227ee7df40d41602854ae760620d6eb651fe/LICENSE"
+
+[[file]]
+repository = "Comfy-Org/MiniMax-H3"
+revision = "4cc1d817b6184899b41293954329f576cb5ae86b"
+source = "embeddings/minimaxh3_art_is_explosion.safetensors"
+destination = "embeddings/minimaxh3_art_is_explosion.safetensors"
+size = 512120
+sha256 = "00e8679c77ce1fc3fd3accb67bc4db56d626b6b27609797504ab00e2b997145f"
+
+[[file]]
+repository = "Comfy-Org/MiniMax-H3"
+revision = "4cc1d817b6184899b41293954329f576cb5ae86b"
+source = "embeddings/minimaxh3_blooming_flowers.safetensors"
+destination = "embeddings/minimaxh3_blooming_flowers.safetensors"
+size = 1259640
+sha256 = "934d1d2c50bf27cd0b3785b0f44b0b62119a90b2901f9193782d86ff7191cbe9"
+
+[[file]]
+repository = "Comfy-Org/MiniMax-H3"
+revision = "4cc1d817b6184899b41293954329f576cb5ae86b"
+source = "embeddings/minimaxh3_bullet_time.safetensors"
+destination = "embeddings/minimaxh3_bullet_time.safetensors"
+size = 962680
+sha256 = "e318b200d28c22fcf41d9b25ce481dd5a766f0ac50561663e33401975ea1bcae"
+
+[[file]]
+repository = "Comfy-Org/MiniMax-H3"
+revision = "4cc1d817b6184899b41293954329f576cb5ae86b"
+source = "embeddings/minimaxh3_dark_magic.safetensors"
+destination = "embeddings/minimaxh3_dark_magic.safetensors"
+size = 604280
+sha256 = "71df9fe76f9cbb34a7508fc49d46bf35ee51744aaa17789c6406e1bec49f5866"
+
+[[file]]
+repository = "Comfy-Org/MiniMax-H3"
+revision = "4cc1d817b6184899b41293954329f576cb5ae86b"
+source = "embeddings/minimaxh3_fire_breath.safetensors"
+destination = "embeddings/minimaxh3_fire_breath.safetensors"
+size = 1208440
+sha256 = "ed048cf52802774a819e916bbf6ad6eaa047027abc6cd0decc63daccbb93c9f1"
+
+[[file]]
+repository = "Comfy-Org/MiniMax-H3"
+revision = "4cc1d817b6184899b41293954329f576cb5ae86b"
+source = "embeddings/minimaxh3_four_seasons.safetensors"
+destination = "embeddings/minimaxh3_four_seasons.safetensors"
+size = 1454200
+sha256 = "9a432e89afc942d1ea27055372a6fb81c4dc0f4c0498a49b9f5eff1a015f1034"
+
+[[file]]
+repository = "Comfy-Org/MiniMax-H3"
+revision = "4cc1d817b6184899b41293954329f576cb5ae86b"
+source = "embeddings/minimaxh3_kiss_camera.safetensors"
+destination = "embeddings/minimaxh3_kiss_camera.safetensors"
+size = 993400
+sha256 = "9da82f56c26f2a81b80803a31486d31036c122112203b62d4991759a90ddf4b8"
+
+[[file]]
+repository = "Comfy-Org/MiniMax-H3"
+revision = "4cc1d817b6184899b41293954329f576cb5ae86b"
+source = "embeddings/minimaxh3_spiral_ascent.safetensors"
+destination = "embeddings/minimaxh3_spiral_ascent.safetensors"
+size = 1341560
+sha256 = "767b6bdccee4c41805802a07bf3c04ba9582fbb8e7bc4bd416ff8e000e3e29b9"
+
+[[file]]
+repository = "Comfy-Org/MiniMax-H3"
+revision = "4cc1d817b6184899b41293954329f576cb5ae86b"
+source = "embeddings/minimaxh3_storm_magic.safetensors"
+destination = "embeddings/minimaxh3_storm_magic.safetensors"
+size = 1403000
+sha256 = "5047cd4499207ef20d62872c7153a476e216e7edabd12b595802f567666d7425"
+
+[[file]]
+repository = "Comfy-Org/MiniMax-H3"
+revision = "4cc1d817b6184899b41293954329f576cb5ae86b"
+source = "embeddings/minimaxh3_truman_show.safetensors"
+destination = "embeddings/minimaxh3_truman_show.safetensors"
+size = 921720
+sha256 = "3830e6ab9d7b95965f5497a6691bd92e33f8bf7a62bafb7b2331b268ff98aa00"

@@ -1,9 +1,9 @@
 # Model sets
 
-Model sets download the files used by selected official ComfyUI workflows.
-Every file is pinned to a Hugging Face repository commit, expected size, and
-SHA-256 checksum. Downloads resume when possible and become visible to ComfyUI
-only after verification.
+Model sets download the files used by selected official ComfyUI workflows and
+reviewed optional assets for those workflows. Every file is pinned to a
+Hugging Face repository commit, expected size, and SHA-256 checksum. Downloads
+resume when possible and become visible to ComfyUI only after verification.
 
 ## Quick start
 
@@ -57,18 +57,22 @@ several minutes, depending on disk speed.
 | `krea2-style-reference-int8` | [Krea-2 style reference with INT8 ConvRot][krea-style] | 19.4 GB |
 | `minimax-h3-i2v` | [MiniMax H3 image to video][minimax-i2v] | 44.4 GB |
 | `minimax-h3-r2v` | [MiniMax H3 reference to video][minimax-r2v] | 44.4 GB |
+| `minimax-h3-i2v-turbo-4step-v1-1` | [LightX2V Turbo 4-step v1.1 add-on][minimax-i2v] | 2.0 GB |
+| `minimax-h3-prompt-embeddings` | Prompt-embedding add-on for [image to video][minimax-i2v] and [reference to video][minimax-r2v] | 10.7 MB |
 
 [flux-t2i]: https://github.com/Comfy-Org/workflow_templates/blob/3db6490611e6a16b84b09110e61a07264ce47cd3/templates/image_flux2_text_to_image_9b.json
 [flux-base-edit]: https://github.com/Comfy-Org/workflow_templates/blob/3db6490611e6a16b84b09110e61a07264ce47cd3/templates/image_flux2_klein_image_edit_9b_base.json
 [flux-distilled-edit]: https://github.com/Comfy-Org/workflow_templates/blob/3db6490611e6a16b84b09110e61a07264ce47cd3/templates/image_flux2_klein_image_edit_9b_distilled.json
 [krea-t2i]: https://github.com/Comfy-Org/workflow_templates/blob/3db6490611e6a16b84b09110e61a07264ce47cd3/templates/image_krea2_turbo_t2i.json
 [krea-style]: https://github.com/Comfy-Org/workflow_templates/blob/3db6490611e6a16b84b09110e61a07264ce47cd3/templates/image_krea2_turbo_int8_image_style_reference.json
-[minimax-i2v]: https://github.com/Comfy-Org/workflow_templates/blob/3db6490611e6a16b84b09110e61a07264ce47cd3/templates/video_minimax_h3_i2v.json
-[minimax-r2v]: https://github.com/Comfy-Org/workflow_templates/blob/3db6490611e6a16b84b09110e61a07264ce47cd3/templates/video_minimax_h3_r2v.json
+[minimax-i2v]: https://github.com/Comfy-Org/workflow_templates/blob/66abae5205f7c5105281146fa109f7c12801d268/templates/video_minimax_h3_i2v.json
+[minimax-r2v]: https://github.com/Comfy-Org/workflow_templates/blob/66abae5205f7c5105281146fa109f7c12801d268/templates/video_minimax_h3_r2v.json
+[minimax-embeddings]: https://huggingface.co/Comfy-Org/MiniMax-H3/tree/4cc1d817b6184899b41293954329f576cb5ae86b/embeddings
+[lightx-v1-1-settings]: https://huggingface.co/lightx2v/Minimax-h3-Turbo/discussions/42
 
 Sets share files. Selecting several sets downloads a shared text encoder, VAE,
 or model only once. `models fetch all` downloads every unique file, currently
-about 115 GB when the model library starts empty.
+about 117 GB when the model library starts empty.
 
 Each FLUX set contains the shared files for both its text-to-image and edit
 workflow. The downloader prints the matching pinned workflow links when it
@@ -82,6 +86,26 @@ workflow.
 
 The MiniMax H3 workflows also need KJNodes and SageAttention. The default image
 has SageAttention, and `latent-nodepack` includes the pinned KJNodes source.
+
+The two additional MiniMax sets are optional. Fetch them with the base I2V set:
+
+```bash
+bash bin/latentcrate models fetch \
+  minimax-h3-i2v \
+  minimax-h3-i2v-turbo-4step-v1-1 \
+  minimax-h3-prompt-embeddings
+```
+
+The Turbo add-on does not rewrite the official workflow. Select
+`minimax_h3_fl2v_turbo_4step_v1.1_768p_comfyui_bf16.safetensors` in its LoRA
+loader. LightX2V recommends video shift `6`, audio shift `3`, four steps, the
+`euler` sampler, and the `simple` scheduler for this checkpoint; see the
+[publisher's v1.1 settings][lightx-v1-1-settings].
+
+The prompt add-on installs the ten [published embeddings][minimax-embeddings].
+MiniMax H3 prompt embeddings require ComfyUI v0.34.0 or newer. Reference one in
+the prompt with its filename without `.safetensors`, for example
+`embedding:minimaxh3_art_is_explosion`.
 
 ## Hugging Face access and licenses
 
