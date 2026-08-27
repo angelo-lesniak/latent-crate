@@ -30,7 +30,9 @@ unset \
   FAKE_VERSION_UPDATE_OUTPUT \
   FAKE_DOCKER_COMFY_RUNNING
 fake_bin="$PROJECT_ROOT/tests/fixtures/fake-bin"
-chmod +x "$fake_bin/docker" "$fake_bin/flock"
+doctor_bin="$PROJECT_ROOT/tests/fixtures/doctor-bin"
+# Git stores these fixtures without executable bits; enable them before PATH use.
+chmod +x "$fake_bin/docker" "$fake_bin/flock" "$doctor_bin"/*
 
 # The parser checks run engine-free on macOS and Windows dev machines, so
 # bypass the wrapper's Linux-only platform guard.
@@ -66,12 +68,19 @@ expect_failure() {
 
 bash bin/latentcrate --help >/dev/null
 bash bin/latentcrate versions >/dev/null
-doctor_default=$(PATH="$PROJECT_ROOT/tests/fixtures/doctor-bin:$PATH" \
-  CONTAINER_ENGINE=podman bash bin/latentcrate doctor current)
+doctor_default=$(PATH="$doctor_bin:$PATH" \
+  CONTAINER_ENGINE=podman bash bin/latentcrate doctor current 2>&1) || {
+  printf 'cli test: default doctor failed:\n%s\n' "$doctor_default" >&2
+  exit 1
+}
 [[ "$doctor_default" == *'checking the smaller image without SageAttention'* ]]
+[[ "$doctor_default" == *'podman version 5.2.0-fake'* ]]
 
-doctor_sage=$(PATH="$PROJECT_ROOT/tests/fixtures/doctor-bin:$PATH" \
-  CONTAINER_ENGINE=podman bash bin/latentcrate doctor current --sage available)
+doctor_sage=$(PATH="$doctor_bin:$PATH" \
+  CONTAINER_ENGINE=podman bash bin/latentcrate doctor current --sage available 2>&1) || {
+  printf 'cli test: Sage doctor failed:\n%s\n' "$doctor_sage" >&2
+  exit 1
+}
 [[ "$doctor_sage" == *'checking the SageAttention-capable image'* ]]
 
 edge_frontend_digest=$(awk -F= '$1 == "COMFY_FRONTEND_DIST_SHA256" {print $2}' versions/edge.env)
