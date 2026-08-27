@@ -12,7 +12,7 @@ is built for consumer NVIDIA graphics cards.
 Use it when you want to:
 
 - keep a stable ComfyUI setup and a newer test setup side by side;
-- use SageAttention and the KJNodes MiniMax H3 memory-efficient path;
+- optionally use SageAttention with KJNodes' MiniMax H3 Sage patch nodes;
 - test a frontend fork or local frontend changes against a pinned backend;
 - develop and test local nodes against pinned ComfyUI versions;
 - rebuild third-party node dependencies instead of installing them on every start;
@@ -34,17 +34,15 @@ On a prepared host, run:
 ```bash
 git clone https://github.com/angelo-lesniak/latent-crate.git latentcrate
 cd latentcrate
-bash bin/latentcrate init --node-set latent-nodepack edge
+bash bin/latentcrate init edge
 bash bin/latentcrate doctor edge
 bash bin/latentcrate up edge --model-set minimax-h3-i2v
 ```
 
-`init` creates `.env` and installs the pinned `latent-nodepack` node set,
-which includes the KJNodes patch that the MiniMax H3 workflow uses. The last
-command downloads the selected models, builds the image, and keeps ComfyUI in
-the foreground so you can see its logs. In a second terminal,
-`bash bin/latentcrate wait edge` exits when ComfyUI is healthy. Then open
-<http://127.0.0.1:4207>, open the template browser, and choose
+`init` creates `.env`. The last command downloads the selected models, builds
+the image, and keeps ComfyUI in the foreground so you can see its logs. In a
+second terminal, `bash bin/latentcrate wait edge` exits when ComfyUI is healthy.
+Then open <http://127.0.0.1:4207>, open the template browser, and choose
 **MiniMax H3: Image to Video**. Press **Ctrl+C** in the first terminal to stop
 ComfyUI. There is no background process to remember for this path.
 
@@ -60,7 +58,7 @@ the next task from the table below.
 | --- | --- |
 | Use the slower-changing `current` profile | `bash bin/latentcrate up current --detach` |
 | Look up any command or flag | [CLI reference](docs/cli.md) |
-| Set up MiniMax H3 with SageAttention | [SageAttention guide](docs/sageattention.md) |
+| Use KJNodes' MiniMax H3 Sage patch | [SageAttention guide](docs/sageattention.md) |
 | Add nodes with ComfyUI Manager or local-only nodes | [Third-party node guide](docs/third-party-nodes.md) |
 | Find official workflows intended for local ComfyUI | [Template tools](docs/templates.md) |
 | Download pinned files for an official workflow | [Model sets](docs/model-sets.md) |
@@ -98,8 +96,8 @@ not bit-for-bit reproducible.
 
 The shipped version profiles (`current` and `edge`) are tuned for NVIDIA RTX
 50-series cards. Other recent generations are expected to work after a
-one-time profile edit, and SageAttention must support the card's GPU
-architecture; the support matrix below shows the status, and the
+one-time profile edit, and an opted-in SageAttention build must support the
+card's GPU architecture; the support matrix below shows the status, and the
 [getting-started guide](docs/getting-started.md#first-launch) shows the exact
 commands. AMD, ARM64, Jetson, native Windows containers, Kubernetes, and
 public multi-user hosting are outside the current scope.
@@ -184,10 +182,10 @@ After the container is healthy, run `smoke-gpu` with the profile you started:
 bash bin/latentcrate smoke-gpu edge
 ```
 
-The command checks CUDA, Torch, Triton, SageAttention, FFmpeg codecs, a real
-Sage kernel, and a short NVENC hardware encode. It saves a report below
-`reports/`. Contributor checks that do not need a GPU run with
-`bash tests/static.sh`.
+The command checks CUDA, Torch, Triton, FFmpeg codecs, and a short NVENC
+hardware encode. With Sage enabled, it also checks SageAttention and a real
+Sage kernel. It saves a report below `reports/`. Contributor checks that do not
+need a GPU run with `bash tests/static.sh`.
 
 ## Documentation
 

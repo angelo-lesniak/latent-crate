@@ -85,15 +85,15 @@ portable Compose file uses a CDI device name. Record whether the current
 - [ ] Fetch and verify one model set in WSL storage, then use its linked official
       workflow. Confirm a gated token does not appear in container inspection.
 - [ ] Run `bash bin/latentcrate smoke-gpu current` and retain the report.
-- [ ] Confirm Torch CUDA initialization, the Sage kernel, and the real FFmpeg
-      NVENC encode pass. The normal `current` build is Sage-capable.
+- [ ] Confirm Torch CUDA initialization and the real FFmpeg NVENC encode pass.
+      The normal `current` build does not include SageAttention.
 - [ ] Confirm x264/x265 and every declared FFmpeg inventory check passes with the
       injected Windows/WSL NVIDIA libraries.
 
 ## 5. Other variants
 
-- [ ] Build and verify `--sage off`; confirm the smaller image contains no Sage
-      package and the matching smoke command does not run Sage checks.
+- [ ] Build and verify `--sage available`; confirm the image contains Sage, its
+      kernel passes, and the matching smoke command runs Sage checks.
 - [ ] Build `edge` and confirm its pinned CUDA TorchCodec wheel decodes the smoke
       video and a representative real input.
 - [ ] Test the pinned release frontend, a trusted `--frontend-git` build, and a

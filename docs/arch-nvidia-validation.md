@@ -67,9 +67,9 @@ bash bin/latentcrate up current --detach
   capability, Torch, CUDA, Triton, SageAttention, and media results.
 - Exercise the workflow affected by the change. A successful import alone does
   not prove that a CUDA kernel or codec works.
-- For MiniMax H3 work, confirm the memory-efficient SageAttention path is active
-  and observe its peak VRAM use.
-- If image selection changed, also build and test `--sage off`.
+- For MiniMax H3 SageAttention work, confirm the memory-efficient Sage path is
+  active and observe its peak VRAM use.
+- If image selection changed, also build and test `--sage available`.
 
 ### Frontend modes
 

@@ -6,7 +6,7 @@ every page before using LatentCrate.
 ## First setup
 
 - [Getting started](getting-started.md): prepare Linux or WSL2, configure the
-  host, and complete the first Sage-capable launch.
+  host, and complete the first launch.
 - [Troubleshooting](troubleshooting.md): common errors, checks, and fixes.
 - [Glossary](glossary.md): short explanations of GPU and container terms.
 
@@ -22,7 +22,8 @@ every page before using LatentCrate.
   Docker, Podman, and WSL2 limits.
 - [Third-party nodes](third-party-nodes.md): Manager updates, saved dependencies, pinned
   node sets, private nodes, and native packages.
-- [SageAttention](sageattention.md): Sage defaults and the MiniMax H3 path.
+- [SageAttention](sageattention.md): opt in to Sage for compatible workflows
+  and KJNodes Sage patch nodes.
 - [Frontend modes](frontends.md): pinned releases, public Git source, local
   source, and prebuilt `dist/` assets.
 - [Privacy and containment](privacy.md): safe defaults and their limits.

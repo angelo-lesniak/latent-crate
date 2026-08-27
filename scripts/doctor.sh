@@ -13,7 +13,7 @@ allow_no_gpu=false
 minimum_driver_major=580
 custom_node_architectures=
 sage_architectures=
-sage_enabled=true
+sage_enabled=false
 failures=0
 warnings=0
 selected_engine=
@@ -251,7 +251,7 @@ if command -v nvidia-smi >/dev/null 2>&1; then
       if architecture_list_contains "$sage_architectures" "$capability"; then
         ok "SageAttention CUDA architecture list covers compute capability $capability"
       elif [[ "$sage_enabled" == true ]]; then
-        gpu_problem "SAGE_CUDA_ARCH_LIST=$sage_architectures does not cover compute capability $capability; set both architecture lists for this GPU or opt out with LATENTCRATE_SAGE=off"
+        gpu_problem "SAGE_CUDA_ARCH_LIST=$sage_architectures does not cover compute capability $capability; update the Sage architecture list or rerun with --sage off"
       else
         warn "SAGE_CUDA_ARCH_LIST=$sage_architectures does not cover compute capability $capability; the Sage image is disabled"
       fi

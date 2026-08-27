@@ -1,13 +1,13 @@
-# SageAttention and MiniMax H3
+# SageAttention
 
-LatentCrate builds the SageAttention-capable image by default. SageAttention is
-compiled at the pinned version and CUDA architecture from the selected profile.
-It is never downloaded or compiled when the container starts.
+LatentCrate does not include SageAttention in the default image. Opting in
+compiles it at the pinned version and CUDA architecture from the selected
+profile. It is never downloaded or compiled when the container starts.
 
 ```bash
-bash bin/latentcrate build current
-bash bin/latentcrate up current --detach
-bash bin/latentcrate smoke-gpu current
+bash bin/latentcrate build current --sage available
+bash bin/latentcrate up current --sage available --detach
+bash bin/latentcrate smoke-gpu current --sage available
 ```
 
 The [CLI reference](cli.md) is the main source for these commands and their
@@ -18,29 +18,23 @@ records the source commit, CUDA architecture list, and wheel digest.
 
 ## Workflow-level and global Sage are different
 
-Having Sage in the image does not force every workflow to use it. This is the
-default because workflow-level patches can select Sage only where it is known to
-work.
+`LATENTCRATE_SAGE=available` adds Sage to the image without forcing every
+workflow to use it. Workflow-level patches can then select Sage only where it
+is known to work. Repeat `--sage available` with `config` or `smoke-gpu` when
+inspecting that running variant, or set `LATENTCRATE_SAGE=available` in `.env`
+for a persistent opt-in.
 
-`LATENTCRATE_SAGE=available` therefore remains the normal setting. Use
-`LATENTCRATE_SAGE=global` (or `--sage global` for one command) only after
+Use `LATENTCRATE_SAGE=global` (or `--sage global` for one command) only after
 representative workflows pass with ComfyUI's global `--use-sage-attention`
 behavior.
 
-To build the smaller image without Sage:
+## KJNodes MiniMax H3 Sage patch path
 
-```bash
-bash bin/latentcrate up current --sage off --detach
-```
-
-After `up --sage off`, repeat `--sage off` with `config` or `smoke-gpu` when
-inspecting that running variant. Set `LATENTCRATE_SAGE=off` in `.env` for a
-persistent opt-out.
-
-## KJNodes MiniMax H3 path
-
-The MiniMax H3 memory-efficient patch currently uses SageAttention 2.2 internal
-APIs. Follow this path:
+This optional path applies to KJNodes' MiniMax H3 Sage patch. Installing
+KJNodes and using its non-Sage nodes do not require SageAttention. ComfyUI's
+native Comfy Kitchen attention backend does not require SageAttention either.
+All KJNodes Sage patch nodes require a Sage-capable image. The MiniMax H3 patch
+currently uses SageAttention 2.2 internal APIs. Follow this path:
 
 1. Install the pinned `latent-nodepack` node set, which includes KJNodes:
 
@@ -51,17 +45,17 @@ APIs. Follow this path:
 2. Capture its dependencies, build, and start:
 
    ```bash
-   bash bin/latentcrate up current --detach
+   bash bin/latentcrate up current --sage available --detach
    bash bin/latentcrate wait current
    ```
 
-3. In the H3 workflow, use KJNodes' `Patch Sage Attention KJ` node with the
-   selection set to `auto`.
+3. In the H3 workflow, use KJNodes'
+   `MiniMax H3 Memory Efficient Sage Attention Patch` node.
 
 4. Verify the real GPU path:
 
    ```bash
-   bash bin/latentcrate smoke-gpu current
+   bash bin/latentcrate smoke-gpu current --sage available
    ```
 
 The smoke test imports the KJ-required Sage symbols and runs a small attention
@@ -75,8 +69,8 @@ version number is newer; KJNodes currently depends on 2.2 APIs.
 
 ## Image targets
 
-The Dockerfile keeps separate final targets so opting out does not leave Sage
-files in the image:
+The Dockerfile keeps separate final targets so opting in does not add Sage
+files to the default image:
 
 - `runtime`: release frontend without Sage;
 - `runtime-sage`: release frontend with Sage;

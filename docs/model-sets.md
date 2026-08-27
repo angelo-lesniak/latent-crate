@@ -84,8 +84,9 @@ RTX 5090 setup. In the official Krea-2 text-to-image workflow, select
 `krea2_turbo_int8_convrot.safetensors` in the model loader after opening the
 workflow.
 
-The MiniMax H3 workflows also need KJNodes and SageAttention. The default image
-has SageAttention, and `latent-nodepack` includes the pinned KJNodes source.
+The pinned official MiniMax H3 workflows use ComfyUI core nodes and do not
+require KJNodes or SageAttention. Installing KJNodes does not require Sage;
+use `--sage available` only for its SageAttention patch nodes.
 
 The two additional MiniMax sets are optional. Fetch them with the base I2V set:
 

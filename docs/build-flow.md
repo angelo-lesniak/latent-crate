@@ -41,7 +41,7 @@ flowchart TD
 flowchart TD
     Core["comfy-runtime"] --> Release["runtime<br/>Pinned release frontend"]
     Release --> Sage["runtime-sage<br/>Release frontend + Sage"]
-    Sage --> Default["default<br/>Alias to runtime-sage"]
+    Release --> Default["default<br/>Alias to runtime"]
 
     Devel["PyTorch CUDA<br/>development image"] --> SageBuilder["sage-builder<br/>Build SageAttention wheel"]
     SageBuilder -. "temporary wheel mount" .-> Sage
@@ -68,7 +68,7 @@ flowchart TD
 | `runtime-sage` | Pinned release | Yes |
 | `runtime-frontend-git` | Exact public Git commit | No |
 | `runtime-frontend-git-sage` | Exact public Git commit | Yes |
-| `default` | Pinned release | Yes |
+| `default` | Pinned release | No |
 
 Local source mode and prebuilt `dist/` mode mount frontend files when the
 container starts. They reuse the release image and do not add Dockerfile

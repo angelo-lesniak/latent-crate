@@ -60,13 +60,16 @@ format for Podman builds because the Dockerfile relies on Bash `SHELL` metadata.
 
 ## SageAttention
 
-`LATENTCRATE_SAGE` (default `available`) selects one of three Sage modes; the
+`LATENTCRATE_SAGE` (default `off`) selects one of three Sage modes; the
 modes and the per-command `--sage <mode>` override are defined in
 [shared variant flags](cli.md#shared-variant-flags).
 
-The default gives workflows access to SageAttention without forcing global
-replacement. Use `global` only after representative workflows have been tested
-with global Sage. See [SageAttention](sageattention.md).
+Use `available` to add SageAttention for workflows that select it themselves.
+Use `global` only after representative workflows have been tested with global
+Sage. See [SageAttention](sageattention.md).
+
+An existing `.env` with `LATENTCRATE_SAGE=available` or `global` remains an
+explicit opt-in. Set it to `off` to adopt the smaller default image.
 
 ## ComfyUI behavior
 
@@ -118,15 +121,17 @@ profile before experimenting:
 
 ```bash
 cp versions/current.env versions/my-gpu.env
-# For another GPU, edit CUSTOM_NODE_CUDA_ARCH_LIST and SAGE_CUDA_ARCH_LIST.
-# Edit LATENTCRATE_TAG to my-gpu-sage so it matches the new profile name.
+# For another GPU, edit CUSTOM_NODE_CUDA_ARCH_LIST.
+# Also edit SAGE_CUDA_ARCH_LIST if you plan to opt in to SageAttention.
+# Edit LATENTCRATE_TAG to my-gpu so it matches the new profile name.
 bash bin/latentcrate doctor my-gpu
 bash bin/latentcrate up my-gpu --detach
 ```
 
 `LATENTCRATE_TAG` names the image that the profile builds; it must be the
-profile file name plus `-sage`. The project checks enforce this for every file
-under `versions/`.
+profile file name. The wrapper adds variant suffixes such as `-sage` when the
+matching option is selected. The project checks enforce the plain default tag
+for every file under `versions/`.
 
 Important build selections include:
 
@@ -190,10 +195,10 @@ change them.
 The wrapper derives `LATENTCRATE_TAG` and `LATENTCRATE_TOOLS_TAG` from the
 selected profile and options. Do not override the tags in `.env` or on the
 command line. The `LATENTCRATE_TAG` line inside a version profile file is
-different: it must be present and match the profile file name plus `-sage`,
-which is why the copied-profile recipe tells you to edit it there. Override
-`LATENTCRATE_IMAGE` and `LATENTCRATE_TOOLS_IMAGE` only to keep two fully
-independent checkouts from sharing images.
+different: it must be present and match the profile file name, which is why the
+copied-profile recipe tells you to edit it there. Override `LATENTCRATE_IMAGE`
+and `LATENTCRATE_TOOLS_IMAGE` only to keep two fully independent checkouts from
+sharing images.
 
 ## Configuration safety
 

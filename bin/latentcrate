@@ -95,8 +95,8 @@ Frontend flags:
 Version profiles are files below versions/ without the .env suffix. Set
 CONTAINER_ENGINE=docker or CONTAINER_ENGINE=podman to override detection.
 Sage modes (LATENTCRATE_SAGE in .env, or --sage for one command):
-  off        smaller image without SageAttention
-  available  Sage-capable image; workflows opt in (the default)
+  off        smaller image without SageAttention (the default)
+  available  Sage-capable image; workflows opt in
   global     Sage-capable image; ComfyUI applies Sage globally
 Node dependencies refresh by default. Use --use-saved-node-deps to reuse the
 last saved dependency snapshot.
@@ -104,7 +104,7 @@ EOF
 }
 
 set_default_sage_variant() {
-  local value=${LATENTCRATE_SAGE:-available}
+  local value=${LATENTCRATE_SAGE:-off}
   case "${value,,}" in
     off|available|global) SAGE_MODE=${value,,} ;;
     *) die 'LATENTCRATE_SAGE must be off, available, or global' ;;
