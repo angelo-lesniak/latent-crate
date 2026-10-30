@@ -15,8 +15,6 @@ readonly PROJECT_ROOT
 # Load only fixed, repository-relative implementation modules.
 # shellcheck source=lib/latentcrate/core.sh
 source "$PROJECT_ROOT/lib/latentcrate/core.sh"
-# shellcheck source=lib/latentcrate/versions.sh
-source "$PROJECT_ROOT/lib/latentcrate/versions.sh"
 # shellcheck source=lib/latentcrate/frontend.sh
 source "$PROJECT_ROOT/lib/latentcrate/frontend.sh"
 # shellcheck source=lib/latentcrate/node-deps.sh
@@ -35,71 +33,64 @@ usage() {
 LatentCrate - pinned ComfyUI containers for Docker and Podman
 
 Usage:
-  bin/latentcrate init [--node-set name] [profile]
+  bin/latentcrate init [--node-set name]
       Create .env and the host data directories; optionally install a node set.
-  bin/latentcrate doctor [profile] [--allow-no-gpu] [--sage mode]
+  bin/latentcrate doctor [--allow-no-gpu] [--sage mode]
       Check the host (engine, GPU, directories, ports) before building.
-  bin/latentcrate up [profile] [--sage mode] [--detach] [--use-saved-node-deps] [--model-set name] [frontend flag]
+  bin/latentcrate up [--sage mode] [--detach] [--model-set name] [frontend flag]
       Build the image if needed and start ComfyUI.
-  bin/latentcrate build [profile] [--sage mode] [--use-saved-node-deps] [frontend flag]
+  bin/latentcrate build [--sage mode] [frontend flag]
       Build the image without starting ComfyUI.
-  bin/latentcrate down [profile]
+  bin/latentcrate down
       Stop and remove the ComfyUI container.
-  bin/latentcrate config [profile] [--sage mode] [frontend flag]
+  bin/latentcrate config [--sage mode] [frontend flag]
       Print the resolved Compose configuration.
-  bin/latentcrate status [profile]
+  bin/latentcrate status
       Show the ComfyUI container status.
-  bin/latentcrate wait [profile] [--timeout seconds]
+  bin/latentcrate wait [--timeout seconds]
       Block until the running container reports healthy.
-  bin/latentcrate logs [profile]
+  bin/latentcrate logs
       Follow the ComfyUI container logs.
-  bin/latentcrate shell [profile]
+  bin/latentcrate shell
       Open a bash shell in the running container.
-  bin/latentcrate smoke-gpu [profile] [--sage mode] [frontend flag]
+  bin/latentcrate smoke-gpu [--sage mode] [frontend flag]
       Run the GPU verification suite in the running container and save a report.
-  bin/latentcrate frontend pin-release [profile]
-      Download and pin the selected profile's frontend release archive digest.
-  bin/latentcrate versions update <component|all> <profile>
-      Update one or all eligible external version pins in an explicit profile.
-  bin/latentcrate node-deps snapshot [profile]
+  bin/latentcrate node-deps snapshot
       Capture custom-node Python dependencies for the next image build.
   bin/latentcrate node-deps clear
       Reset the saved custom-node dependency snapshot.
   bin/latentcrate nodes list
       List the available custom-node sets with their descriptions.
-  bin/latentcrate nodes install <set> [profile]
+  bin/latentcrate nodes install <set>
       Install a pinned custom-node set (stop ComfyUI first).
-  bin/latentcrate nodes sync <set> [profile]
+  bin/latentcrate nodes sync <set>
       Install the set, replacing clean checkouts pinned at other commits.
-  bin/latentcrate nodes status <set> [profile]
+  bin/latentcrate nodes status <set>
       Report how the managed third-party nodes compare to the set.
   bin/latentcrate models list
       List the available pinned model-file sets.
-  bin/latentcrate models fetch [--profile profile] <set> [<set> ...] | all
+  bin/latentcrate models fetch <set> [<set> ...] | all
       Download and verify one or more model sets from Hugging Face.
-  bin/latentcrate models status [--profile profile] <set> [<set> ...] | all
+  bin/latentcrate models status <set> [<set> ...] | all
       Verify the selected files already present in the models directory.
-  bin/latentcrate templates list [profile]
-      List official templates marked for local ComfyUI use in the selected image.
-  bin/latentcrate templates create-model-set <template> [profile] [--name name]
+  bin/latentcrate templates list
+      List official templates marked for local ComfyUI use in the built image.
+  bin/latentcrate templates create-model-set <template> [--name name]
       Create a reviewable model-set manifest draft from a template.
-  bin/latentcrate versions
-      Show the pinned components for each version profile.
+  bin/latentcrate pins
+      Print the pinned components from pins.env.
 
-Frontend flags:
-  --frontend-release
+Frontend flags (the default builds the pinned frontend tag from Git):
   --frontend-git <https-url> <commit-branch-tag-or-pr-reference>
   --frontend-source <absolute-or-relative-source-directory>  (up/config/smoke-gpu)
   --frontend-dist <absolute-or-relative-dist-directory>  (up/config/smoke-gpu)
 
-Version profiles are files below versions/ without the .env suffix. Set
+Settings come from .env.example, overridden by .env. Set
 CONTAINER_ENGINE=docker or CONTAINER_ENGINE=podman to override detection.
 Sage modes (LATENTCRATE_SAGE in .env, or --sage for one command):
   off        smaller image without SageAttention (the default)
   available  Sage-capable image; workflows opt in
   global     Sage-capable image; ComfyUI applies Sage globally
-Node dependencies refresh by default. Use --use-saved-node-deps to reuse the
-last saved dependency snapshot.
 EOF
 }
 
@@ -121,13 +112,10 @@ set_sage_mode_flag() {
 parse_variant_options() {
   local command=$1
   shift
-  local profile_seen=false
   local frontend_seen=false
 
-  PROFILE=current
   set_default_sage_variant
   DETACH=false
-  REFRESH_NODE_DEPS=true
   MODEL_SETS=()
 
   while (($# > 0)); do
@@ -141,11 +129,6 @@ parse_variant_options() {
         [[ "$command" == up ]] || die "$1 is only valid with up"
         DETACH=true
         ;;
-      --use-saved-node-deps)
-        [[ "$command" == up || "$command" == build ]] \
-          || die '--use-saved-node-deps is only valid with up or build'
-        REFRESH_NODE_DEPS=false
-        ;;
       --model-set)
         [[ "$command" == up ]] || die '--model-set is only valid with up'
         (($# >= 2)) || die '--model-set requires a set name'
@@ -153,11 +136,6 @@ parse_variant_options() {
         model_set_file "$2" >/dev/null
         MODEL_SETS+=("$2")
         shift
-        ;;
-      --frontend-release)
-        [[ "$frontend_seen" == false ]] || die 'only one frontend flag may be supplied'
-        frontend_seen=true
-        export COMFY_FRONTEND_MODE=release
         ;;
       --frontend-git)
         [[ "$frontend_seen" == false ]] || die 'only one frontend flag may be supplied'
@@ -191,33 +169,31 @@ parse_variant_options() {
         shift
         ;;
       --*) die "unknown option for $command: $1" ;;
-      *)
-        [[ "$profile_seen" == false ]] || die "multiple version profiles supplied: $PROFILE and $1"
-        profile_file "$1" >/dev/null
-        PROFILE=$1
-        profile_seen=true
-        ;;
+      *) die "unknown argument for $command: $1" ;;
     esac
     shift
   done
 }
 
-parse_profile_only() {
-  PROFILE=${1:-current}
-  (($# <= 1)) || die 'this command accepts at most one version profile'
-  [[ "$PROFILE" != --* ]] || die "unknown option: $PROFILE"
-  profile_file "$PROFILE" >/dev/null
+# down, status, and logs render the project without resolving the frontend
+# reference or asking for the GPU, so they work offline and with broken pins.
+configure_render_only() {
+  (($# == 0)) || die "unknown argument: $1"
+  set_default_sage_variant
+  RESOLVE_FRONTEND_REF=false
+  configure_variant "$SAGE_MODE"
 }
 
 main() {
   local command=${1:-help}
-  local engine timeout allow_no_gpu min_driver profile_seen node_set model_action template_action template_name draft_name sage_enabled
+  local engine timeout allow_no_gpu node_set model_action template_action template_name draft_name sage_enabled
   local -a up_args
   local -a model_sets
   shift || true
 
   cd "$PROJECT_ROOT"
   INCLUDE_FRONTEND_OVERLAY=false
+  INCLUDE_GPU_OVERLAY=false
   FRONTEND_SOURCE_BUILD=false
 
   case "$command" in
@@ -226,14 +202,11 @@ main() {
       usage
       return
       ;;
-    versions)
-      if (($# == 0)); then
-        for file in "$PROJECT_ROOT"/versions/*.env; do
-          printf '\n== %s ==\n' "$(basename "$file" .env)"
-          sed '/^[[:space:]]*#/d; /^[[:space:]]*$/d' "$file"
-        done
-        return
-      fi
+    pins)
+      (($# == 0)) || die 'pins accepts no arguments'
+      load_pins
+      print_pins
+      return
       ;;
   esac
 
@@ -246,13 +219,12 @@ main() {
   fi
 
   load_local_env
+  load_pins
   capture_hf_token
 
   case "$command" in
     init)
       node_set=
-      PROFILE=current
-      profile_seen=false
       while (($# > 0)); do
         case "$1" in
           --node-set)
@@ -263,23 +235,17 @@ main() {
             shift
             ;;
           --*) die "unknown init option: $1" ;;
-          *)
-            [[ "$profile_seen" == false ]] || die 'init accepts at most one version profile'
-            PROFILE=$1
-            profile_file "$PROFILE" >/dev/null
-            profile_seen=true
-            ;;
+          *) die "unknown init argument: $1" ;;
         esac
         shift
       done
       init_project
+      load_pins
       capture_hf_token
-      [[ -z "$node_set" ]] || run_node_set install "$node_set" "$PROFILE"
+      [[ -z "$node_set" ]] || run_node_set install "$node_set"
       ;;
     doctor)
-      PROFILE=current
       allow_no_gpu=false
-      profile_seen=false
       set_default_sage_variant
       while (($# > 0)); do
         case "$1" in
@@ -290,88 +256,75 @@ main() {
             shift
             ;;
           --*) die "unknown doctor option: $1" ;;
-          *)
-            [[ "$profile_seen" == false ]] || die 'doctor accepts at most one version profile'
-            PROFILE=$1
-            profile_file "$PROFILE" >/dev/null
-            profile_seen=true
-            ;;
+          *) die "unknown doctor argument: $1" ;;
         esac
         shift
       done
-      min_driver=${CUDA_MIN_DRIVER_MAJOR:-$(profile_value "$PROFILE" CUDA_MIN_DRIVER_MAJOR)}
       sage_enabled=true
       [[ "$SAGE_MODE" != off ]] || sage_enabled=false
       bash "$PROJECT_ROOT/scripts/doctor.sh" \
         --engine "${CONTAINER_ENGINE:-}" \
         --allow-no-gpu "$allow_no_gpu" \
-        --min-driver-major "${min_driver:-580}" \
-        --custom-node-arch-list "${CUSTOM_NODE_CUDA_ARCH_LIST:-$(profile_value "$PROFILE" CUSTOM_NODE_CUDA_ARCH_LIST)}" \
-        --sage-arch-list "${SAGE_CUDA_ARCH_LIST:-$(profile_value "$PROFILE" SAGE_CUDA_ARCH_LIST)}" \
+        --min-driver-major "$CUDA_MIN_DRIVER_MAJOR" \
+        --cuda-arch-list "$COMFY_CUDA_ARCH_LIST" \
         --sage "$sage_enabled"
       ;;
     up)
       parse_variant_options up "$@"
-      configure_variant "$PROFILE" "$SAGE_MODE"
+      INCLUDE_GPU_OVERLAY=true
+      configure_variant "$SAGE_MODE"
       validate_bind_address
       prepare_host_directories
       engine=$(detect_engine)
       if ((${#MODEL_SETS[@]} > 0)); then
-        run_model_sets fetch "$PROFILE" "${MODEL_SETS[@]}"
+        run_model_sets fetch "${MODEL_SETS[@]}"
       fi
       if [[ "$FRONTEND_SOURCE_BUILD" == true ]]; then
-        build_local_frontend "$engine" "$PROFILE"
+        build_local_frontend "$engine"
       fi
       [[ "${COMFY_FRONTEND_MODE}" == dist ]] && INCLUDE_FRONTEND_OVERLAY=true
-      if [[ "$REFRESH_NODE_DEPS" == true ]]; then
-        run_refreshed_build "$engine" "$PROFILE" \
-          'custom-node dependency build failed; restored the last buildable snapshot'
-      else
-        run_cached_build "$engine" "$PROFILE"
-      fi
+      run_refreshed_build "$engine" \
+        'custom-node dependency build failed; restored the last buildable snapshot'
       # Every up builds an image first. Recreate unconditionally so Compose
       # cannot keep a container that still points at the previous image ID.
       up_args=(up --no-build --force-recreate)
       if [[ "$DETACH" == true ]]; then
-        compose "$engine" "$PROFILE" "${up_args[@]}" --detach comfy
-        printf 'Run: bash bin/latentcrate wait %s\n' "$PROFILE"
+        compose "$engine" "${up_args[@]}" --detach comfy
+        printf 'Run: bash bin/latentcrate wait\n'
       else
-        compose "$engine" "$PROFILE" "${up_args[@]}" comfy
+        compose "$engine" "${up_args[@]}" comfy
       fi
       ;;
     build)
       parse_variant_options build "$@"
-      configure_variant "$PROFILE" "$SAGE_MODE"
+      INCLUDE_GPU_OVERLAY=true
+      configure_variant "$SAGE_MODE"
       [[ "$COMFY_FRONTEND_MODE" != dist ]] \
-        || die 'build supports release and Git frontends; use up for --frontend-source or --frontend-dist'
+        || die 'build supports the pinned and Git frontends; use up for --frontend-source or --frontend-dist'
       engine=$(detect_engine)
-      if [[ "$REFRESH_NODE_DEPS" == true ]]; then
-        run_refreshed_build "$engine" "$PROFILE" 'image build failed'
-      else
-        run_cached_build "$engine" "$PROFILE"
-      fi
+      run_refreshed_build "$engine" 'image build failed'
       ;;
     down)
-      parse_profile_only "$@"
+      configure_render_only "$@"
+      INCLUDE_GPU_OVERLAY=true
       engine=$(detect_engine)
-      compose "$engine" "$PROFILE" down
+      compose "$engine" down
       ;;
     config)
       parse_variant_options config "$@"
-      configure_variant "$PROFILE" "$SAGE_MODE"
+      configure_variant "$SAGE_MODE"
       [[ "${COMFY_FRONTEND_MODE}" == dist ]] && INCLUDE_FRONTEND_OVERLAY=true
       engine=$(detect_engine)
-      compose "$engine" "$PROFILE" config
+      compose "$engine" config
       ;;
     status)
-      parse_profile_only "$@"
+      configure_render_only "$@"
+      INCLUDE_GPU_OVERLAY=true
       engine=$(detect_engine)
-      compose "$engine" "$PROFILE" ps
+      compose "$engine" ps
       ;;
     wait)
-      PROFILE=current
       timeout=180
-      profile_seen=false
       while (($# > 0)); do
         case "$1" in
           --timeout)
@@ -381,55 +334,40 @@ main() {
             shift
             ;;
           --*) die "unknown wait option: $1" ;;
-          *)
-            [[ "$profile_seen" == false ]] || die 'wait accepts at most one version profile'
-            PROFILE=$1
-            profile_file "$PROFILE" >/dev/null
-            profile_seen=true
-            ;;
+          *) die "unknown wait argument: $1" ;;
         esac
         shift
       done
       engine=$(detect_engine)
-      wait_until_healthy "$engine" "$PROFILE" "$timeout"
+      wait_until_healthy "$engine" "$timeout"
       ;;
     logs)
-      parse_profile_only "$@"
+      configure_render_only "$@"
+      INCLUDE_GPU_OVERLAY=true
       engine=$(detect_engine)
-      compose "$engine" "$PROFILE" logs --follow comfy
+      compose "$engine" logs --follow comfy
       ;;
     shell)
-      parse_profile_only "$@"
+      configure_render_only "$@"
+      INCLUDE_GPU_OVERLAY=true
       engine=$(detect_engine)
-      compose "$engine" "$PROFILE" exec comfy bash
+      compose "$engine" exec comfy bash
       ;;
     smoke-gpu)
       parse_variant_options smoke-gpu "$@"
-      configure_variant "$PROFILE" "$SAGE_MODE"
+      INCLUDE_GPU_OVERLAY=true
+      configure_variant "$SAGE_MODE"
+      [[ "${COMFY_FRONTEND_MODE}" == dist ]] && INCLUDE_FRONTEND_OVERLAY=true
       engine=$(detect_engine)
-      run_gpu_smoke "$engine" "$PROFILE" "$SAGE"
-      ;;
-    frontend)
-      case "${1:-}" in
-        pin-release)
-          (($# <= 2)) || die 'frontend pin-release accepts at most one version profile'
-          pin_frontend_release "${2:-current}"
-          ;;
-        *) die 'usage: bin/latentcrate frontend pin-release [profile]' ;;
-      esac
-      ;;
-    versions)
-      [[ "${1:-}" == update && $# == 3 ]] \
-        || die 'usage: bin/latentcrate versions update <component|all> <profile>'
-      update_versions "$2" "$3"
+      run_gpu_smoke "$engine" "$SAGE"
       ;;
     node-deps)
       case "${1:-}" in
         snapshot)
-          (($# <= 2)) || die 'node-deps snapshot accepts at most one version profile'
+          (($# == 1)) || die 'node-deps snapshot accepts no additional arguments'
           acquire_node_dependency_lock
           trap 'release_node_dependency_lock' EXIT
-          snapshot_node_dependencies "${2:-current}"
+          snapshot_node_dependencies
           release_node_dependency_lock
           trap - EXIT
           ;;
@@ -441,7 +379,7 @@ main() {
           release_node_dependency_lock
           trap - EXIT
           ;;
-        *) die 'usage: bin/latentcrate node-deps snapshot [profile] | node-deps clear' ;;
+        *) die 'usage: bin/latentcrate node-deps snapshot | node-deps clear' ;;
       esac
       ;;
     nodes)
@@ -451,11 +389,10 @@ main() {
           list_node_sets
           ;;
         install|sync|status)
-          (($# >= 2 && $# <= 3)) \
-            || die "nodes ${1:-install} requires a set name and accepts an optional version profile"
-          run_node_set "$1" "$2" "${3:-current}"
+          (($# == 2)) || die "nodes ${1:-install} requires exactly one set name"
+          run_node_set "$1" "$2"
           ;;
-        *) die 'usage: bin/latentcrate nodes list | nodes install <set> [profile] | nodes sync <set> [profile] | nodes status <set> [profile]' ;;
+        *) die 'usage: bin/latentcrate nodes list | nodes install <set> | nodes sync <set> | nodes status <set>' ;;
       esac
       ;;
     models)
@@ -467,42 +404,30 @@ main() {
           ;;
         fetch|status)
           shift
-          PROFILE=current
-          profile_seen=false
           model_sets=()
           while (($# > 0)); do
             case "$1" in
-              --profile)
-                (($# >= 2)) || die '--profile requires a version profile'
-                [[ "$profile_seen" == false ]] || die 'models accepts at most one --profile option'
-                PROFILE=$2
-                profile_file "$PROFILE" >/dev/null
-                profile_seen=true
-                shift
-                ;;
               --*) die "unknown models $model_action option: $1" ;;
               *) model_sets+=("$1") ;;
             esac
             shift
           done
-          run_model_sets "$model_action" "$PROFILE" "${model_sets[@]}"
+          run_model_sets "$model_action" "${model_sets[@]}"
           ;;
-        *) die 'usage: bin/latentcrate models list | models fetch [--profile profile] <set> [<set> ...] | all | models status [--profile profile] <set> [<set> ...] | all' ;;
+        *) die 'usage: bin/latentcrate models list | models fetch <set> [<set> ...] | all | models status <set> [<set> ...] | all' ;;
       esac
       ;;
     templates)
       template_action=${1:-}
       case "$template_action" in
         list)
-          (($# <= 2)) || die 'templates list accepts at most one version profile'
-          run_template_tool list "${2:-current}"
+          (($# == 1)) || die 'templates list accepts no additional arguments'
+          run_template_tool list
           ;;
         create-model-set)
           (($# >= 2)) || die 'templates create-model-set requires a template ID'
           template_name=$2
           draft_name=$template_name
-          PROFILE=current
-          profile_seen=false
           shift 2
           while (($# > 0)); do
             case "$1" in
@@ -512,21 +437,15 @@ main() {
                 shift
                 ;;
               --*) die "unknown templates create-model-set option: $1" ;;
-              *)
-                [[ "$profile_seen" == false ]] \
-                  || die 'templates create-model-set accepts at most one version profile'
-                PROFILE=$1
-                profile_file "$PROFILE" >/dev/null
-                profile_seen=true
-                ;;
+              *) die "unknown templates create-model-set argument: $1" ;;
             esac
             shift
           done
           validate_template_name "$template_name"
           validate_draft_name "$draft_name"
-          run_template_tool create-model-set "$PROFILE" "$template_name" "$draft_name"
+          run_template_tool create-model-set "$template_name" "$draft_name"
           ;;
-        *) die 'usage: bin/latentcrate templates list [profile] | templates create-model-set <template> [profile] [--name name]' ;;
+        *) die 'usage: bin/latentcrate templates list | templates create-model-set <template> [--name name]' ;;
       esac
       ;;
     *)

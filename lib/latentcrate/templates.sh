@@ -17,24 +17,22 @@ validate_draft_name() {
 
 run_template_tool() {
   local action=$1
-  local profile=$2
-  local template=${3:-}
-  local name=${4:-}
+  local template=${2:-}
+  local name=${3:-}
   local engine
 
-  profile_file "$profile" >/dev/null
-  # Template packages follow the backend profile and do not depend on a
-  # frontend fork or local frontend build. Avoid unrelated Git resolution.
+  # Template packages follow the backend image and do not depend on a
+  # frontend fork or local frontend build.
   export COMFY_FRONTEND_MODE=release
   set_default_sage_variant
-  configure_variant "$profile" "$SAGE_MODE"
+  configure_variant "$SAGE_MODE"
   engine=$(detect_engine)
 
   # Build the selected runtime first: the helper intentionally reads the
   # template package installed in that exact image, never a moving web index.
-  compose "$engine" "$profile" build comfy
+  compose "$engine" build comfy
   if [[ "$action" == list ]]; then
-    compose_tool "$engine" "$profile" run --rm --no-deps -T template-inspector list
+    compose_tool "$engine" run --rm --no-deps -T template-inspector list
     return
   fi
 
@@ -44,6 +42,6 @@ run_template_tool() {
   validate_draft_name "$name"
   export TEMPLATE_DRAFT_OUTPUT_DIR=$PROJECT_ROOT/build/model-set-drafts
   mkdir -p "$TEMPLATE_DRAFT_OUTPUT_DIR"
-  compose_tool "$engine" "$profile" run --rm --no-deps -T template-draft \
+  compose_tool "$engine" run --rm --no-deps -T template-draft \
     create-model-set "$template" --name "$name"
 }

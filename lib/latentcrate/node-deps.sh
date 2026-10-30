@@ -57,22 +57,6 @@ release_node_dependency_lock() {
   fi
 }
 
-prepare_custom_node_cache_key() {
-  local profile=${1:-current}
-  local snapshot="$PROJECT_ROOT/build/custom-node-requirements"
-  profile_file "$profile" >/dev/null
-  [[ -d "$snapshot" ]] || die 'third-party node dependency snapshot is missing'
-  CUSTOM_NODE_CACHE_KEY=$(bash "$PROJECT_ROOT/scripts/custom-node-cache-key.sh" \
-    "$(effective_profile_value "$profile" PYTORCH_DEVEL_IMAGE)" \
-    "$(effective_profile_value "$profile" PYTORCH_RUNTIME_IMAGE)" \
-    "$(effective_profile_value "$profile" COMFYUI_REF)" \
-    "$(effective_profile_value "$profile" TORCHCODEC_VERSION)" \
-    "$(effective_profile_value "$profile" TORCHCODEC_INDEX_URL)" \
-    "$(effective_profile_value "$profile" CUSTOM_NODE_CUDA_ARCH_LIST)") \
-    || die 'could not identify the third-party node dependency build cache'
-  export CUSTOM_NODE_CACHE_KEY
-}
-
 begin_node_dependency_candidate() {
   local snapshot="$PROJECT_ROOT/build/custom-node-requirements"
   NODE_DEPS_CANDIDATE_BACKUP=$(mktemp -d "$PROJECT_ROOT/build/.node-deps-buildable.XXXXXX")
@@ -115,7 +99,6 @@ commit_node_dependency_candidate() {
 }
 
 snapshot_node_dependencies() {
-  local profile=${1:-current}
   local custom_nodes_dir="${COMFY_DATA_DIR:-$PROJECT_ROOT/data/comfy}/custom_nodes"
   local local_nodes_dir="${COMFY_LOCAL_NODES_DIR:-$PROJECT_ROOT/local/custom_nodes}"
   local destination="$PROJECT_ROOT/build/custom-node-requirements"
@@ -125,7 +108,6 @@ snapshot_node_dependencies() {
     || die "custom-node directory does not exist: $custom_nodes_dir (check COMFY_DATA_DIR and start ComfyUI once)"
   [[ -d "$local_nodes_dir" ]] \
     || die "local custom-node directory does not exist: $local_nodes_dir (check COMFY_LOCAL_NODES_DIR or run latentcrate init)"
-  profile_file "$profile" >/dev/null
   validate_custom_node_roots
   custom_nodes_dir=$(cd -- "$custom_nodes_dir" && pwd -P)
   local_nodes_dir=$(cd -- "$local_nodes_dir" && pwd -P)
@@ -133,13 +115,12 @@ snapshot_node_dependencies() {
   export NODE_DEPS_SOURCE_DIR=$custom_nodes_dir
   export NODE_DEPS_LOCAL_SOURCE_DIR=$local_nodes_dir
   export NODE_DEPS_OUTPUT_DIR=$PROJECT_ROOT/build
-  export LATENTCRATE_TOOLS_TAG=$profile
 
   engine=$(detect_engine)
   printf '== Building the LatentCrate tools image ==\n'
-  compose_tool "$engine" "$profile" build node-deps-snapshot || return
+  compose_tool "$engine" build node-deps-snapshot || return
   printf '== Capturing the third-party node dependency snapshot ==\n'
-  compose_tool "$engine" "$profile" run --rm --no-deps node-deps-snapshot || return
+  compose_tool "$engine" run --rm --no-deps node-deps-snapshot || return
   [[ -r "$destination/manifest.txt" ]] \
     || { printf 'LatentCrate: dependency capture completed without publishing manifest.txt\n' >&2; return 1; }
   printf 'Rebuild the selected image to install the saved dependencies.\n'
@@ -158,46 +139,27 @@ announce_comfy_image_build() {
   printf 'The first build can take a long time (possibly hours).\n'
 }
 
-# Shared refresh-build transaction used by both `up` and `build`:
-# lock -> trap -> begin candidate -> snapshot -> cache key -> build ->
+# Shared build transaction used by both `up` and `build`:
+# lock -> trap -> begin candidate -> snapshot -> build ->
 # commit (or restore on failure) -> release. The commands differ only in
 # the message they report when the image build fails.
 run_refreshed_build() {
   local engine=$1
-  local profile=$2
-  local build_failure_message=$3
+  local build_failure_message=$2
 
   acquire_node_dependency_lock
   trap 'restore_node_dependency_candidate; release_node_dependency_lock' EXIT
   begin_node_dependency_candidate
-  if ! snapshot_node_dependencies "$profile"; then
+  if ! snapshot_node_dependencies; then
     restore_node_dependency_candidate
     die 'third-party node dependency capture failed; the last snapshot was preserved'
   fi
-  prepare_custom_node_cache_key "$profile"
   announce_comfy_image_build
-  if ! compose "$engine" "$profile" build comfy; then
+  if ! compose "$engine" build comfy; then
     restore_node_dependency_candidate
     die "$build_failure_message"
   fi
   commit_node_dependency_candidate
-  release_node_dependency_lock
-  trap - EXIT
-}
-
-# Shared cached-snapshot build used by `up --use-saved-node-deps` and
-# `build --use-saved-node-deps`: lock -> cache key -> build -> release.
-run_cached_build() {
-  local engine=$1
-  local profile=$2
-
-  acquire_node_dependency_lock
-  trap 'release_node_dependency_lock' EXIT
-  prepare_custom_node_cache_key "$profile"
-  announce_comfy_image_build
-  if ! compose "$engine" "$profile" build comfy; then
-    die 'image build failed'
-  fi
   release_node_dependency_lock
   trap - EXIT
 }

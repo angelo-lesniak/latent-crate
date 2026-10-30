@@ -56,8 +56,7 @@ validate_model_set_selection() {
 
 run_model_sets() {
   local action=$1
-  local profile=$2
-  shift 2
+  shift
   local models_dir="${COMFY_MODELS_DIR:-$PROJECT_ROOT/data/models}"
   local hf_cache_dir="${COMFY_CACHE_DIR:-$PROJECT_ROOT/data/cache}/huggingface"
   local engine token service
@@ -65,7 +64,6 @@ run_model_sets() {
 
   [[ "$action" == fetch || "$action" == status ]] \
     || die "unsupported model-set action: $action"
-  profile_file "$profile" >/dev/null
   validate_model_set_selection "${selected[@]}"
   [[ -d "$models_dir" ]] \
     || die "models directory does not exist: $models_dir (run latentcrate init first)"
@@ -76,21 +74,20 @@ run_model_sets() {
   token=${LATENTCRATE_HF_TOKEN_VALUE:-}
   unset LATENTCRATE_HF_TOKEN_VALUE || true
   export COMFY_MODELS_DIR=$models_dir
-  export LATENTCRATE_TOOLS_TAG=$profile
   engine=$(detect_engine)
 
   if [[ "$action" == status ]]; then
     service=model-set-status
-    compose_tool "$engine" "$profile" build "$service"
-    compose_tool "$engine" "$profile" run --rm --no-deps -T "$service" \
+    compose_tool "$engine" build "$service"
+    compose_tool "$engine" run --rm --no-deps -T "$service" \
       status "${selected[@]}"
   else
     mkdir -p "$hf_cache_dir"
     service=model-set
-    compose_tool "$engine" "$profile" build "$service"
+    compose_tool "$engine" build "$service"
     # printf is a Bash builtin, so the token is not exposed in an external
     # process argument. The helper reads it once and never persists it.
-    printf '%s' "$token" | compose_tool "$engine" "$profile" run --rm --no-deps -T "$service" \
+    printf '%s' "$token" | compose_tool "$engine" run --rm --no-deps -T "$service" \
       fetch --token-stdin "${selected[@]}"
   fi
 }

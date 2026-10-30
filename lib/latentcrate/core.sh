@@ -23,12 +23,14 @@ load_local_env() {
   while IFS= read -r name; do
     existing_environment["$name"]=${!name}
   done < <(compgen -e)
+  set -a
+  # shellcheck disable=SC1091
+  source "$PROJECT_ROOT/.env.example"
   if [[ -f "$PROJECT_ROOT/.env" ]]; then
-    set -a
     # shellcheck disable=SC1091
     source "$PROJECT_ROOT/.env"
-    set +a
   fi
+  set +a
   for name in "${!existing_environment[@]}"; do
     # Read-only variables (for example an exported SHELLOPTS) cannot be
     # reassigned; printf -v would abort the wrapper under set -e.
@@ -42,122 +44,43 @@ load_local_env() {
     export "${name?}"
   done
   export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-latentcrate}"
+  HOST_UID=$(id -u) || die 'could not determine the calling user with id -u'
+  HOST_GID=$(id -g) || die 'could not determine the calling group with id -g'
+  export HOST_UID HOST_GID
   if [[ "${COMFY_BIND_ADDRESS:-}" == ::1 ]]; then
     export COMFY_BIND_ADDRESS='[::1]'
   fi
 }
 
-available_profiles() {
-  local candidate names=
-  for candidate in "$PROJECT_ROOT"/versions/*.env; do
-    [[ -f "$candidate" ]] || continue
-    names+="${names:+, }$(basename "$candidate" .env)"
+# pins.env: plain KEY=VALUE lines, every key once, bare values. Every key is
+# exported for the Compose build arguments; PIN_KEYS keeps the file order.
+load_pins() {
+  local path="$PROJECT_ROOT/pins.env" line key value lineno=0
+  local key_re='^([A-Z][A-Z0-9_]*)=([A-Za-z0-9][A-Za-z0-9._+-]*)$'
+  local -A seen=()
+
+  [[ -f "$path" ]] || die "pins file is missing: $path"
+  PIN_KEYS=()
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    ((++lineno))
+    [[ "$line" =~ ^[[:space:]]*(#|$) ]] && continue
+    [[ "$line" =~ $key_re ]] \
+      || die "pins.env line $lineno must be KEY=VALUE with a bare value: $line"
+    key=${BASH_REMATCH[1]}
+    value=${BASH_REMATCH[2]}
+    [[ -z "${seen[$key]:-}" ]] || die "pins.env defines $key twice (line $lineno)"
+    seen[$key]=1
+    PIN_KEYS+=("$key")
+    printf -v "$key" '%s' "$value"
+    export "${key?}"
+  done < "$path"
+}
+
+print_pins() {
+  local key
+  for key in "${PIN_KEYS[@]}"; do
+    printf '%s=%s\n' "$key" "${!key}"
   done
-  printf '%s\n' "${names:-none}"
-}
-
-profile_file() {
-  local profile=${1:-current}
-  local path
-
-  [[ "$profile" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || die "unsafe version profile name: $profile"
-  path="$PROJECT_ROOT/versions/${profile}.env"
-  [[ -f "$path" ]] || die "unknown version profile: $profile (available: $(available_profiles))"
-  printf '%s\n' "$path"
-}
-
-profile_value() {
-  local profile=$1
-  local key=$2
-  local path
-  path=$(profile_file "$profile")
-  awk -F= -v wanted="$key" '$1 == wanted {sub(/^[^=]*=/, ""); print; exit}' "$path"
-}
-
-profile_assignment() {
-  local path=$1
-  local key=$2
-  local count value
-
-  count=$(awk -v wanted="$key" 'index($0, wanted "=") == 1 {count++} END {print count + 0}' "$path")
-  [[ "$count" == 1 ]] || die "version profile must define $key exactly once: $path"
-  value=$(awk -v wanted="$key" 'index($0, wanted "=") == 1 {sub(/^[^=]*=/, ""); print; exit}' "$path")
-  [[ "$value" != *$'\r'* && "$value" != *$'\n'* && "$value" != *'|'* ]] \
-    || die "version profile has an unsafe value for $key: $path"
-  printf '%s\n' "$value"
-}
-
-acquire_version_profile_lock() {
-  command -v flock >/dev/null 2>&1 \
-    || die 'flock (util-linux) is required for version profile updates'
-  exec {VERSION_PROFILE_LOCK_FD}<"$PROJECT_ROOT/versions" \
-    || die 'could not open the version profile directory lock'
-  flock -n "$VERSION_PROFILE_LOCK_FD" \
-    || die 'another version profile update is running'
-}
-
-release_version_profile_lock() {
-  [[ -n "${VERSION_PROFILE_LOCK_FD:-}" ]] || return
-  flock -u "$VERSION_PROFILE_LOCK_FD" 2>/dev/null || true
-  exec {VERSION_PROFILE_LOCK_FD}>&-
-  unset VERSION_PROFILE_LOCK_FD
-}
-
-assert_version_profile_unchanged() {
-  local path=$1
-  local snapshot=$2
-  local activity=$3
-
-  [[ ! -L "$path" ]] || die "refusing symbolic link for version profile: $path"
-  cmp -s -- "$path" "$snapshot" \
-    || die "version profile changed while $activity was running: $path"
-}
-
-snapshot_version_profile() {
-  local path=$1
-  local template=$2
-  local snapshot
-
-  [[ ! -L "$path" ]] || die "refusing symbolic link for version profile: $path"
-  snapshot=$(mktemp "$template") \
-    || die 'could not create a temporary version-profile snapshot'
-  cp -p -- "$path" "$snapshot" \
-    || { rm -f -- "$snapshot"; die "could not snapshot version profile: $path"; }
-  printf '%s\n' "$snapshot"
-}
-
-stage_version_profile_update() {
-  local path=$1
-  local snapshot=$2
-  local template=$3
-  local staged
-
-  staged=$(mktemp "$template") \
-    || die 'could not create a temporary version-profile update'
-  cp -p -- "$snapshot" "$staged" \
-    || { rm -f -- "$staged"; die "could not stage version profile update: $path"; }
-  printf '%s\n' "$staged"
-}
-
-publish_version_profile_update() {
-  local path=$1
-  local snapshot=$2
-  local staged=$3
-  local activity=$4
-
-  assert_version_profile_unchanged "$path" "$snapshot" "$activity"
-  mv -f -- "$staged" "$path" \
-    || die "could not update version profile: $path"
-}
-
-effective_profile_value() {
-  local profile=$1
-  local key=$2
-  if [[ -v "$key" ]]; then
-    printf '%s\n' "${!key}"
-  else
-    profile_value "$profile" "$key"
-  fi
 }
 
 running_under_wsl() {
@@ -262,7 +185,8 @@ validate_bind_address() {
   local address=${COMFY_BIND_ADDRESS:-127.0.0.1}
 
   case "$address" in
-    127.0.0.1|localhost|'[::1]') return ;;
+    127.0.0.1|'[::1]') return ;;
+    localhost) die 'COMFY_BIND_ADDRESS=localhost is not a binding Compose accepts; use 127.0.0.1 or [::1]' ;;
   esac
 
   is_true "${COMFY_ALLOW_REMOTE:-false}" \
@@ -286,13 +210,15 @@ running_service_container_ids() {
 
 compose() {
   local engine=$1
-  local profile=$2
-  shift 2
+  shift
   local files=(
     --file compose.yaml
     --file "compose.${engine}.yaml"
   )
 
+  if [[ "${INCLUDE_GPU_OVERLAY:-false}" == true ]]; then
+    files+=(--file compose.gpu.yaml)
+  fi
   if [[ "${INCLUDE_FRONTEND_OVERLAY:-false}" == true ]]; then
     files+=(--file compose.frontend-dist.yaml)
   fi
@@ -307,7 +233,7 @@ compose() {
     fi
     "$engine" compose \
       "${files[@]}" \
-      --env-file "$(profile_file "$profile")" \
+      --env-file pins.env \
       "$@"
   )
 }
@@ -317,25 +243,15 @@ compose() {
 # providers do not auto-enable it when a helper service is targeted by name.
 compose_tool() {
   local engine=$1
-  local profile=$2
-  shift 2
-  compose "$engine" "$profile" --profile tools "$@"
+  shift
+  compose "$engine" --profile tools "$@"
 }
 
 init_project() {
   if [[ ! -f "$PROJECT_ROOT/.env" ]]; then
     cp "$PROJECT_ROOT/.env.example" "$PROJECT_ROOT/.env"
-    if command -v id >/dev/null 2>&1; then
-      local uid gid
-      uid=$(id -u)
-      gid=$(id -g)
-      sed -i.bak \
-        -e "s/^HOST_UID=.*/HOST_UID=$uid/" \
-        -e "s/^HOST_GID=.*/HOST_GID=$gid/" \
-        -e "s/^HOST_MODEL_GID=.*/HOST_MODEL_GID=$gid/" \
-        "$PROJECT_ROOT/.env"
-      rm -f "$PROJECT_ROOT/.env.bak"
-    fi
+    sed -i.bak -e "s/^HOST_MODEL_GID=.*/HOST_MODEL_GID=$(id -g)/" "$PROJECT_ROOT/.env"
+    rm -f "$PROJECT_ROOT/.env.bak"
     printf 'Created %s\n' "$PROJECT_ROOT/.env"
   else
     printf 'Keeping existing %s\n' "$PROJECT_ROOT/.env"

@@ -1,8 +1,9 @@
+# Docker Engine: the supplementary group that owns shared or NAS model
+# storage, since Docker maps no host group into the container.
 services:
   comfy:
-    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     group_add:
-      - "${HOST_MODEL_GID:-1000}"
+      - "${HOST_MODEL_GID:?exported by bin/latentcrate from .env}"
   node-deps-snapshot:
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
   node-set:

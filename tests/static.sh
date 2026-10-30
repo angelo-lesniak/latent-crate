@@ -12,7 +12,6 @@ fi
 PROJECT_ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 readonly PROJECT_ROOT
 cd "$PROJECT_ROOT"
-unset CUSTOM_NODE_CACHE_KEY
 
 if ! command -v python >/dev/null 2>&1; then
   printf 'static: required command is unavailable: python\n' >&2
@@ -57,8 +56,6 @@ bash tests/node-deps-lifecycle.sh
 bash tests/entrypoint.sh
 bash tests/doctor.sh
 bash tests/resolve-frontend.sh
-bash tests/frontend-release-pin.sh
-bash tests/version-update.sh
 bash tests/export-node-set.sh
 
 if command -v podman-compose >/dev/null 2>&1; then
@@ -79,7 +76,7 @@ fi
 
 if command -v rg >/dev/null 2>&1; then
   if rg -n '/mnt/|/home/[A-Za-z0-9._-]+' \
-    .env.example compose*.yaml config scripts services versions; then
+    .env.example pins.env compose*.yaml config scripts services; then
     printf 'static: machine-specific absolute host paths remain\n' >&2
     exit 1
   fi
@@ -87,90 +84,52 @@ else
   skip 'absolute host path scan (rg not found)'
 fi
 
-compose_validated=false
-if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
-  compose_validated=true
-  for profile in current edge; do
-    docker compose \
-      --file compose.yaml \
-      --file compose.docker.yaml \
-      --env-file "versions/${profile}.env" \
-      config >/dev/null
-  done
-  COMFY_FRONTEND_MODE=git \
-  COMFY_BUILD_TARGET=runtime-frontend-git \
-  FRONTEND_GIT_URL=https://github.com/Comfy-Org/ComfyUI_frontend.git \
-  FRONTEND_GIT_REF=0000000000000000000000000000000000000000 \
-  FRONTEND_GIT_REQUESTED_REF=fixture \
-    docker compose \
-      --file compose.yaml \
-      --file compose.docker.yaml \
-      --env-file versions/current.env \
-      config >/dev/null
-  COMFY_FRONTEND_MODE=dist \
-  COMFY_FRONTEND_DIST_DIR="$PROJECT_ROOT/tests/fixtures/frontend-dist" \
-    docker compose \
-      --file compose.yaml \
-      --file compose.docker.yaml \
-      --file compose.frontend-dist.yaml \
-      --env-file versions/current.env \
-      config >/dev/null
-  FRONTEND_SOURCE_DIR="$PROJECT_ROOT/tests/fixtures/frontend-source" \
-  FRONTEND_OUTPUT_DIR="$PROJECT_ROOT/data/cache/frontend-builds/test" \
-  FRONTEND_PNPM_CACHE_DIR="$PROJECT_ROOT/data/cache/frontend-pnpm" \
-  FRONTEND_WORK_DIR="$PROJECT_ROOT/data/cache/frontend-work/test" \
-  NODE_DEPS_SOURCE_DIR="$PROJECT_ROOT/tests/fixtures" \
-  NODE_DEPS_LOCAL_SOURCE_DIR="$PROJECT_ROOT/tests/fixtures/custom-nodes" \
-  NODE_DEPS_OUTPUT_DIR="$PROJECT_ROOT/build" \
-    docker compose \
-      --file compose.yaml \
-      --file compose.docker.yaml \
-      --env-file versions/current.env \
-      --profile tools \
-      config >/dev/null
-fi
+# Render every Compose file combination the wrapper passes, with the settings
+# and derived values it exports: the gate renders through the same `${VAR:?}`
+# interpolation as a real command.
+render_compose_variants() {
+  local engine=$1
+  local -a base=(--file compose.yaml --file "compose.${engine}.yaml")
+  local -a gpu=("${base[@]}" --file compose.gpu.yaml)
+  (
+    set -a
+    # shellcheck disable=SC1091
+    source .env.example
+    set +a
+    export HOST_UID=1000 HOST_GID=1000
+    export COMFY_FRONTEND_MODE=release
+    export FRONTEND_GIT_URL=https://github.com/Comfy-Org/ComfyUI_frontend.git
+    export FRONTEND_GIT_REF=0000000000000000000000000000000000000000
+    export FRONTEND_GIT_REQUESTED_REF=fixture
+    LATENTCRATE_IMAGE=latentcrate/comfy:release-fixture COMFY_BUILD_TARGET=runtime \
+      "$engine" compose "${gpu[@]}" --env-file pins.env config >/dev/null
+    LATENTCRATE_IMAGE=latentcrate/comfy:release-sage-fixture COMFY_BUILD_TARGET=runtime-sage \
+      LATENTCRATE_SAGE=available \
+      "$engine" compose "${gpu[@]}" --env-file pins.env config >/dev/null
+    LATENTCRATE_IMAGE=latentcrate/comfy:dist-fixture COMFY_BUILD_TARGET=comfy-runtime \
+      COMFY_FRONTEND_MODE=dist \
+      COMFY_FRONTEND_DIST_DIR="$PROJECT_ROOT/tests/fixtures/frontend-dist" \
+      "$engine" compose "${gpu[@]}" --file compose.frontend-dist.yaml \
+        --env-file pins.env config >/dev/null
+    LATENTCRATE_IMAGE=latentcrate/comfy:release-fixture COMFY_BUILD_TARGET=runtime \
+      FRONTEND_SOURCE_DIR="$PROJECT_ROOT/tests/fixtures/frontend-source" \
+      FRONTEND_OUTPUT_DIR="$PROJECT_ROOT/data/cache/frontend-builds/test" \
+      FRONTEND_PNPM_CACHE_DIR="$PROJECT_ROOT/data/cache/frontend-pnpm" \
+      FRONTEND_WORK_DIR="$PROJECT_ROOT/data/cache/frontend-work/test" \
+      NODE_DEPS_SOURCE_DIR="$PROJECT_ROOT/tests/fixtures" \
+      NODE_DEPS_LOCAL_SOURCE_DIR="$PROJECT_ROOT/tests/fixtures/custom-nodes" \
+      NODE_DEPS_OUTPUT_DIR="$PROJECT_ROOT/build" \
+      "$engine" compose "${base[@]}" --env-file pins.env --profile tools config >/dev/null
+  )
+}
 
-if command -v podman >/dev/null 2>&1 && podman compose version >/dev/null 2>&1; then
-  compose_validated=true
-  for profile in current edge; do
-    podman compose \
-      --file compose.yaml \
-      --file compose.podman.yaml \
-      --env-file "versions/${profile}.env" \
-      config >/dev/null
-  done
-  COMFY_FRONTEND_MODE=git \
-  COMFY_BUILD_TARGET=runtime-frontend-git \
-  FRONTEND_GIT_URL=https://github.com/Comfy-Org/ComfyUI_frontend.git \
-  FRONTEND_GIT_REF=0000000000000000000000000000000000000000 \
-  FRONTEND_GIT_REQUESTED_REF=fixture \
-    podman compose \
-      --file compose.yaml \
-      --file compose.podman.yaml \
-      --env-file versions/current.env \
-      config >/dev/null
-  COMFY_FRONTEND_MODE=dist \
-  COMFY_FRONTEND_DIST_DIR="$PROJECT_ROOT/tests/fixtures/frontend-dist" \
-    podman compose \
-      --file compose.yaml \
-      --file compose.podman.yaml \
-      --file compose.frontend-dist.yaml \
-      --env-file versions/current.env \
-      config >/dev/null
-  FRONTEND_SOURCE_DIR="$PROJECT_ROOT/tests/fixtures/frontend-source" \
-  FRONTEND_OUTPUT_DIR="$PROJECT_ROOT/data/cache/frontend-builds/test" \
-  FRONTEND_PNPM_CACHE_DIR="$PROJECT_ROOT/data/cache/frontend-pnpm" \
-  FRONTEND_WORK_DIR="$PROJECT_ROOT/data/cache/frontend-work/test" \
-  NODE_DEPS_SOURCE_DIR="$PROJECT_ROOT/tests/fixtures" \
-  NODE_DEPS_LOCAL_SOURCE_DIR="$PROJECT_ROOT/tests/fixtures/custom-nodes" \
-  NODE_DEPS_OUTPUT_DIR="$PROJECT_ROOT/build" \
-    podman compose \
-      --file compose.yaml \
-      --file compose.podman.yaml \
-      --env-file versions/current.env \
-      --profile tools \
-      config >/dev/null
-fi
+compose_validated=false
+for engine in docker podman; do
+  if command -v "$engine" >/dev/null 2>&1 && "$engine" compose version >/dev/null 2>&1; then
+    compose_validated=true
+    render_compose_variants "$engine"
+  fi
+done
 
 if [[ "$compose_validated" != true ]]; then
   skip 'compose validation (no container engine with Compose found)'

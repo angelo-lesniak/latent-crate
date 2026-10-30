@@ -1,0 +1,7 @@
+# GPU device request for the comfy service. The wrapper includes this overlay
+# unless the command runs without a GPU (`templates`, --allow-no-gpu), which
+# lets the same image render and run without a CDI device.
+services:
+  comfy:
+    devices:
+      - "${GPU_DEVICE:?exported by bin/latentcrate from .env}"

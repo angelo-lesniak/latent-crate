@@ -78,73 +78,64 @@ expect_failure_status() {
 # --- Engine detection: healthy rootless Podman, matching GPU, plenty of disk.
 case_label='healthy podman'
 run_doctor "$bin_full" \
-  --engine podman --custom-node-arch-list 12.0 --sage-arch-list 12.0
+  --engine podman --cuda-arch-list 12.0
 expect_success
 expect_output '[ok] podman engine is reachable'
 expect_output '[ok] Podman engine is rootless'
 expect_output '[ok] Podman uses crun, which supports keep-groups'
 expect_output '[ok] checking the smaller image without SageAttention'
-expect_output 'custom-node CUDA architecture list covers compute capability 12.0'
-expect_output 'SageAttention CUDA architecture list covers compute capability 12.0'
+expect_output 'COMFY_CUDA_ARCH_LIST covers compute capability 12.0'
 expect_output "engine storage at $STORAGE_ROOT has 100 GB free"
 expect_output '0 failure(s)'
 
 # --- Engine detection: requested engine exists but is unreachable.
 case_label='unreachable podman'
 run_doctor "$bin_full" FAKE_PODMAN_INFO_FAIL=true \
-  --engine podman --custom-node-arch-list 12.0 --sage-arch-list 12.0
+  --engine podman --cuda-arch-list 12.0
 expect_failure_status
 expect_output '[fail] podman engine is not reachable'
 
 # --- Engine detection: automatic selection with no usable engine at all.
 case_label='no usable engine'
 run_doctor "$bin_full" FAKE_PODMAN_INFO_FAIL=true FAKE_DOCKER_INFO_FAIL=true \
-  --custom-node-arch-list 12.0 --sage-arch-list 12.0
+  --cuda-arch-list 12.0
 expect_failure_status
 expect_output '[fail] neither Podman nor Docker has both a reachable engine and Compose provider'
 
 # --- Engine policy: rootful Podman is rejected.
 case_label='rootful podman'
 run_doctor "$bin_full" FAKE_PODMAN_ROOTLESS=false \
-  --engine podman --custom-node-arch-list 12.0 --sage-arch-list 12.0
+  --engine podman --cuda-arch-list 12.0
 expect_failure_status
 expect_output '[fail] the supported Podman path requires a rootless engine'
 
 # --- Engine detection: explicit Docker selection uses the Docker probes.
 case_label='healthy docker'
 run_doctor "$bin_full" \
-  --engine docker --custom-node-arch-list 12.0 --sage-arch-list 12.0
+  --engine docker --cuda-arch-list 12.0
 expect_success
 expect_output '[ok] docker engine is reachable'
 expect_output "engine storage at $STORAGE_ROOT has 100 GB free"
 
-# --- GPU capability: the architecture lists do not cover the detected GPU.
+# --- GPU capability: the architecture list does not cover the detected GPU.
 case_label='gpu arch mismatch'
 run_doctor "$bin_full" FAKE_COMPUTE_CAP=8.6 \
-  --engine podman --custom-node-arch-list 12.0 --sage-arch-list 12.0 \
+  --engine podman --cuda-arch-list 12.0 \
   --sage true
 expect_failure_status
-expect_output '[fail] CUSTOM_NODE_CUDA_ARCH_LIST=12.0 does not cover compute capability 8.6'
-expect_output '[fail] SAGE_CUDA_ARCH_LIST=12.0 does not cover compute capability 8.6'
+expect_output '[fail] COMFY_CUDA_ARCH_LIST=12.0 does not cover compute capability 8.6; add it to the list in .env'
 
 # --- GPU capability: semicolon-separated lists and +PTX suffixes match.
 case_label='gpu arch list formats'
 run_doctor "$bin_full" FAKE_COMPUTE_CAP=8.6 \
-  --engine podman --custom-node-arch-list '8.6+PTX;12.0' --sage-arch-list '8.6;12.0'
+  --engine podman --cuda-arch-list '8.6+PTX;12.0'
 expect_success
-expect_output 'custom-node CUDA architecture list covers compute capability 8.6'
-
-# --- GPU capability: Sage list mismatch is only a warning by default.
-case_label='default sage disabled mismatch'
-run_doctor "$bin_full" \
-  --engine podman --custom-node-arch-list 12.0 --sage-arch-list 9.0
-expect_success
-expect_output 'the Sage image is disabled'
+expect_output 'COMFY_CUDA_ARCH_LIST covers compute capability 8.6'
 
 # --- GPU tooling: a missing GPU stack fails by default...
 case_label='missing gpu stack'
 run_doctor "$bin_no_gpu" \
-  --engine podman --custom-node-arch-list 12.0 --sage-arch-list 12.0
+  --engine podman --cuda-arch-list 12.0
 expect_failure_status
 expect_output '[fail] nvidia-smi was not found; the supported GPU path is unavailable'
 expect_output '[fail] nvidia-ctk was not found'
@@ -153,7 +144,7 @@ expect_output '[fail] nvidia-ctk was not found'
 case_label='allow-no-gpu'
 run_doctor "$bin_no_gpu" \
   --engine podman --allow-no-gpu true \
-  --custom-node-arch-list 12.0 --sage-arch-list 12.0
+  --cuda-arch-list 12.0
 expect_success
 expect_output '[warn] nvidia-smi was not found; the supported GPU path is unavailable (--allow-no-gpu was supplied)'
 
@@ -161,7 +152,7 @@ expect_output '[warn] nvidia-smi was not found; the supported GPU path is unavai
 case_label='old driver'
 run_doctor "$bin_full" FAKE_DRIVER_VERSION=570.12 \
   --engine podman --min-driver-major 580 \
-  --custom-node-arch-list 12.0 --sage-arch-list 12.0
+  --cuda-arch-list 12.0
 expect_failure_status
 expect_output '[fail] NVIDIA driver 570.12 is older than the CUDA 13.x minimum major 580'
 
@@ -169,26 +160,26 @@ expect_output '[fail] NVIDIA driver 570.12 is older than the CUDA 13.x minimum m
 case_label='lowered driver minimum'
 run_doctor "$bin_full" FAKE_DRIVER_VERSION=570.12 \
   --engine podman --min-driver-major 570 \
-  --custom-node-arch-list 12.0 --sage-arch-list 12.0
+  --cuda-arch-list 12.0
 expect_success
 expect_output 'NVIDIA driver 570.12 satisfies CUDA 13.x minimum major 570'
 
 # --- Disk space: under 75 GB free warns but does not fail.
 case_label='low disk space'
 run_doctor "$bin_full" FAKE_DF_FREE_KB=10485760 \
-  --engine podman --custom-node-arch-list 12.0 --sage-arch-list 12.0
+  --engine podman --cuda-arch-list 12.0
 expect_success
 expect_output "engine storage at $STORAGE_ROOT has only 10 GB free"
 
 # --- Port check: a busy ComfyUI port is reported as a warning.
 case_label='busy port'
 run_doctor "$bin_full" FAKE_SS_PORT_BUSY=true \
-  --engine podman --custom-node-arch-list 12.0 --sage-arch-list 12.0
+  --engine podman --cuda-arch-list 12.0
 expect_success
 expect_output '[warn] host port 4207 is already in use'
 case_label='free port'
 run_doctor "$bin_full" \
-  --engine podman --custom-node-arch-list 12.0 --sage-arch-list 12.0
+  --engine podman --cuda-arch-list 12.0
 reject_output 'already in use'
 
 printf 'LatentCrate doctor checks passed.\n'

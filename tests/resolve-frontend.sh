@@ -111,13 +111,9 @@ case_label='ls-remote failure'
 run_resolver fail main ref "$REPOSITORY_URL" main
 expect_failure_output "could not query frontend reference main from $REPOSITORY_URL"
 
-# --- The target and tag subcommands reject an unsupported variant.
-case_label='unsupported target variant'
+# --- Any other subcommand prints the usage.
+case_label='unknown subcommand'
 run_resolver fail unused target bogus
-expect_failure_output 'Unsupported variant: bogus'
-
-case_label='unsupported tag variant'
-run_resolver fail unused tag current bogus
-expect_failure_output 'Unsupported variant: bogus'
+expect_failure_output 'usage:'
 
 printf 'LatentCrate frontend resolver checks passed.\n'

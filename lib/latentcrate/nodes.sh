@@ -47,11 +47,9 @@ list_node_sets() {
 run_node_set() {
   local action=$1
   local set_name=$2
-  local profile=${3:-current}
   local target="${COMFY_DATA_DIR:-$PROJECT_ROOT/data/comfy}/custom_nodes"
   local engine running
 
-  profile_file "$profile" >/dev/null
   acquire_node_set_lock
   trap 'release_node_set_lock' EXIT
   [[ -d "$target" ]] \
@@ -61,23 +59,22 @@ run_node_set() {
   export NODE_SET_FILE
   NODE_SET_FILE=$(node_set_file "$set_name")
   export NODE_SET_TARGET_DIR=$target
-  export LATENTCRATE_TOOLS_TAG=$profile
   engine=$(detect_engine)
   if [[ "$action" == install || "$action" == sync ]]; then
     running=$(running_service_container_ids "$engine" comfy) \
       || die 'could not determine whether ComfyUI is running; no custom nodes were changed'
     [[ -z "$running" ]] \
-      || die "stop ComfyUI before installing or syncing a custom-node set: bash bin/latentcrate down $profile"
+      || die "stop ComfyUI before installing or syncing a custom-node set: bash bin/latentcrate down"
   fi
   if [[ "$action" == status ]]; then
-    compose_tool "$engine" "$profile" build node-set-status
-    compose_tool "$engine" "$profile" run --rm --no-deps node-set-status
+    compose_tool "$engine" build node-set-status
+    compose_tool "$engine" run --rm --no-deps node-set-status
   else
-    compose_tool "$engine" "$profile" build node-set
-    compose_tool "$engine" "$profile" run --rm --no-deps node-set
+    compose_tool "$engine" build node-set
+    compose_tool "$engine" run --rm --no-deps node-set
   fi
   if [[ "$action" == install || "$action" == sync ]]; then
-    printf 'Run "bin/latentcrate up %s" to build the node dependencies into the image.\n' "$profile"
+    printf 'Run "bin/latentcrate up" to build the node dependencies into the image.\n'
   fi
   release_node_set_lock
   trap - EXIT

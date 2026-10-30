@@ -32,7 +32,9 @@ frontend_content_id=$(
     | sha256sum \
     | cut -d ' ' -f 1
 )
-frontend_mode=${COMFY_FRONTEND_MODE:-${LATENTCRATE_FRONTEND_IMAGE_MODE:-release}}
+# The image records the mode it built (git); the dist overlay replaces it.
+frontend_mode=${LATENTCRATE_FRONTEND_IMAGE_MODE:-}
+[[ "${COMFY_FRONTEND_MODE:-}" != dist ]] || frontend_mode=dist
 printf 'running.frontend.mode=%s\n' "$frontend_mode"
 printf 'running.frontend.content.sha256=%s\n' "$frontend_content_id"
 expect_value \
@@ -72,12 +74,6 @@ expect_value \
   "${LATENTCRATE_EXPECT_SAGE:-}" \
   "${LATENTCRATE_SAGE_ENABLED:-0}"
 case "$frontend_mode" in
-  release)
-    expect_value \
-      'frontend release version' \
-      "${LATENTCRATE_EXPECT_FRONTEND_REF:-}" \
-      "$(cat /usr/local/share/latentcrate/frontend.ref 2>/dev/null || true)"
-    ;;
   git)
     expect_value \
       'frontend Git URL' \
@@ -114,18 +110,11 @@ if [[ "${LATENTCRATE_SAGE_ENABLED:-0}" == 1 ]]; then
     "$(cat /usr/local/share/latentcrate/sageattention.cuda-arch-list 2>/dev/null || true)"
 fi
 
-torchcodec_version=$(python -c 'from importlib.metadata import version; print(version("torchcodec"))' 2>/dev/null || true)
-if [[ "${LATENTCRATE_EXPECT_TORCHCODEC_ENABLED:-0}" == 1 ]]; then
-  [[ -n "$torchcodec_version" ]] \
-    || { printf 'LatentCrate: TorchCodec was expected but is not installed.\n' >&2; exit 1; }
-  expect_value \
-    'TorchCodec version' \
-    "${LATENTCRATE_EXPECT_TORCHCODEC_VERSION:-}" \
-    "$torchcodec_version"
-else
-  [[ -z "$torchcodec_version" ]] \
-    || { printf 'LatentCrate: TorchCodec is installed in a profile that disables it.\n' >&2; exit 1; }
-fi
+torchcodec_version=$(python -c 'from importlib.metadata import version; print(version("torchcodec"))')
+expect_value \
+  'TorchCodec version' \
+  "${LATENTCRATE_EXPECT_TORCHCODEC_VERSION:-}" \
+  "$torchcodec_version"
 if [[ "$frontend_mode" != dist && -r /usr/local/share/latentcrate/frontend.content.sha256 ]]; then
   recorded_frontend_content_id=$(< /usr/local/share/latentcrate/frontend.content.sha256)
   if [[ "$frontend_content_id" != "$recorded_frontend_content_id" ]]; then
@@ -154,7 +143,7 @@ PY
 
 if [[ "${LATENTCRATE_REQUIRE_SAGE:-0}" == 1 && "${LATENTCRATE_SAGE_ENABLED:-0}" != 1 ]]; then
   printf '\nLatentCrate: SageAttention was required, but the running container is not Sage-capable.\n' >&2
-  printf 'Recreate it with a Sage-capable image: bash bin/latentcrate up <profile> --sage available --detach\n' >&2
+  printf 'Recreate it with a Sage-capable image: bash bin/latentcrate up --sage available --detach\n' >&2
   exit 1
 fi
 
@@ -211,19 +200,18 @@ for encoder in h264_nvenc hevc_nvenc av1_nvenc libsvtav1 libx264 libx265; do
   grep -E "[[:space:]]${encoder}([[:space:]]|$)" <<< "$encoder_list"
 done
 
-if [[ -n "$torchcodec_version" ]]; then
-  printf '\n== TorchCodec decode ==\n'
-  torchcodec_smoke_file=$(mktemp --suffix=.mp4)
-  trap 'rm -f -- "$torchcodec_smoke_file"' EXIT
-  ffmpeg \
-    -hide_banner \
-    -loglevel error \
-    -f lavfi \
-    -i color=size=64x64:rate=1:color=black \
-    -frames:v 2 \
-    -c:v libx264 \
-    -y "$torchcodec_smoke_file"
-  TORCHCODEC_SMOKE_FILE="$torchcodec_smoke_file" python - <<'PY'
+printf '\n== TorchCodec decode ==\n'
+torchcodec_smoke_file=$(mktemp --suffix=.mp4)
+trap 'rm -f -- "$torchcodec_smoke_file"' EXIT
+ffmpeg \
+  -hide_banner \
+  -loglevel error \
+  -f lavfi \
+  -i color=size=64x64:rate=1:color=black \
+  -frames:v 2 \
+  -c:v libx264 \
+  -y "$torchcodec_smoke_file"
+TORCHCODEC_SMOKE_FILE="$torchcodec_smoke_file" python - <<'PY'
 import os
 
 from torchcodec.decoders import VideoDecoder
@@ -233,11 +221,8 @@ frame = decoder[0]
 assert tuple(frame.shape) == (3, 64, 64), frame.shape
 print(f"torchcodec_frame={tuple(frame.shape)}")
 PY
-  rm -f -- "$torchcodec_smoke_file"
-  trap - EXIT
-else
-  printf '\nTorchCodec is disabled for this profile; skipping its decode test.\n'
-fi
+rm -f -- "$torchcodec_smoke_file"
+trap - EXIT
 
 printf '\n== NVENC hardware encode ==\n'
 nvenc_smoke_size=1920x1080

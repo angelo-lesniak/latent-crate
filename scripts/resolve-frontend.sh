@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# Single source of truth for the frontend/Sage variant -> Dockerfile target and
-# image tag mapping, and for resolving a frontend Git reference to an exact
-# commit. Both lib/latentcrate/frontend.sh and .github/workflows/build.yml call
-# this script instead of keeping their own copies.
+# Resolves a frontend Git reference to an exact commit for
+# lib/latentcrate/frontend.sh.
 
 die() {
   printf 'LatentCrate: %s\n' "$*" >&2
@@ -14,8 +12,6 @@ die() {
 usage() {
   cat >&2 <<'EOF'
 usage:
-  resolve-frontend.sh target <release|release-sage|frontend-git|frontend-git-sage>
-  resolve-frontend.sh tag <profile> <release|release-sage|frontend-git|frontend-git-sage>
   resolve-frontend.sh ref <https-repository-url> <commit-branch-tag-or-pr-reference>
 EOF
   exit 2
@@ -29,29 +25,6 @@ hardened_git() {
     GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null \
     git -c credential.helper= -c core.askPass=/bin/false \
     -c http.followRedirects=false "$@"
-}
-
-variant_target() {
-  case "$1" in
-    release) printf 'runtime\n' ;;
-    release-sage) printf 'runtime-sage\n' ;;
-    frontend-git) printf 'runtime-frontend-git\n' ;;
-    frontend-git-sage) printf 'runtime-frontend-git-sage\n' ;;
-    *) printf 'Unsupported variant: %s\n' "$1" >&2; exit 1 ;;
-  esac
-}
-
-variant_tag() {
-  local profile=$1
-  local variant=$2
-
-  case "$variant" in
-    release) printf '%s\n' "$profile" ;;
-    release-sage) printf '%s-sage\n' "$profile" ;;
-    frontend-git) printf '%s-frontend-git\n' "$profile" ;;
-    frontend-git-sage) printf '%s-frontend-git-sage\n' "$profile" ;;
-    *) printf 'Unsupported variant: %s\n' "$variant" >&2; exit 1 ;;
-  esac
 }
 
 resolve_ref() {
@@ -91,14 +64,6 @@ resolve_ref() {
 }
 
 case "${1:-}" in
-  target)
-    (($# == 2)) || usage
-    variant_target "$2"
-    ;;
-  tag)
-    (($# == 3)) || usage
-    variant_tag "$2" "$3"
-    ;;
   ref)
     (($# == 3)) || usage
     resolve_ref "$2" "$3"

@@ -1,4 +1,10 @@
-name: "${COMPOSE_PROJECT_NAME:-latentcrate}"
+name: "${COMPOSE_PROJECT_NAME:?exported by bin/latentcrate from .env}"
+
+# Interpolation: every setting of .env.example, every pin of pins.env, and
+# the values the wrapper derives (HOST_UID, HOST_GID, LATENTCRATE_IMAGE,
+# COMFY_BUILD_TARGET, FRONTEND_GIT_*) are required (`:?`): bin/latentcrate
+# exports each on every Compose call. `?` rather than `:?` marks a value
+# that is empty by design.
 
 # Shared configuration for the node-set and node-set-status services. The
 # services below merge this block and override only their real differences:
@@ -10,9 +16,6 @@ x-node-set-common: &node-set-common
     context: .
     dockerfile: services/tools/Dockerfile
     target: node-set-tool
-    args:
-      TOOL_PYTHON_IMAGE: "${TOOL_PYTHON_IMAGE:?select a version profile}"
-      FRONTEND_NODE_IMAGE: "${FRONTEND_NODE_IMAGE:?select a version profile}"
   read_only: true
   pids_limit: 128
   cap_drop: ["ALL"]
@@ -46,9 +49,6 @@ x-model-set-common: &model-set-common
     context: .
     dockerfile: services/tools/Dockerfile
     target: model-set-tool
-    args:
-      TOOL_PYTHON_IMAGE: "${TOOL_PYTHON_IMAGE:?select a version profile}"
-      FRONTEND_NODE_IMAGE: "${FRONTEND_NODE_IMAGE:?select a version profile}"
   read_only: true
   pids_limit: 128
   cap_drop: ["ALL"]
@@ -75,7 +75,7 @@ x-model-set-common: &model-set-common
 # receives a writable host directory.
 x-template-common: &template-common
   profiles: ["tools"]
-  image: "${LATENTCRATE_IMAGE:-latentcrate/comfy}:${LATENTCRATE_TAG:-current}"
+  image: "${LATENTCRATE_IMAGE:?set by bin/latentcrate}"
   entrypoint: ["python", "/usr/local/bin/latentcrate-manage-templates.py"]
   network_mode: none
   read_only: true
@@ -88,75 +88,79 @@ x-template-common: &template-common
 
 services:
   comfy:
-    image: "${LATENTCRATE_IMAGE:-latentcrate/comfy}:${LATENTCRATE_TAG:-current}"
+    image: "${LATENTCRATE_IMAGE:?set by bin/latentcrate}"
     build:
       context: .
       dockerfile: services/comfy/Dockerfile
-      target: "${COMFY_BUILD_TARGET:-runtime}"
+      target: "${COMFY_BUILD_TARGET:?set by bin/latentcrate}"
+      # Every pin is an argument so an image never builds from a value that
+      # is not in pins.env.
       args:
-        PYTORCH_DEVEL_IMAGE: "${PYTORCH_DEVEL_IMAGE:?select a version profile}"
-        PYTORCH_RUNTIME_IMAGE: "${PYTORCH_RUNTIME_IMAGE:?select a version profile}"
-        COMFYUI_REF: "${COMFYUI_REF:?select a version profile}"
-        COMFYUI_FRONTEND_REF: "${COMFYUI_FRONTEND_REF:?select a version profile}"
-        COMFY_FRONTEND_DIST_SHA256: "${COMFY_FRONTEND_DIST_SHA256:-}"
-        FFMPEG_REF: "${FFMPEG_REF:?select a version profile}"
-        NV_CODEC_HEADERS_REF: "${NV_CODEC_HEADERS_REF:?select a version profile}"
-        SVT_AV1_REF: "${SVT_AV1_REF:?select a version profile}"
-        SAGEATTENTION_REF: "${SAGEATTENTION_REF:?select a version profile}"
-        SAGE_CUDA_ARCH_LIST: "${SAGE_CUDA_ARCH_LIST:?select a version profile}"
-        SAGE_BUILD_JOBS: "${SAGE_BUILD_JOBS:?select a version profile}"
-        CUSTOM_NODE_CUDA_ARCH_LIST: "${CUSTOM_NODE_CUDA_ARCH_LIST:?select a version profile}"
-        # Only ComfyUI image builds use this value. Helper commands and
-        # read-only lifecycle commands render with the inert fallback.
-        CUSTOM_NODE_CACHE_KEY: "${CUSTOM_NODE_CACHE_KEY:-not-used}"
-        CUDA_NPP_VERSION: "${CUDA_NPP_VERSION:?select a version profile}"
-        TORCHCODEC_VERSION: "${TORCHCODEC_VERSION}"
-        TORCHCODEC_INDEX_URL: "${TORCHCODEC_INDEX_URL:?select a version profile}"
-        FRONTEND_NODE_IMAGE: "${FRONTEND_NODE_IMAGE:?select a version profile}"
-        FRONTEND_PNPM_VERSION: "${FRONTEND_PNPM_VERSION:?select a version profile}"
-        FRONTEND_GIT_URL: "${FRONTEND_GIT_URL:-}"
-        FRONTEND_GIT_REF: "${FRONTEND_GIT_REF:-}"
-        FRONTEND_GIT_REQUESTED_REF: "${FRONTEND_GIT_REQUESTED_REF:-}"
+        PYTORCH_DEVEL_TAG: "${PYTORCH_DEVEL_TAG:?pin it in pins.env}"
+        PYTORCH_DEVEL_DIGEST: "${PYTORCH_DEVEL_DIGEST:?pin it in pins.env}"
+        PYTORCH_RUNTIME_TAG: "${PYTORCH_RUNTIME_TAG:?pin it in pins.env}"
+        PYTORCH_RUNTIME_DIGEST: "${PYTORCH_RUNTIME_DIGEST:?pin it in pins.env}"
+        FRONTEND_NODE_TAG: "${FRONTEND_NODE_TAG:?pin it in pins.env}"
+        FRONTEND_NODE_DIGEST: "${FRONTEND_NODE_DIGEST:?pin it in pins.env}"
+        COMFYUI_REF: "${COMFYUI_REF:?pin it in pins.env}"
+        COMFYUI_FRONTEND_REF: "${COMFYUI_FRONTEND_REF:?pin it in pins.env}"
+        FFMPEG_REF: "${FFMPEG_REF:?pin it in pins.env}"
+        NV_CODEC_HEADERS_REF: "${NV_CODEC_HEADERS_REF:?pin it in pins.env}"
+        SVT_AV1_REF: "${SVT_AV1_REF:?pin it in pins.env}"
+        SAGEATTENTION_REF: "${SAGEATTENTION_REF:?pin it in pins.env}"
+        FRONTEND_PNPM_VERSION: "${FRONTEND_PNPM_VERSION:?pin it in pins.env}"
+        CUDA_NPP_VERSION: "${CUDA_NPP_VERSION:?pin it in pins.env}"
+        TORCHCODEC_VERSION: "${TORCHCODEC_VERSION:?pin it in pins.env}"
+        COMFY_CUDA_ARCH_LIST: "${COMFY_CUDA_ARCH_LIST:?exported by bin/latentcrate from .env}"
+        SAGE_BUILD_JOBS: "${SAGE_BUILD_JOBS:?exported by bin/latentcrate from .env}"
+        # The wrapper resolves the frontend ref (the pinned tag in release
+        # mode) to a commit for every runtime build; dist mode leaves them empty.
+        FRONTEND_GIT_URL: "${FRONTEND_GIT_URL?set by bin/latentcrate}"
+        FRONTEND_GIT_REF: "${FRONTEND_GIT_REF?set by bin/latentcrate}"
+        FRONTEND_GIT_REQUESTED_REF: "${FRONTEND_GIT_REQUESTED_REF?set by bin/latentcrate}"
+    user: "${HOST_UID:?set by bin/latentcrate}:${HOST_GID:?set by bin/latentcrate}"
     init: true
     read_only: true
-    restart: "${RESTART_POLICY:-no}"
-    stop_grace_period: "${STOP_GRACE_PERIOD:-30s}"
-    shm_size: "${COMFY_SHM_SIZE:-8gb}"
-    pids_limit: "${COMFY_PIDS_LIMIT:-2048}"
+    restart: "${RESTART_POLICY:?exported by bin/latentcrate from .env}"
+    stop_grace_period: "${STOP_GRACE_PERIOD:?exported by bin/latentcrate from .env}"
+    shm_size: "${COMFY_SHM_SIZE:?exported by bin/latentcrate from .env}"
+    pids_limit: "${COMFY_PIDS_LIMIT:?exported by bin/latentcrate from .env}"
     cap_drop: ["ALL"]
     security_opt:
       - no-new-privileges:true
     tmpfs:
-      - "/tmp:rw,nosuid,nodev,mode=1777,size=${COMFY_TMPFS_SIZE:-1g}"
+      - "/tmp:rw,nosuid,nodev,mode=1777,size=${COMFY_TMPFS_SIZE:?exported by bin/latentcrate from .env}"
     ports:
       # Container port 8188 must match the --port in services/comfy/entrypoint.sh
       # and the probe URL in services/comfy/healthcheck.py.
-      - "${COMFY_BIND_ADDRESS:-127.0.0.1}:${COMFY_PORT:-4207}:8188"
-    devices:
-      - "${GPU_DEVICE:-nvidia.com/gpu=all}"
+      - "${COMFY_BIND_ADDRESS:?exported by bin/latentcrate from .env}:${COMFY_PORT:?exported by bin/latentcrate from .env}:8188"
+    # The GPU device request lives in compose.gpu.yaml so that `templates`,
+    # a CPU render, and --allow-no-gpu need no CDI device.
     volumes:
       - type: bind
-        source: "${COMFY_DATA_DIR:-./data/comfy}"
+        source: "${COMFY_DATA_DIR:?exported by bin/latentcrate from .env}"
         target: /data
       - type: bind
-        source: "${COMFY_MODELS_DIR:-./data/models}"
+        source: "${COMFY_MODELS_DIR:?exported by bin/latentcrate from .env}"
         target: /models
       - type: bind
-        source: "${COMFY_CACHE_DIR:-./data/cache}"
+        source: "${COMFY_CACHE_DIR:?exported by bin/latentcrate from .env}"
         target: /cache
       - type: bind
-        source: "${COMFY_LOCAL_NODES_DIR:-./local/custom_nodes}"
+        source: "${COMFY_LOCAL_NODES_DIR:?exported by bin/latentcrate from .env}"
         target: /local/custom_nodes
         read_only: true
     environment:
-      COMFY_ENABLE_MANAGER: "${COMFY_ENABLE_MANAGER:-true}"
-      COMFY_FRONTEND_MODE: "${COMFY_FRONTEND_MODE:-release}"
-      LATENTCRATE_SAGE_MODE: "${LATENTCRATE_SAGE_MODE:-off}"
-      COMFY_DISABLE_API_NODES: "${COMFY_DISABLE_API_NODES:-false}"
-      COMFY_DISABLE_METADATA: "${COMFY_DISABLE_METADATA:-false}"
-      COMFYUI_EXTRA_ARGS: "${COMFYUI_EXTRA_ARGS:-}"
-      NVIDIA_DRIVER_CAPABILITIES: "${NVIDIA_DRIVER_CAPABILITIES:-compute,utility,video}"
-      UMASK: "${UMASK:-0002}"
+      COMFY_ENABLE_MANAGER: "${COMFY_ENABLE_MANAGER:?exported by bin/latentcrate from .env}"
+      COMFY_FRONTEND_MODE: "${COMFY_FRONTEND_MODE:?set by bin/latentcrate}"
+      # The setting's values are the modes the entrypoint reads, so it is
+      # passed through unchanged.
+      LATENTCRATE_SAGE_MODE: "${LATENTCRATE_SAGE:?exported by bin/latentcrate from .env}"
+      COMFY_DISABLE_API_NODES: "${COMFY_DISABLE_API_NODES:?exported by bin/latentcrate from .env}"
+      COMFY_DISABLE_METADATA: "${COMFY_DISABLE_METADATA:?exported by bin/latentcrate from .env}"
+      COMFYUI_EXTRA_ARGS: "${COMFYUI_EXTRA_ARGS?exported by bin/latentcrate from .env}"
+      NVIDIA_DRIVER_CAPABILITIES: "${NVIDIA_DRIVER_CAPABILITIES:?exported by bin/latentcrate from .env}"
+      UMASK: "${UMASK:?exported by bin/latentcrate from .env}"
     healthcheck:
       test: ["CMD", "python", "/usr/local/bin/latentcrate-healthcheck.py"]
       interval: 30s
@@ -171,9 +175,6 @@ services:
       context: .
       dockerfile: services/tools/Dockerfile
       target: node-deps-tool
-      args:
-        TOOL_PYTHON_IMAGE: "${TOOL_PYTHON_IMAGE:?select a version profile}"
-        FRONTEND_NODE_IMAGE: "${FRONTEND_NODE_IMAGE:?select a version profile}"
     network_mode: none
     read_only: true
     pids_limit: 128
@@ -225,50 +226,6 @@ services:
         source: ./config/custom-nodes/allowed-git-hosts.txt
         target: /config/allowed-git-hosts.txt
         read_only: true
-      - type: tmpfs
-        target: /tmp
-
-  frontend-release-pin:
-    profiles: ["tools"]
-    image: "${LATENTCRATE_TOOLS_IMAGE:-latentcrate/tools}:${LATENTCRATE_TOOLS_TAG:-current}-frontend-release"
-    build:
-      context: .
-      dockerfile: services/tools/Dockerfile
-      target: frontend-release-tool
-      args:
-        TOOL_PYTHON_IMAGE: "${TOOL_PYTHON_IMAGE:?select a version profile}"
-        FRONTEND_NODE_IMAGE: "${FRONTEND_NODE_IMAGE:?select a version profile}"
-    read_only: true
-    pids_limit: 64
-    cap_drop: ["ALL"]
-    security_opt:
-      - no-new-privileges:true
-    environment:
-      PYTHONDONTWRITEBYTECODE: "1"
-    networks: [version-sources]
-    volumes:
-      - type: tmpfs
-        target: /tmp
-
-  version-update:
-    profiles: ["tools"]
-    image: "${LATENTCRATE_TOOLS_IMAGE:-latentcrate/tools}:${LATENTCRATE_TOOLS_TAG:-current}-version-update"
-    build:
-      context: .
-      dockerfile: services/tools/Dockerfile
-      target: version-update-tool
-      args:
-        TOOL_PYTHON_IMAGE: "${TOOL_PYTHON_IMAGE:?select a version profile}"
-        FRONTEND_NODE_IMAGE: "${FRONTEND_NODE_IMAGE:?select a version profile}"
-    read_only: true
-    pids_limit: 64
-    cap_drop: ["ALL"]
-    security_opt:
-      - no-new-privileges:true
-    environment:
-      PYTHONDONTWRITEBYTECODE: "1"
-    networks: [version-sources]
-    volumes:
       - type: tmpfs
         target: /tmp
 
@@ -346,9 +303,7 @@ services:
       dockerfile: services/tools/Dockerfile
       target: frontend-local-tool
       args:
-        TOOL_PYTHON_IMAGE: "${TOOL_PYTHON_IMAGE:?select a version profile}"
-        FRONTEND_NODE_IMAGE: "${FRONTEND_NODE_IMAGE:?select a version profile}"
-        FRONTEND_PNPM_VERSION: "${FRONTEND_PNPM_VERSION:?select a version profile}"
+        FRONTEND_PNPM_VERSION: "${FRONTEND_PNPM_VERSION:?pin it in pins.env}"
     read_only: true
     pids_limit: 256
     cap_drop: ["ALL"]
@@ -377,9 +332,7 @@ services:
       dockerfile: services/tools/Dockerfile
       target: frontend-local-tool
       args:
-        TOOL_PYTHON_IMAGE: "${TOOL_PYTHON_IMAGE:?select a version profile}"
-        FRONTEND_NODE_IMAGE: "${FRONTEND_NODE_IMAGE:?select a version profile}"
-        FRONTEND_PNPM_VERSION: "${FRONTEND_PNPM_VERSION:?select a version profile}"
+        FRONTEND_PNPM_VERSION: "${FRONTEND_PNPM_VERSION:?pin it in pins.env}"
     network_mode: none
     read_only: true
     pids_limit: 512
@@ -403,7 +356,3 @@ services:
         target: /work
       - type: tmpfs
         target: /tmp
-
-networks:
-  default:
-  version-sources:

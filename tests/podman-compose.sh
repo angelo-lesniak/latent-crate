@@ -8,18 +8,21 @@ cd "$PROJECT_ROOT"
 command -v podman-compose >/dev/null 2>&1 \
   || { printf 'podman-compose compatibility: podman-compose is required\n' >&2; exit 1; }
 
-unset \
-  COMFY_BUILD_TARGET \
-  COMFY_FRONTEND_DIST_DIR \
-  COMFY_FRONTEND_MODE \
-  COMPOSE_PROJECT_NAME \
-  FAKE_PODMAN_LOG \
-  FRONTEND_GIT_REF \
-  FRONTEND_GIT_REQUESTED_REF \
-  FRONTEND_GIT_URL
+unset FAKE_PODMAN_LOG
 
-unset CUSTOM_NODE_CACHE_KEY
-export COMPOSE_PROJECT_NAME=latentcrate
+# The settings and the values bin/latentcrate derives; compose.yaml requires
+# every one of them.
+set -a
+# shellcheck disable=SC1091
+source .env.example
+set +a
+export HOST_UID=1000 HOST_GID=1000
+export COMFY_FRONTEND_MODE=release
+export COMFY_BUILD_TARGET=runtime
+export LATENTCRATE_IMAGE=latentcrate/comfy:release-fixture
+export FRONTEND_GIT_URL=https://github.com/Comfy-Org/ComfyUI_frontend.git
+export FRONTEND_GIT_REF=0000000000000000000000000000000000000000
+export FRONTEND_GIT_REQUESTED_REF=fixture
 export NODE_SET_FILE="$PROJECT_ROOT/config/custom-nodes/sets/latent-nodepack.toml"
 export NODE_SET_TARGET_DIR="$PROJECT_ROOT/data/comfy/custom_nodes"
 export NODE_DEPS_SOURCE_DIR="$PROJECT_ROOT/data/comfy/custom_nodes"
@@ -47,6 +50,7 @@ mkdir -p \
   "$TEMPLATE_DRAFT_OUTPUT_DIR"
 
 compose_files=(--file compose.yaml --file compose.podman.yaml)
+runtime_files=("${compose_files[@]}" --file compose.gpu.yaml)
 if [[ "${OS:-}" == Windows_NT ]]; then
   fake_engine=$(cygpath -w "$PROJECT_ROOT/tests/fixtures/podman-compose-bin/podman.cmd")
   fake_network_log=$(cygpath -w "$network_log")
@@ -57,50 +61,47 @@ else
 fi
 
 podman_compose_dry_run() {
-  podman-compose "${compose_files[@]}" \
-    --env-file versions/edge.env \
+  podman-compose "${runtime_files[@]}" \
+    --env-file pins.env \
     --podman-path "$fake_engine" \
     --dry-run "$@" >/dev/null
 }
 
 podman_compose_tool_dry_run() {
   podman-compose "${compose_files[@]}" \
-    --env-file versions/edge.env \
+    --env-file pins.env \
     --profile tools \
     --podman-path "$fake_engine" \
     --dry-run "$@" >/dev/null
 }
 
-for profile in current edge; do
-  podman-compose "${compose_files[@]}" \
-    --env-file "versions/${profile}.env" \
-    --podman-path "$fake_engine" config >/dev/null
-done
+podman-compose "${runtime_files[@]}" \
+  --env-file pins.env \
+  --podman-path "$fake_engine" config >/dev/null
 
 COMFY_FRONTEND_MODE=git \
-COMFY_BUILD_TARGET=runtime-frontend-git-sage \
-FRONTEND_GIT_URL=https://github.com/Comfy-Org/ComfyUI_frontend.git \
-FRONTEND_GIT_REF=0000000000000000000000000000000000000000 \
-FRONTEND_GIT_REQUESTED_REF=fixture \
-  podman-compose "${compose_files[@]}" \
-    --env-file versions/edge.env \
+COMFY_BUILD_TARGET=runtime-sage \
+LATENTCRATE_IMAGE=latentcrate/comfy:git-sage-fixture \
+LATENTCRATE_SAGE=available \
+  podman-compose "${runtime_files[@]}" \
+    --env-file pins.env \
     --podman-path "$fake_engine" config >/dev/null
 
 COMFY_FRONTEND_MODE=dist \
+COMFY_BUILD_TARGET=comfy-runtime \
+LATENTCRATE_IMAGE=latentcrate/comfy:dist-fixture \
 COMFY_FRONTEND_DIST_DIR="$PROJECT_ROOT/tests/fixtures/frontend-dist" \
-  podman-compose "${compose_files[@]}" \
+  podman-compose "${runtime_files[@]}" \
     --file compose.frontend-dist.yaml \
-    --env-file versions/current.env \
+    --env-file pins.env \
     --podman-path "$fake_engine" config >/dev/null
 
 tool_services=$(podman-compose "${compose_files[@]}" \
-  --env-file versions/edge.env --profile tools \
+  --env-file pins.env --profile tools \
   --podman-path "$fake_engine" config --services)
 for service in \
   comfy \
   node-deps-snapshot \
-  frontend-release-pin \
-  version-update \
   node-set \
   node-set-status \
   model-set \
@@ -118,8 +119,6 @@ done
 # a directly targeted helper as missing.
 for service in \
   node-deps-snapshot \
-  frontend-release-pin \
-  version-update \
   node-set \
   node-set-status \
   model-set \
@@ -134,17 +133,12 @@ done
 # in dry-run mode; no container engine or network is used.
 for service in \
   node-deps-snapshot \
-  frontend-release-pin \
-  version-update \
   node-set \
   node-set-status \
   frontend-fetch \
   frontend-build; do
   podman_compose_tool_dry_run run --rm --no-deps "$service"
 done
-podman_compose_tool_dry_run run --rm --no-deps -T frontend-release-pin \
-  digest Comfy-Org/ComfyUI_frontend@v1.50.4
-podman_compose_tool_dry_run run --rm --no-deps -T version-update list
 for service in model-set model-set-status; do
   podman_compose_tool_dry_run run --rm --no-deps -T "$service" status all
 done
@@ -154,17 +148,13 @@ podman_compose_tool_dry_run run --rm --no-deps -T template-draft \
 
 (
   export FAKE_PODMAN_LOG=$fake_network_log
-  podman-compose "${compose_files[@]}" \
-    --env-file versions/edge.env \
+  podman-compose "${runtime_files[@]}" \
+    --env-file pins.env \
     --podman-path "$fake_engine" \
     run --rm --no-deps comfy >/dev/null
 )
 grep -Fq -- '--network=latentcrate_default:alias=comfy' "$network_log" \
   || { printf 'podman-compose compatibility: comfy does not use the default network\n' >&2; exit 1; }
-if grep -Fq -- '--network=latentcrate_version-sources:alias=comfy' "$network_log"; then
-  printf 'podman-compose compatibility: comfy joined the version-sources helper network\n' >&2
-  exit 1
-fi
 
 podman_compose_dry_run build comfy
 podman_compose_dry_run up --no-build --detach comfy

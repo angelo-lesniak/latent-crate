@@ -11,8 +11,7 @@ source "$PROJECT_ROOT/lib/latentcrate/core.sh"
 requested_engine=
 allow_no_gpu=false
 minimum_driver_major=580
-custom_node_architectures=
-sage_architectures=
+cuda_architectures=
 sage_enabled=false
 failures=0
 warnings=0
@@ -20,20 +19,19 @@ selected_engine=
 
 usage_error() {
   printf 'doctor.sh: %s\n' "$1" >&2
-  printf 'usage: doctor.sh [--engine docker|podman] [--allow-no-gpu true|false] [--min-driver-major n] [--custom-node-arch-list list] [--sage-arch-list list] [--sage true|false]\n' >&2
+  printf 'usage: doctor.sh [--engine docker|podman] [--allow-no-gpu true|false] [--min-driver-major n] [--cuda-arch-list list] [--sage true|false]\n' >&2
   exit 2
 }
 
 while (($# > 0)); do
   case "$1" in
-    --engine|--allow-no-gpu|--min-driver-major|--custom-node-arch-list|--sage-arch-list|--sage)
+    --engine|--allow-no-gpu|--min-driver-major|--cuda-arch-list|--sage)
       (($# >= 2)) || usage_error "$1 requires a value"
       case "$1" in
         --engine) requested_engine=$2 ;;
         --allow-no-gpu) allow_no_gpu=$2 ;;
         --min-driver-major) minimum_driver_major=$2 ;;
-        --custom-node-arch-list) custom_node_architectures=$2 ;;
-        --sage-arch-list) sage_architectures=$2 ;;
+        --cuda-arch-list) cuda_architectures=$2 ;;
         --sage) sage_enabled=$2 ;;
       esac
       shift
@@ -243,17 +241,10 @@ if command -v nvidia-smi >/dev/null 2>&1; then
     while IFS= read -r capability; do
       capability=${capability//[[:space:]]/}
       [[ -n "$capability" ]] || continue
-      if architecture_list_contains "$custom_node_architectures" "$capability"; then
-        ok "custom-node CUDA architecture list covers compute capability $capability"
+      if architecture_list_contains "$cuda_architectures" "$capability"; then
+        ok "COMFY_CUDA_ARCH_LIST covers compute capability $capability"
       else
-        gpu_problem "CUSTOM_NODE_CUDA_ARCH_LIST=$custom_node_architectures does not cover compute capability $capability"
-      fi
-      if architecture_list_contains "$sage_architectures" "$capability"; then
-        ok "SageAttention CUDA architecture list covers compute capability $capability"
-      elif [[ "$sage_enabled" == true ]]; then
-        gpu_problem "SAGE_CUDA_ARCH_LIST=$sage_architectures does not cover compute capability $capability; update the Sage architecture list or rerun with --sage off"
-      else
-        warn "SAGE_CUDA_ARCH_LIST=$sage_architectures does not cover compute capability $capability; the Sage image is disabled"
+        gpu_problem "COMFY_CUDA_ARCH_LIST=$cuda_architectures does not cover compute capability $capability; add it to the list in .env"
       fi
     done <<< "$selected_capabilities"
   else
@@ -297,7 +288,7 @@ elif [[ "$selected_engine" == podman ]]; then
 else
   warn "no engine was selected, so CDI resolution of $requested_device was not probed; after fixing the engine, verify with: <engine> run --rm --device $requested_device <image> true"
 fi
-printf '       The CDI checks above inspect configuration only. Real device resolution is proven by: bash bin/latentcrate smoke-gpu <profile>, or by the first up.\n'
+printf '       The CDI checks above inspect configuration only. Real device resolution is proven by: bash bin/latentcrate smoke-gpu, or by the first up.\n'
 
 if [[ -f /usr/share/containers/oci/hooks.d/oci-nvidia-hook.json ]]; then
   warn 'NVIDIA OCI hook-based device injection detected; CDI-only operation is recommended'

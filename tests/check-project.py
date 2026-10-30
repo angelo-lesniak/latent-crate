@@ -11,12 +11,10 @@ string.
 
 from __future__ import annotations
 
-import ast
 import re
 import sys
 import tomllib
 from pathlib import Path
-from urllib.parse import urlsplit
 
 try:
     import yaml
@@ -29,36 +27,11 @@ except ImportError:
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# Version keys that must be pinned in every versions/*.env profile and must
-# not grow duplicate defaults in the Dockerfile or Compose file. When adding a
-# key, follow the "Adding a pinned version key" touch-list in CONTRIBUTING.md.
-VERSION_KEYS = {
-    "PYTORCH_DEVEL_IMAGE",
-    "PYTORCH_RUNTIME_IMAGE",
-    "COMFYUI_REF",
-    "COMFYUI_FRONTEND_REF",
-    "COMFY_FRONTEND_DIST_SHA256",
-    "FFMPEG_REF",
-    "NV_CODEC_HEADERS_REF",
-    "SVT_AV1_REF",
-    "SAGEATTENTION_REF",
-    "SAGE_CUDA_ARCH_LIST",
-    "SAGE_BUILD_JOBS",
-    "CUSTOM_NODE_CUDA_ARCH_LIST",
-    "CUDA_NPP_VERSION",
-    "TORCHCODEC_VERSION",
-    "TORCHCODEC_INDEX_URL",
-    "FRONTEND_NODE_IMAGE",
-    "FRONTEND_PNPM_VERSION",
-    "TOOL_PYTHON_IMAGE",
-    "CUDA_MIN_DRIVER_MAJOR",
-}
 # CUDA_MIN_DRIVER_MAJOR is a host-side doctor input, not an image build input,
-# so it is exempt from the "no duplicate build default" rules below.
-NON_BUILD_VERSION_KEYS = {"CUDA_MIN_DRIVER_MAJOR"}
+# so it is exempt from the build-argument rules in check_pins_single_source.
+NON_BUILD_PIN_KEYS = {"CUDA_MIN_DRIVER_MAJOR"}
 CLI_MODULES = (
     "lib/latentcrate/core.sh",
-    "lib/latentcrate/versions.sh",
     "lib/latentcrate/frontend.sh",
     "lib/latentcrate/node-deps.sh",
     "lib/latentcrate/nodes.sh",
@@ -204,100 +177,91 @@ def read_cli_sources() -> str:
     return "\n".join(sources)
 
 
-# --- Version profiles --------------------------------------------------------
+# --- Pins --------------------------------------------------------------------
 
 
-def check_version_profiles() -> None:
-    """Every version profile must pin the full key set and follow the
-    TorchCodec/Sage profile policy."""
-    profiles: dict[str, dict[str, str]] = {}
-    for path in sorted((ROOT / "versions").glob("*.env")):
-        values = parse_env(path)
-        profiles[path.stem] = values
-        missing = sorted(VERSION_KEYS - values.keys())
-        if missing:
-            fail(f"{path.relative_to(ROOT)} misses: {', '.join(missing)}")
-
-        if values["TORCHCODEC_VERSION"] and "+cu130" not in values["TORCHCODEC_VERSION"]:
-            fail(f"{path.relative_to(ROOT)} must select the CUDA 13 TorchCodec wheel explicitly")
-        if values["TORCHCODEC_VERSION"] and not values["CUDA_NPP_VERSION"].startswith("13."):
-            fail(f"{path.relative_to(ROOT)} must pin the CUDA 13 NPP runtime for TorchCodec")
-        if not values["TORCHCODEC_INDEX_URL"].startswith("https://download.pytorch.org/whl/"):
-            fail(f"{path.relative_to(ROOT)} uses an unexpected TorchCodec index")
-        if values.get("COMFY_BUILD_TARGET") != "runtime":
-            fail(f"{path.relative_to(ROOT)} must default to the runtime without Sage")
-        if values.get("LATENTCRATE_TAG") != path.stem:
-            fail(f"{path.relative_to(ROOT)} must default to its plain image tag")
-
-    if profiles.get("current", {}).get("TORCHCODEC_VERSION"):
-        fail("the default current profile must not enable edge-only TorchCodec")
-    if not profiles.get("edge", {}).get("TORCHCODEC_VERSION"):
-        fail("the edge profile must pin TorchCodec")
-
-
-def check_version_single_source() -> None:
-    """versions/*.env is the single source of pinned values: the Dockerfile
-    must not give versioned ARGs defaults, and Compose must not embed its own
-    non-empty fallback for any versioned variable."""
+def check_pins_single_source() -> None:
+    """pins.env is the only place a pinned value may live: every pin is a
+    Dockerfile ARG and a required comfy build argument, no Dockerfile ARG
+    carries a default, no Compose file gives a pin a fallback, the image and
+    target come from the wrapper, and every base image is pulled by its
+    pinned tag and digest."""
+    pins = parse_env(ROOT / "pins.env")
+    build_pins = set(pins) - NON_BUILD_PIN_KEYS
     dockerfile = read_text("services/comfy/Dockerfile")
-    for key in VERSION_KEYS - NON_BUILD_VERSION_KEYS:
-        if re.search(rf"^ARG {re.escape(key)}=", dockerfile, re.MULTILINE):
-            fail(
-                f"versioned ARG {key} has a duplicate Dockerfile default; "
-                "versions/*.env is the only place pinned values may live"
-            )
+    for match in re.finditer(r"^ARG ([A-Z0-9_]+)=", dockerfile, re.MULTILINE):
+        fail(f"Dockerfile ARG {match.group(1)} has a default; build inputs come from pins.env and .env only")
+    declared = set(re.findall(r"^ARG ([A-Z0-9_]+)$", dockerfile, re.MULTILINE))
+    for key in sorted(build_pins - declared):
+        fail(f"pin {key} is not declared as a Dockerfile build argument")
+    for match in re.finditer(r"^FROM (\S+)", dockerfile, re.MULTILINE):
+        image = match.group(1)
+        if "/" in image and not re.fullmatch(
+            r"\S+:\$\{[A-Z0-9_]+_TAG\}@sha256:\$\{[A-Z0-9_]+_DIGEST\}", image
+        ):
+            fail(f"base image must be pulled by a pinned tag and digest: {image}")
 
     compose = compose_document()
-    compose_strings = list(walk_strings(compose))
     comfy = compose_service(compose, "comfy")
-    default_image = "${LATENTCRATE_IMAGE:-latentcrate/comfy}:${LATENTCRATE_TAG:-current}"
-    if comfy.get("image") != default_image:
-        fail(f"the comfy service image must default to the non-Sage current tag ({default_image})")
-    if comfy.get("build", {}).get("target") != "${COMFY_BUILD_TARGET:-runtime}":
-        fail("the comfy service build target must default to the runtime without Sage (${COMFY_BUILD_TARGET:-runtime})")
-    for key in VERSION_KEYS - NON_BUILD_VERSION_KEYS:
-        pattern = re.compile(rf"\$\{{{re.escape(key)}:-([^}}]*)\}}")
-        for value in compose_strings:
-            for match in pattern.finditer(value):
-                if match.group(1):
-                    fail(
-                        f"versioned value {key} has a duplicate Compose default "
-                        f"({match.group(0)}); versions/*.env is the only place pinned values may live"
-                    )
-    comfy_build_args = comfy.get("build", {}).get("args") or {}
-    if "COMFY_FRONTEND_DIST_SHA256" not in comfy_build_args:
-        fail("the comfy service must pass COMFY_FRONTEND_DIST_SHA256 through to the image build so release archive verification stays wired")
+    if comfy.get("image") != "${LATENTCRATE_IMAGE:?set by bin/latentcrate}":
+        fail("the comfy service image must be the reference bin/latentcrate derives, without a fallback")
+    if comfy.get("build", {}).get("target") != "${COMFY_BUILD_TARGET:?set by bin/latentcrate}":
+        fail("the comfy service build target must be the one bin/latentcrate selects, without a fallback")
+    build_args = comfy.get("build", {}).get("args") or {}
+    for key in sorted(build_pins):
+        if build_args.get(key) != f"${{{key}:?pin it in pins.env}}":
+            fail(f"the comfy service must pass pin {key} as a required build argument")
+    for path in sorted(ROOT.glob("compose*.yaml")):
+        for value in walk_strings(load_yaml(path.name)):
+            for match in re.finditer(r"\$\{([A-Z0-9_]+):-([^}]*)\}", value):
+                if match.group(1) in pins and match.group(2):
+                    fail(f"pin {match.group(1)} has a Compose fallback in {path.name}: {match.group(0)}")
+    for relative in (
+        "bin/latentcrate",
+        *sorted(path.relative_to(ROOT).as_posix() for path in (ROOT / "lib/latentcrate").glob("*.sh")),
+        "services/comfy/Dockerfile",
+    ):
+        for match in re.finditer(r"\$\{([A-Z0-9_]+):-", read_text(relative)):
+            if match.group(1) in pins:
+                fail(f"pin {match.group(1)} has a fallback in {relative}: {match.group(0)}")
+
+
+def check_pin_families() -> None:
+    """The pins that name a CUDA family or a PyTorch release independently
+    must agree: the +cuNNN suffix of TORCHCODEC_VERSION and the major of
+    CUDA_NPP_VERSION follow the cudaNN.N of PYTORCH_RUNTIME_TAG, and
+    PYTORCH_DEVEL_TAG names the same release."""
+    pins = parse_env(ROOT / "pins.env")
+    cuda = re.search(r"-cuda(\d+)\.(\d+)-", pins.get("PYTORCH_RUNTIME_TAG", ""))
+    if (
+        cuda is None
+        or pins.get("TORCHCODEC_VERSION", "").rpartition("+")[2] != f"cu{cuda.group(1)}{cuda.group(2)}"
+        or pins.get("CUDA_NPP_VERSION", "").split(".", 1)[0] != cuda.group(1)
+        or pins.get("PYTORCH_DEVEL_TAG", "").removesuffix("-devel")
+        != pins["PYTORCH_RUNTIME_TAG"].removesuffix("-runtime")
+    ):
+        fail(
+            "PYTORCH_DEVEL_TAG, PYTORCH_RUNTIME_TAG, TORCHCODEC_VERSION, and CUDA_NPP_VERSION in "
+            "pins.env must name one PyTorch release and CUDA family; change the four pins together"
+        )
 
 
 # --- Dockerfile stage graph (deliberately text-based: the artifact is text) --
 
 
 def check_dockerfile_stage_graph() -> None:
-    """The image must expose the four runtime variants with the documented
-    inheritance: Git frontends never inherit the packaged release frontend,
-    Sage stages inherit their frontend stage, and the default target is the
-    release image without Sage."""
+    """The image exposes three targets with the documented inheritance: the
+    frontend target builds on the frontend-less runtime, the Sage target on
+    the frontend target, and a plain build gives the frontend target."""
     dockerfile = read_text("services/comfy/Dockerfile")
-    for stage in (
-        "runtime",
-        "runtime-sage",
-        "runtime-frontend-git",
-        "runtime-frontend-git-sage",
+    for edge in (
+        "FROM comfy-runtime-base AS comfy-runtime",
+        "FROM comfy-runtime AS runtime",
+        "FROM runtime AS runtime-sage",
+        "FROM runtime AS default",
     ):
-        if not re.search(rf"^FROM .+ AS {re.escape(stage)}$", dockerfile, re.MULTILINE):
-            fail(f"missing frontend/runtime target: {stage}")
-    if not re.search(r"^FROM runtime AS default$", dockerfile, re.MULTILINE):
-        fail("plain image builds must default to the release runtime without Sage (FROM runtime AS default)")
-    if not re.search(r"^FROM comfy-runtime AS runtime-frontend-git$", dockerfile, re.MULTILINE):
-        fail("Git frontend images must build from comfy-runtime so they never inherit the packaged release frontend")
-    if not re.search(r"^FROM runtime AS runtime-sage$", dockerfile, re.MULTILINE):
-        fail("release Sage images must build from runtime so they retain the packaged release frontend")
-    if not re.search(
-        r"^FROM runtime-frontend-git AS runtime-frontend-git-sage$",
-        dockerfile,
-        re.MULTILINE,
-    ):
-        fail("Git Sage images must build from runtime-frontend-git so they retain the packaged Git frontend")
+        if not re.search(rf"^{re.escape(edge)}$", dockerfile, re.MULTILINE):
+            fail(f"Dockerfile stage graph misses: {edge}")
 
 
 def check_dockerfile_cache_decoupling() -> None:
@@ -305,10 +269,9 @@ def check_dockerfile_cache_decoupling() -> None:
     must not reference frontend or Sage pins, so changing those pins cannot
     invalidate the common build cache."""
     dockerfile = read_text("services/comfy/Dockerfile")
-    common_runtime = dockerfile.split(
-        "FROM ${PYTORCH_RUNTIME_IMAGE} AS comfy-python-base", 1
-    )[1].split("FROM comfy-python-base AS comfy-runtime-base", 1)[0]
-    for unrelated_pin in ("COMFYUI_FRONTEND_REF", "SAGEATTENTION_REF", "SAGE_CUDA_ARCH_LIST"):
+    common_runtime = re.split(r"^FROM .+ AS comfy-python-base$", dockerfile, maxsplit=1, flags=re.MULTILINE)[1]
+    common_runtime = common_runtime.split("FROM comfy-python-base AS comfy-runtime-base", 1)[0]
+    for unrelated_pin in ("COMFYUI_FRONTEND_REF", "SAGEATTENTION_REF", "COMFY_CUDA_ARCH_LIST"):
         if unrelated_pin in common_runtime:
             fail(f"common runtime cache is coupled to unrelated pin: {unrelated_pin}")
 
@@ -323,7 +286,6 @@ def check_runtime_stage_arg_scope() -> None:
     )[1].split("\nFROM ", 1)[0]
     for name in (
         "COMFYUI_REF",
-        "CUSTOM_NODE_CUDA_ARCH_LIST",
         "CUDA_NPP_VERSION",
         "FFMPEG_REF",
         "NV_CODEC_HEADERS_REF",
@@ -397,48 +359,33 @@ def check_frontend_helper_services() -> None:
     if find_mount(build, "/output") is None:
         fail("the offline frontend-build service must receive the generated-output mount at /output")
 
-    release_pin = compose_service(compose, "frontend-release-pin")
-    require_service_hardening("frontend-release-pin", release_pin)
-    if release_pin.get("networks") != ["version-sources"]:
-        fail("the networked frontend release pin helper must use only the version-sources network")
-    for mount in release_pin.get("volumes") or []:
-        if isinstance(mount, dict) and mount.get("type") == "bind":
-            fail("the networked frontend release pin helper must not receive host bind mounts")
-
-    version_update = compose_service(compose, "version-update")
-    require_service_hardening("version-update", version_update)
-    version_update_args = (version_update.get("build") or {}).get("args") or {}
-    for required_arg in ("TOOL_PYTHON_IMAGE", "FRONTEND_NODE_IMAGE"):
-        if not version_update_args.get(required_arg):
-            fail(f"version-update build must pass required base-image argument {required_arg}")
-    if version_update.get("networks") != ["version-sources"]:
-        fail("the networked version update helper must use only the version-sources network")
-    for mount in version_update.get("volumes") or []:
-        if isinstance(mount, dict) and mount.get("type") == "bind":
-            fail("the networked version update helper must not receive host bind mounts")
-    networks = compose.get("networks") or {}
-    if "version-sources" not in networks or "default" not in networks:
-        fail("compose.yaml must define separate default and version-sources networks")
 
 
 # --- Build and runtime hardening ---------------------------------------------
 
 
 def check_node_deps_build_isolation() -> None:
-    """Generated custom-node requirement snapshots are build inputs, not
-    image content: they must be bind-mounted into a dedicated CUDA build
-    stage, and the runtime must consume only the CUDA-built packages."""
+    """The copied requirement tree is rewritten and compiled in a dedicated
+    CUDA build stage; the runtime consumes only the CUDA-built packages."""
     dockerfile = read_text("services/comfy/Dockerfile")
-    if "COPY build/custom-node-requirements" in dockerfile:
-        fail("generated requirement snapshots must not be copied into an image layer")
-    if "source=build/custom-node-requirements" not in dockerfile:
-        fail("generated requirement snapshots must be mounted into the install step")
-    if "FROM ${PYTORCH_DEVEL_IMAGE} AS node-deps-builder" not in dockerfile:
-        fail("third-party node wheels must build in the matching CUDA development image (node-deps-builder stage)")
+    builder = re.split(
+        r"^FROM \S+ AS node-deps-builder$", dockerfile, maxsplit=1, flags=re.MULTILINE
+    )
+    if len(builder) != 2 or not re.search(
+        r"^FROM docker\.io/pytorch/pytorch:\$\{PYTORCH_DEVEL_TAG\}@sha256:\$\{PYTORCH_DEVEL_DIGEST\} AS node-deps-builder$",
+        dockerfile,
+        re.MULTILINE,
+    ):
+        fail("third-party node wheels must build in the pinned CUDA development image (node-deps-builder stage)")
+    builder_stage = re.split(r"^FROM ", builder[1], maxsplit=1, flags=re.MULTILINE)[0]
+    if dockerfile.count("COPY build/custom-node-requirements") != 1 or "COPY build/custom-node-requirements" not in builder_stage:
+        fail("the requirement tree must enter the node-deps-builder stage only")
+    rewrite = builder_stage.find("rewrite-node-requirements.py /tmp/custom-node-requirements")
+    build = builder_stage.find("&& /usr/local/bin/latentcrate-build-node-deps")
+    if rewrite < 0 or build < 0 or rewrite > build:
+        fail("node-deps-builder must rewrite the requirement tree before building wheels from it")
     if "from=node-deps-builder" not in dockerfile:
         fail("the runtime must consume the CUDA-built third-party node packages from node-deps-builder")
-    if "latentcrate-pip-node-${CUSTOM_NODE_CACHE_KEY}" not in dockerfile:
-        fail("custom-node pip caches must be namespaced by snapshot and toolchain inputs (CUSTOM_NODE_CACHE_KEY)")
     if "comfy-environment-constraints.txt" not in dockerfile:
         fail("custom-node resolution must use the resolved ComfyUI environment constraints")
     if "test ! -e /usr/local/cuda/bin/nvcc" not in dockerfile:
@@ -548,12 +495,16 @@ def check_media_stack() -> None:
 
 
 def check_torchcodec_pinning() -> None:
-    """TorchCodec must install from the selected version profile and extract
+    """TorchCodec must install from the pinned version and extract
     its pinned CUDA NPP runtime dependencies from the CUDA devel image."""
     dockerfile = read_text("services/comfy/Dockerfile")
     if "torchcodec==${TORCHCODEC_VERSION}" not in dockerfile:
-        fail("TorchCodec must be installed from the selected version profile")
-    if "FROM ${PYTORCH_DEVEL_IMAGE} AS torchcodec-runtime-libs" not in dockerfile:
+        fail("TorchCodec must be installed from the pinned TORCHCODEC_VERSION")
+    if not re.search(
+        r"^FROM docker\.io/pytorch/pytorch:\$\{PYTORCH_DEVEL_TAG\}@sha256:\$\{PYTORCH_DEVEL_DIGEST\} AS torchcodec-runtime-libs$",
+        dockerfile,
+        re.MULTILINE,
+    ):
         fail("TorchCodec must extract its pinned CUDA NPP runtime dependencies (torchcodec-runtime-libs stage)")
     if "for library in nppc nppicc" not in dockerfile:
         fail("TorchCodec runtime extraction must cover both NPP libraries (nppc and nppicc)")
@@ -577,44 +528,6 @@ def check_image_metadata() -> None:
     ):
         if f"/usr/local/share/latentcrate/{private_record}" in dockerfile:
             fail(f"final image discloses detailed custom-node metadata: {private_record}")
-
-
-def check_release_frontend_installer() -> None:
-    """Release frontends must install from the exact release asset URL and
-    never depend on the anonymous GitHub API."""
-    dockerfile = read_text("services/comfy/Dockerfile")
-    release_installer_text = read_text("services/comfy/install-release-frontend.py")
-    release_installer_tree = ast.parse(
-        release_installer_text,
-        filename="services/comfy/install-release-frontend.py",
-    )
-    top_level_strings = {
-        target.id: statement.value.value
-        for statement in release_installer_tree.body
-        if isinstance(statement, ast.Assign)
-        and isinstance(statement.value, ast.Constant)
-        and isinstance(statement.value.value, str)
-        for target in statement.targets
-        if isinstance(target, ast.Name)
-    }
-    expected_template = (
-        "https://github.com/{owner}/{repo}/releases/download/{tag}/dist.zip"
-    )
-    if top_level_strings.get("RELEASE_ASSET_URL_TEMPLATE") != expected_template:
-        fail("release frontends must use the exact release asset URL")
-
-    referenced_hosts = {
-        parsed.hostname
-        for node in ast.walk(release_installer_tree)
-        if isinstance(node, ast.Constant)
-        and isinstance(node.value, str)
-        for parsed in (urlsplit(node.value),)
-        if parsed.hostname is not None
-    }
-    if any(host == "api.github.com" for host in referenced_hosts):
-        fail("release frontend builds must not depend on the anonymous GitHub API")
-    if "FrontendManager.init_frontend_unsafe" in dockerfile:
-        fail("release frontend builds must not depend on the anonymous GitHub API")
 
 
 def check_manager_defaults() -> None:
@@ -692,13 +605,13 @@ def check_comfy_service_hardened() -> None:
     if local_nodes is None or local_nodes.get("read_only") is not True:
         fail("local-only custom nodes must be mounted read-only at /local/custom_nodes")
     environment = comfy.get("environment") or {}
-    for variable, expected in (
-        ("COMFY_DISABLE_API_NODES", "${COMFY_DISABLE_API_NODES:-false}"),
-        ("COMFY_DISABLE_METADATA", "${COMFY_DISABLE_METADATA:-false}"),
-        ("LATENTCRATE_SAGE_MODE", "${LATENTCRATE_SAGE_MODE:-off}"),
+    for variable, setting in (
+        ("COMFY_DISABLE_API_NODES", "COMFY_DISABLE_API_NODES"),
+        ("COMFY_DISABLE_METADATA", "COMFY_DISABLE_METADATA"),
+        ("LATENTCRATE_SAGE_MODE", "LATENTCRATE_SAGE"),
     ):
-        if environment.get(variable) != expected:
-            fail(f"ComfyUI environment must pass {variable} through with default {expected}")
+        if not re.fullmatch(rf"\$\{{{setting}:\?[^}}]*\}}", str(environment.get(variable, ""))):
+            fail(f"ComfyUI environment must pass {variable} through from the required setting {setting}")
 
 
 def check_env_example_defaults() -> None:
@@ -729,54 +642,6 @@ def check_excluded_default_features() -> None:
             fail(f"excluded default feature is present: {excluded}")
     if re.search(r"^\s*sox(?:\s|\\|$)", dockerfile, re.MULTILINE | re.IGNORECASE):
         fail("SoX must not be added to the default image")
-
-
-def check_tools_image_targets() -> None:
-    """Custom-node snapshots and sets must have containerized tool targets."""
-    tools_dockerfile = read_text("services/tools/Dockerfile")
-    if "node-deps-tool" not in tools_dockerfile:
-        fail("third-party node dependency snapshots must have a containerized tool target (node-deps-tool)")
-    if "node-set-tool" not in tools_dockerfile:
-        fail("custom-node sets must use their containerized installer (node-set-tool)")
-    if "model-set-tool" not in tools_dockerfile:
-        fail("model sets must use their containerized downloader (model-set-tool)")
-    if "frontend-release-tool" not in tools_dockerfile:
-        fail("frontend release digests must use their containerized helper (frontend-release-tool)")
-    if "version-update-tool" not in tools_dockerfile:
-        fail("version resolution must use its containerized helper (version-update-tool)")
-    if not (ROOT / "scripts" / "verify-model-set-metadata.py").is_file():
-        fail("model-set maintainers need the remote metadata verifier")
-
-    compose = compose_document()
-    for service_name in ("frontend-fetch", "frontend-build"):
-        work_mount = find_mount(compose_service(compose, service_name), "/work")
-        if work_mount is None or work_mount.get("type") != "bind" or not work_mount.get("source"):
-            fail(f"{service_name} must use an explicit host-cache work mount for podman-compose")
-    static_workflow = load_yaml(".github/workflows/static.yml")
-    workflow_text = "\n".join(walk_strings(static_workflow))
-    for model_tool_contract in ("--target model-set-tool", "fetch --token-stdin hf-smoke", "status hf-smoke"):
-        if model_tool_contract not in workflow_text:
-            fail(f"static CI must build and run the model-set helper: {model_tool_contract}")
-    for frontend_release_contract in (
-        "--target frontend-release-tool",
-        'digest "$COMFYUI_FRONTEND_REF"',
-        '"$frontend_digest" == "COMFY_FRONTEND_DIST_SHA256=$COMFY_FRONTEND_DIST_SHA256"',
-    ):
-        if frontend_release_contract not in workflow_text:
-            fail(
-                "static CI must build and verify the frontend release helper: "
-                f"{frontend_release_contract}"
-            )
-    for version_update_contract in (
-        "--target version-update-tool",
-        "latentcrate/version-update-test",
-        "list | grep -Fxq torchcodec",
-    ):
-        if version_update_contract not in workflow_text:
-            fail(
-                "static CI must build and run the version update helper: "
-                f"{version_update_contract}"
-            )
 
 
 def check_node_deps_snapshot_service() -> None:
@@ -948,7 +813,7 @@ def check_cli_engine_and_remote_guard() -> None:
         fail("the wrapper must require explicit acknowledgement (COMFY_ALLOW_REMOTE) for remote binding")
     if "running_service_container_ids" not in cli:
         fail("service state checks must use the shared engine-label helper")
-    for unsupported_ps in ("ps --quiet comfy", "ps -q comfy", '"$PROFILE" ps comfy'):
+    for unsupported_ps in ("ps --quiet comfy", "ps -q comfy"):
         if unsupported_ps in cli:
             fail(f"service state checks use provider-specific Compose syntax: {unsupported_ps}")
     if "podman-compose==1.6.0" not in read_text("requirements-dev.txt"):
@@ -962,7 +827,6 @@ def check_cli_node_workflows() -> None:
     host Python), the node-set workflows must exist, and removed
     dependency-refresh controls must not resurface."""
     cli = read_cli_sources()
-    compose_text = read_text("compose.yaml")
     env_example = read_text(".env.example")
     snapshot_function = cli.split("snapshot_node_dependencies()", 1)[1].split(
         "clear_node_dependencies()", 1
@@ -971,14 +835,10 @@ def check_cli_node_workflows() -> None:
         fail("custom-node snapshots must not invoke host Python")
     if "node-deps-snapshot" not in snapshot_function:
         fail("custom-node snapshots must run through the node-deps-snapshot helper container")
-    if 'compose_tool()' not in cli or 'compose "$engine" "$profile" --profile tools "$@"' not in cli:
+    if 'compose_tool()' not in cli or 'compose "$engine" --profile tools "$@"' not in cli:
         fail("containerized helper services must explicitly enable the tools Compose profile")
-    if "${CUSTOM_NODE_CACHE_KEY:-not-used}" not in compose_text:
-        fail("helper commands must render without preparing a custom-node cache key")
     tool_services = (
         "node-deps-snapshot",
-        "frontend-release-pin",
-        "version-update",
         "node-set",
         "node-set-status",
         "model-set",
@@ -989,29 +849,14 @@ def check_cli_node_workflows() -> None:
         "frontend-build",
     )
     for line in cli.splitlines():
-        if 'compose "$engine" "$profile"' in line and any(
+        if 'compose "$engine"' in line and any(
             f" {service}" in line for service in tool_services
         ):
             fail(f"helper service bypasses compose_tool: {line.strip()}")
-    frontend_pin_function = cli.split("pin_frontend_release()", 1)[1].split(
-        "prepare_frontend_mode()", 1
-    )[0]
-    if "frontend-release-pin" not in frontend_pin_function:
-        fail("frontend release digests must run through the frontend-release-pin helper")
-    if "compose_tool" not in frontend_pin_function:
-        fail("frontend release digest generation must use compose_tool")
-    if "python" in frontend_pin_function.lower():
-        fail("frontend release pinning must not require host Python")
-    version_update_function = read_text("lib/latentcrate/versions.sh")
-    if "version-update" not in version_update_function or "compose_tool" not in version_update_function:
-        fail("version updates must run through the version-update helper via compose_tool")
-    if re.search(r"(^|[;&|]\s*)python[0-9]*\s", version_update_function, re.MULTILINE):
-        fail("version updates must not require host Python")
     for node_contract in (
         "nodes install",
         "nodes sync",
         "nodes status",
-        "--use-saved-node-deps",
         "models fetch",
         "models status",
         "--model-set",
@@ -1020,8 +865,6 @@ def check_cli_node_workflows() -> None:
     ):
         if node_contract not in cli:
             fail(f"custom-node CLI workflow is missing: {node_contract}")
-    if "REFRESH_NODE_DEPS=true" not in cli:
-        fail("third-party node dependency refresh must default to enabled")
     for removed_refresh_control in (
         "--refresh-node-deps",
         "LATENTCRATE_REFRESH_NODE_DEPS",
@@ -1044,9 +887,9 @@ def check_sage_quarantine() -> None:
         "--mount=type=bind,from=sage-builder,source=/wheels,"
         "target=/tmp/sage-wheels,readonly"
     )
-    if dockerfile.count(sage_wheel_mount) != 2:
-        fail("both Sage targets must install the wheel through a temporary read-only build mount")
-    for sage_stage in ("FROM runtime AS runtime-sage", "FROM runtime-frontend-git AS runtime-frontend-git-sage"):
+    if dockerfile.count(sage_wheel_mount) != 1:
+        fail("the Sage target must install the wheel through a temporary read-only build mount")
+    for sage_stage in ("FROM runtime AS runtime-sage",):
         section = dockerfile.split(sage_stage, 1)[1]
         section = re.split(r"^FROM ", section, maxsplit=1, flags=re.MULTILINE)[0]
         install_split = section.split("latentcrate-install-sage", 1)
@@ -1078,99 +921,12 @@ def check_gpu_smoke_expectations() -> None:
         "LATENTCRATE_EXPECT_SAGEATTENTION_REF",
         "LATENTCRATE_EXPECT_SAGE_CUDA_ARCH_LIST",
         "LATENTCRATE_EXPECT_SVT_AV1_REF",
-        "LATENTCRATE_EXPECT_TORCHCODEC_ENABLED",
         "LATENTCRATE_EXPECT_TORCHCODEC_VERSION",
     ):
         if expected not in smoke:
             fail(f"GPU verification does not assert the requested build record: {expected}")
     if "nvenc_smoke_size=1920x1080" not in smoke:
         fail("GPU verification must use a cross-generation-safe NVENC frame size")
-
-
-# --- CI workflow -------------------------------------------------------------
-
-
-def workflow_build_steps(workflow: dict) -> list[tuple[str, dict]]:
-    steps: list[tuple[str, dict]] = []
-    for job_name, job in (workflow.get("jobs") or {}).items():
-        for step in job.get("steps") or []:
-            steps.append((job_name, step))
-    return steps
-
-
-def check_workflow_build_cache() -> None:
-    """Image builds must use the pinned Buildx/build-push actions with a
-    reusable cache that exports at mode=max but tolerates export errors, must
-    allow a configurable large runner, and must not load the final image into
-    the runner daemon."""
-    workflow = load_yaml(".github/workflows/build.yml")
-    jobs = workflow.get("jobs") or {}
-    if not jobs:
-        fail("image workflow defines no jobs")
-    push_steps: list[tuple[str, dict]] = []
-    for job_name, job in jobs.items():
-        if "LATENTCRATE_BUILD_RUNNER" not in str(job.get("runs-on", "")):
-            fail(f"large CUDA builds must allow a configurable CPU runner (job {job_name} ignores vars.LATENTCRATE_BUILD_RUNNER)")
-        uses = [step.get("uses", "") for step in job.get("steps") or []]
-        if not any(use.startswith("docker/setup-buildx-action@v4") for use in uses):
-            fail(f"job {job_name} must set up Buildx with docker/setup-buildx-action@v4")
-        for step in job.get("steps") or []:
-            if str(step.get("uses", "")).startswith("docker/build-push-action"):
-                push_steps.append((job_name, step))
-    if not push_steps:
-        fail("image workflow has no docker/build-push-action step")
-    for job_name, step in push_steps:
-        if not str(step.get("uses", "")).startswith("docker/build-push-action@v7"):
-            fail(f"job {job_name} must pin docker/build-push-action@v7")
-        with_block = step.get("with") or {}
-        if "cache-from" not in with_block or "cache-to" not in with_block:
-            fail(f"job {job_name} build must configure the reusable cache (cache-from/cache-to)")
-        cache_to = str(with_block.get("cache-to", ""))
-        if "mode=max" not in cache_to or "ignore-error=true" not in cache_to:
-            fail(f"job {job_name} cache export must use mode=max with ignore-error=true so cache problems never fail builds")
-        if with_block.get("load"):
-            fail(f"job {job_name} must not duplicate a large final image in the runner daemon (load: true)")
-        build_args = parse_build_args(str(with_block.get("build-args", "")))
-        if "COMFY_FRONTEND_DIST_SHA256" not in build_args:
-            fail(f"job {job_name} build-args must pass COMFY_FRONTEND_DIST_SHA256 so release archive verification stays wired")
-
-
-def parse_build_args(block: str) -> dict[str, str]:
-    values: dict[str, str] = {}
-    for line in block.splitlines():
-        line = line.strip()
-        if not line or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        values[key] = value
-    return values
-
-
-def check_workflow_frontend_ref_delegation() -> None:
-    """The workflow must delegate variant/target mapping and frontend ref
-    resolution to scripts/resolve-frontend.sh, and that script must reject
-    option-like or whitespace-containing frontend references."""
-    workflow_text = read_text(".github/workflows/build.yml")
-    for delegation in (
-        "scripts/resolve-frontend.sh target",
-        "scripts/resolve-frontend.sh tag",
-        "scripts/resolve-frontend.sh ref",
-    ):
-        if delegation not in workflow_text:
-            fail(f"image workflow must delegate to the shared resolver: {delegation}")
-    resolver = read_text("scripts/resolve-frontend.sh")
-    if '"$requested" != -*' not in resolver or "[[:space:]]" not in resolver:
-        fail("scripts/resolve-frontend.sh must reject option-like or whitespace frontend refs")
-    if "^https://" not in resolver:
-        fail("scripts/resolve-frontend.sh must require HTTPS frontend Git URLs")
-
-
-def check_workflow_gpu_claims() -> None:
-    """Standard image-build CI runs without a GPU and must not claim GPU
-    runtime validation."""
-    workflow_text = read_text(".github/workflows/build.yml")
-    if "latentcrate-gpu-smoke" in workflow_text or "smoke-gpu" in workflow_text:
-        fail("standard image-build CI must not claim GPU runtime validation")
 
 
 # --- Documentation -----------------------------------------------------------
@@ -1194,8 +950,8 @@ def check_markdown_links() -> None:
 
 CHECKS = (
     check_yaml_duplicate_keys,
-    check_version_profiles,
-    check_version_single_source,
+    check_pins_single_source,
+    check_pin_families,
     check_dockerfile_stage_graph,
     check_dockerfile_cache_decoupling,
     check_runtime_stage_arg_scope,
@@ -1210,14 +966,12 @@ CHECKS = (
     check_media_stack,
     check_torchcodec_pinning,
     check_image_metadata,
-    check_release_frontend_installer,
     check_manager_defaults,
     check_entrypoint_privacy,
     check_entrypoint_sage_contract,
     check_comfy_service_hardened,
     check_env_example_defaults,
     check_excluded_default_features,
-    check_tools_image_targets,
     check_node_deps_snapshot_service,
     check_node_set_services_hardened,
     check_model_set_services_hardened,
@@ -1228,9 +982,6 @@ CHECKS = (
     check_cli_node_workflows,
     check_sage_quarantine,
     check_gpu_smoke_expectations,
-    check_workflow_build_cache,
-    check_workflow_frontend_ref_delegation,
-    check_workflow_gpu_claims,
     check_markdown_links,
 )
 

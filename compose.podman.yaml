@@ -1,7 +1,9 @@
+# Rootless Podman maps the host user into the container with keep-id so
+# bind-mounted files keep their ownership. Docker needs only `user:`, which
+# compose.yaml sets.
 services:
   comfy:
-    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
-    userns_mode: "keep-id:uid=${HOST_UID:-1000},gid=${HOST_GID:-1000}"
+    userns_mode: "keep-id:uid=${HOST_UID:?set by bin/latentcrate},gid=${HOST_GID:?set by bin/latentcrate}"
     group_add:
       - keep-groups
   node-deps-snapshot:

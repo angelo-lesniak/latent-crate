@@ -39,15 +39,18 @@ expect_entrypoint_rejection() {
   fi
 }
 
-expect_entrypoint_rejection 'git mode on release image' \
-  'requested frontend mode git does not match image mode release' \
+expect_entrypoint_rejection 'git mode on an image without a frontend' \
+  'frontend mode git needs an image with a built-in frontend' \
   COMFY_FRONTEND_MODE=git
-expect_entrypoint_rejection 'release mode on git image' \
-  'requested frontend mode release does not match image mode git' \
-  COMFY_FRONTEND_MODE=release LATENTCRATE_FRONTEND_IMAGE_MODE=git
+expect_entrypoint_rejection 'unset mode on an image without a frontend' \
+  'frontend mode git needs an image with a built-in frontend'
+expect_entrypoint_rejection 'release mode on an image without a frontend' \
+  'frontend mode release needs an image with a built-in frontend' \
+  COMFY_FRONTEND_MODE=release
 expect_entrypoint_rejection 'image mode with a foreign root' \
   'image frontend mode must use /opt/latentcrate-frontend' \
-  COMFY_FRONTEND_MODE=release COMFY_FRONTEND_ROOT=/somewhere/else
+  COMFY_FRONTEND_MODE=release LATENTCRATE_FRONTEND_IMAGE_MODE=git \
+  COMFY_FRONTEND_ROOT=/somewhere/else
 expect_entrypoint_rejection 'dist mode without the fixed mount' \
   'dist frontend mode must use the read-only mount at /opt/latentcrate-frontend-dist' \
   COMFY_FRONTEND_MODE=dist
