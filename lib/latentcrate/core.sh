@@ -211,6 +211,12 @@ running_service_container_ids() {
 compose() {
   local engine=$1
   shift
+  # Every render interpolates the comfy service, so a command that only runs
+  # a helper service derives the image and target here, offline.
+  if [[ -z "${COMFY_BUILD_TARGET:-}" ]]; then
+    set_default_sage_variant
+    RESOLVE_FRONTEND_REF=false configure_variant "$SAGE_MODE"
+  fi
   local files=(
     --file compose.yaml
     --file "compose.${engine}.yaml"

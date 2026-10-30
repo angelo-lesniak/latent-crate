@@ -123,9 +123,18 @@ template_draft=$(CONTAINER_ENGINE=docker \
 [[ "$template_draft" == *'build comfy'* ]]
 [[ "$template_draft" == *'template-draft create-model-set video_minimax_h3_i2v --name minimax-h3-i2v-draft'* ]]
 
-node_set_install=$(CONTAINER_ENGINE=docker \
+# Helper-service commands render the comfy image and target without
+# resolving the frontend reference; the fake git records any call.
+resolver_record="$PROJECT_ROOT/build/cli-test-resolver-record"
+rm -f -- "$resolver_record"
+node_set_install=$(CONTAINER_ENGINE=docker FAKE_GIT_RECORD_FILE="$resolver_record" \
   bash bin/latentcrate nodes install latent-nodepack)
 [[ "$node_set_install" == *'build node-set'* ]]
+[[ "$node_set_install" == *'target=runtime mode=release sage=off image=latentcrate/comfy:release-'* ]]
+node_set_status=$(CONTAINER_ENGINE=docker FAKE_GIT_RECORD_FILE="$resolver_record" \
+  bash bin/latentcrate nodes status latent-nodepack)
+[[ "$node_set_status" == *'run --rm --no-deps node-set-status'* ]]
+[[ "$node_set_status" == *'target=runtime mode=release sage=off image=latentcrate/comfy:release-'* ]]
 
 if running_node_output=$(CONTAINER_ENGINE=docker \
     FAKE_DOCKER_COMFY_RUNNING=true \
@@ -145,10 +154,12 @@ status_output=$(CONTAINER_ENGINE=docker \
   bash bin/latentcrate status)
 [[ "$status_output" == *' ps'* ]]
 
-model_status=$(CONTAINER_ENGINE=docker \
+model_status=$(CONTAINER_ENGINE=docker FAKE_GIT_RECORD_FILE="$resolver_record" \
   bash bin/latentcrate models status krea2-t2i-int8)
 [[ "$model_status" == *'build model-set-status'* ]]
 [[ "$model_status" == *'run --rm --no-deps -T model-set-status status krea2-t2i-int8'* ]]
+[[ "$model_status" == *'target=runtime mode=release sage=off image=latentcrate/comfy:release-'* ]]
+[[ ! -e "$resolver_record" ]] || { printf 'cli test: a helper-service command resolved the frontend reference\n' >&2; exit 1; }
 
 model_fetch=$(CONTAINER_ENGINE=docker HF_TOKEN=secret-fixture \
   bash bin/latentcrate models fetch flux2-klein-9b-distilled minimax-h3-r2v)
