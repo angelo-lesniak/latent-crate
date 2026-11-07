@@ -114,8 +114,9 @@ bash bin/latentcrate up edge \
   --detach
 ```
 
-LatentCrate builds a small tool image from the selected profile's
-`FRONTEND_NODE_IMAGE` and `FRONTEND_PNPM_VERSION`. The source checkout is mounted
+LatentCrate builds a small tool image from the Node image that
+`FRONTEND_NODE_TAG` and `FRONTEND_NODE_DIGEST` pin in `pins.env`, with
+`FRONTEND_PNPM_VERSION`. The source checkout is mounted
 read-only into two temporary containers:
 
 1. `frontend-fetch` runs a frozen pnpm install with registry access and

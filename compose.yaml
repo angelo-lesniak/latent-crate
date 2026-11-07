@@ -6,6 +6,15 @@ name: "${COMPOSE_PROJECT_NAME:?exported by bin/latentcrate from .env}"
 # exports each on every Compose call. `?` rather than `:?` marks a value
 # that is empty by design.
 
+# Build arguments of services/tools/Dockerfile, passed whole to every
+# service that builds one of its targets.
+x-tools-build-args: &tools-build-args
+  TOOL_PYTHON_TAG: "${TOOL_PYTHON_TAG:?pin it in pins.env}"
+  TOOL_PYTHON_DIGEST: "${TOOL_PYTHON_DIGEST:?pin it in pins.env}"
+  FRONTEND_NODE_TAG: "${FRONTEND_NODE_TAG:?pin it in pins.env}"
+  FRONTEND_NODE_DIGEST: "${FRONTEND_NODE_DIGEST:?pin it in pins.env}"
+  FRONTEND_PNPM_VERSION: "${FRONTEND_PNPM_VERSION:?pin it in pins.env}"
+
 # Shared configuration for the node-set and node-set-status services. The
 # services below merge this block and override only their real differences:
 # networking, the writability of the /nodes mount, and the command.
@@ -16,6 +25,7 @@ x-node-set-common: &node-set-common
     context: .
     dockerfile: services/tools/Dockerfile
     target: node-set-tool
+    args: *tools-build-args
   read_only: true
   pids_limit: 128
   cap_drop: ["ALL"]
@@ -49,6 +59,7 @@ x-model-set-common: &model-set-common
     context: .
     dockerfile: services/tools/Dockerfile
     target: model-set-tool
+    args: *tools-build-args
   read_only: true
   pids_limit: 128
   cap_drop: ["ALL"]
@@ -175,6 +186,7 @@ services:
       context: .
       dockerfile: services/tools/Dockerfile
       target: node-deps-tool
+      args: *tools-build-args
     network_mode: none
     read_only: true
     pids_limit: 128
@@ -302,8 +314,7 @@ services:
       context: .
       dockerfile: services/tools/Dockerfile
       target: frontend-local-tool
-      args:
-        FRONTEND_PNPM_VERSION: "${FRONTEND_PNPM_VERSION:?pin it in pins.env}"
+      args: *tools-build-args
     read_only: true
     pids_limit: 256
     cap_drop: ["ALL"]
@@ -331,8 +342,7 @@ services:
       context: .
       dockerfile: services/tools/Dockerfile
       target: frontend-local-tool
-      args:
-        FRONTEND_PNPM_VERSION: "${FRONTEND_PNPM_VERSION:?pin it in pins.env}"
+      args: *tools-build-args
     network_mode: none
     read_only: true
     pids_limit: 512

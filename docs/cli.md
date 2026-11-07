@@ -410,9 +410,9 @@ there is no implicit `current` for a command that writes a checked-in file.
 | `svt-av1` | `SVT_AV1_REF` | Latest stable GitLab release |
 | `sageattention` | `SAGEATTENTION_REF` | Latest stable SageAttention tag |
 | `pytorch` | `PYTORCH_DEVEL_IMAGE`, `PYTORCH_RUNTIME_IMAGE` | Latest complete image pair in the existing CUDA/cuDNN family |
-| `node` | `FRONTEND_NODE_IMAGE` | Latest stable Docker Hub tag with the existing suffix and version granularity |
+| `node` | `FRONTEND_NODE_TAG`, `FRONTEND_NODE_DIGEST` | Latest stable Docker Hub tag with the existing suffix and version granularity |
 | `pnpm` | `FRONTEND_PNPM_VERSION` | npm's stable `latest` version |
-| `tool-python` | `TOOL_PYTHON_IMAGE` | Latest stable Docker Hub tag with the existing suffix and version granularity |
+| `tool-python` | `TOOL_PYTHON_TAG`, `TOOL_PYTHON_DIGEST` | Latest stable Docker Hub tag with the existing suffix and version granularity |
 | `torchcodec` | `TORCHCODEC_VERSION` | Latest version with the existing build suffix from `TORCHCODEC_INDEX_URL`; an empty pin stays disabled |
 
 For GitHub tag-backed components, "stable" means that the tag matches the

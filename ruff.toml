@@ -1,0 +1,6 @@
+# Lint and format gate for the Python package and its tests.
+target-version = "py311"
+line-length = 120
+
+[lint]
+select = ["E", "F", "W", "I", "UP", "B", "RUF100"]

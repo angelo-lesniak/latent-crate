@@ -1,7 +1,16 @@
 # syntax=docker/dockerfile:1
 
+# Each base image tag and its manifest digest are required build arguments
+# (pins.env); the digest is what the build pulls.
+ARG TOOL_PYTHON_TAG
+ARG TOOL_PYTHON_DIGEST
+ARG FRONTEND_NODE_TAG
+ARG FRONTEND_NODE_DIGEST
+ARG FRONTEND_PNPM_VERSION
 
-FROM docker.io/library/python:3.14-slim-bookworm@sha256:516b51cb9db2ef061e465c803e50f64361b82cefd91e525b889b967b83e83527 AS node-deps-tool
+
+# hadolint ignore=DL3006
+FROM docker.io/library/python:${TOOL_PYTHON_TAG}@sha256:${TOOL_PYTHON_DIGEST} AS node-deps-tool
 
 LABEL org.opencontainers.image.title="LatentCrate custom-node snapshot tool" \
       org.opencontainers.image.description="Creates reviewed third-party node dependency snapshots without host Python"
@@ -13,7 +22,8 @@ COPY scripts/snapshot-node-deps.py /usr/local/bin/latentcrate-snapshot-node-deps
 ENTRYPOINT ["python", "/usr/local/bin/latentcrate-snapshot-node-deps.py"]
 
 
-FROM docker.io/library/python:3.14-slim-bookworm@sha256:516b51cb9db2ef061e465c803e50f64361b82cefd91e525b889b967b83e83527 AS node-set-tool
+# hadolint ignore=DL3006
+FROM docker.io/library/python:${TOOL_PYTHON_TAG}@sha256:${TOOL_PYTHON_DIGEST} AS node-set-tool
 
 LABEL org.opencontainers.image.title="LatentCrate custom-node set tool" \
       org.opencontainers.image.description="Installs reviewed custom-node repositories at exact commits"
@@ -34,7 +44,8 @@ ENTRYPOINT ["python", "/usr/local/bin/latentcrate-manage-node-set.py"]
 
 # Download pinned Hugging Face model files without requiring host Python.
 # The hf_xet extra keeps large-file transfers resumable and efficient.
-FROM docker.io/library/python:3.14-slim-bookworm@sha256:516b51cb9db2ef061e465c803e50f64361b82cefd91e525b889b967b83e83527 AS model-set-tool
+# hadolint ignore=DL3006
+FROM docker.io/library/python:${TOOL_PYTHON_TAG}@sha256:${TOOL_PYTHON_DIGEST} AS model-set-tool
 
 LABEL org.opencontainers.image.title="LatentCrate model-set tool" \
       org.opencontainers.image.description="Downloads and verifies pinned Hugging Face model files"
@@ -54,7 +65,8 @@ ENV HF_HUB_DISABLE_TELEMETRY=1 \
 ENTRYPOINT ["python", "/usr/local/bin/latentcrate-manage-model-sets.py"]
 
 
-FROM docker.io/library/node:26-bookworm-slim@sha256:88e480776c6149ff1d098cd304f44bf18057fb5d284a3329b78162d29821e28c AS frontend-local-tool
+# hadolint ignore=DL3006
+FROM docker.io/library/node:${FRONTEND_NODE_TAG}@sha256:${FRONTEND_NODE_DIGEST} AS frontend-local-tool
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 

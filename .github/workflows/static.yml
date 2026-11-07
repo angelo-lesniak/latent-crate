@@ -38,7 +38,16 @@ jobs:
       - name: Build and verify the model-set helper
         run: |
           set -Eeuo pipefail
+          # The Dockerfile's base images are build arguments from pins.env.
+          set -a
+          . ./pins.env
+          set +a
           docker build \
+            --build-arg TOOL_PYTHON_TAG \
+            --build-arg TOOL_PYTHON_DIGEST \
+            --build-arg FRONTEND_NODE_TAG \
+            --build-arg FRONTEND_NODE_DIGEST \
+            --build-arg FRONTEND_PNPM_VERSION \
             --target model-set-tool \
             --tag latentcrate/model-set-test \
             --file services/tools/Dockerfile \

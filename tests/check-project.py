@@ -181,25 +181,29 @@ def read_cli_sources() -> str:
 
 
 def check_pins_single_source() -> None:
-    """pins.env is the only place a pinned value may live: every pin is a
-    Dockerfile ARG and a required comfy build argument, no Dockerfile ARG
-    carries a default, no Compose file gives a pin a fallback, the image and
-    target come from the wrapper, and every base image is pulled by its
-    pinned tag and digest."""
+    """pins.env is the only place a pinned value may live: every pin is an
+    ARG of a Dockerfile under services/, every service that builds a
+    Dockerfile passes each pin it declares as a required build argument, no
+    Dockerfile ARG carries a default, no Compose file gives a pin a fallback,
+    the comfy image and target come from the wrapper, and every base image is
+    pulled by its pinned tag and digest."""
     pins = parse_env(ROOT / "pins.env")
     build_pins = set(pins) - NON_BUILD_PIN_KEYS
-    dockerfile = read_text("services/comfy/Dockerfile")
-    for match in re.finditer(r"^ARG ([A-Z0-9_]+)=", dockerfile, re.MULTILINE):
-        fail(f"Dockerfile ARG {match.group(1)} has a default; build inputs come from pins.env and .env only")
-    declared = set(re.findall(r"^ARG ([A-Z0-9_]+)$", dockerfile, re.MULTILINE))
-    for key in sorted(build_pins - declared):
-        fail(f"pin {key} is not declared as a Dockerfile build argument")
-    for match in re.finditer(r"^FROM (\S+)", dockerfile, re.MULTILINE):
-        image = match.group(1)
-        if "/" in image and not re.fullmatch(
-            r"\S+:\$\{[A-Z0-9_]+_TAG\}@sha256:\$\{[A-Z0-9_]+_DIGEST\}", image
-        ):
-            fail(f"base image must be pulled by a pinned tag and digest: {image}")
+    dockerfiles = sorted(path.relative_to(ROOT).as_posix() for path in ROOT.glob("services/*/Dockerfile"))
+    declared_by: dict[str, set[str]] = {}
+    for relative in dockerfiles:
+        dockerfile = read_text(relative)
+        for match in re.finditer(r"^ARG ([A-Z0-9_]+)=", dockerfile, re.MULTILINE):
+            fail(f"{relative} ARG {match.group(1)} has a default; build inputs come from pins.env and .env only")
+        declared_by[relative] = set(re.findall(r"^ARG ([A-Z0-9_]+)$", dockerfile, re.MULTILINE)) & build_pins
+        for match in re.finditer(r"^FROM (\S+)", dockerfile, re.MULTILINE):
+            image = match.group(1)
+            if "/" in image and not re.fullmatch(
+                r"\S+:\$\{[A-Z0-9_]+_TAG\}@sha256:\$\{[A-Z0-9_]+_DIGEST\}", image
+            ):
+                fail(f"{relative} base image must be pulled by a pinned tag and digest: {image}")
+    for key in sorted(build_pins - set().union(*declared_by.values())):
+        fail(f"pin {key} is not declared as a build argument of any Dockerfile under services/")
 
     compose = compose_document()
     comfy = compose_service(compose, "comfy")
@@ -207,10 +211,14 @@ def check_pins_single_source() -> None:
         fail("the comfy service image must be the reference bin/latentcrate derives, without a fallback")
     if comfy.get("build", {}).get("target") != "${COMFY_BUILD_TARGET:?set by bin/latentcrate}":
         fail("the comfy service build target must be the one bin/latentcrate selects, without a fallback")
-    build_args = comfy.get("build", {}).get("args") or {}
-    for key in sorted(build_pins):
-        if build_args.get(key) != f"${{{key}:?pin it in pins.env}}":
-            fail(f"the comfy service must pass pin {key} as a required build argument")
+    for name, service in (compose.get("services") or {}).items():
+        build = service.get("build") or {}
+        if not isinstance(build, dict) or "dockerfile" not in build:
+            continue
+        build_args = build.get("args") or {}
+        for key in sorted(declared_by.get(build["dockerfile"], set())):
+            if build_args.get(key) != f"${{{key}:?pin it in pins.env}}":
+                fail(f"the {name} service must pass pin {key} of {build['dockerfile']} as a required build argument")
     for path in sorted(ROOT.glob("compose*.yaml")):
         for value in walk_strings(load_yaml(path.name)):
             for match in re.finditer(r"\$\{([A-Z0-9_]+):-([^}]*)\}", value):
@@ -219,7 +227,7 @@ def check_pins_single_source() -> None:
     for relative in (
         "bin/latentcrate",
         *sorted(path.relative_to(ROOT).as_posix() for path in (ROOT / "lib/latentcrate").glob("*.sh")),
-        "services/comfy/Dockerfile",
+        *dockerfiles,
     ):
         for match in re.finditer(r"\$\{([A-Z0-9_]+):-", read_text(relative)):
             if match.group(1) in pins:
