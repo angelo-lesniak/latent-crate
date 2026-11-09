@@ -16,8 +16,10 @@ SET_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 # Every manifest kind carries this schema number.
 SCHEMA = 1
 
-# A lowercase hex SHA-256, as the manifests spell it.
+# A lowercase hex SHA-256 and a lowercase full Git commit, as the manifests
+# spell them; Git output is lower-cased before it is matched.
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 # A relative path a manifest names: below its own directory, no `.` or `..`
 # segment, and only characters that survive a shell line unquoted, because
 # a model-set `destination` and a node directory name reach one.

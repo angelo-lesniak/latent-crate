@@ -306,7 +306,9 @@ class Settings:
 
     @property
     def host_model_gid(self) -> str:
-        value = self.values["HOST_MODEL_GID"]
+        value = self.values.get("HOST_MODEL_GID")
+        if value is None:
+            return str(os.getgid())
         if not value.isdigit():
             raise LatentCrateError("HOST_MODEL_GID must be a numeric group id")
         return value
@@ -360,7 +362,8 @@ class Settings:
         values, the shell environment on top, the pins removed (Compose
         reads pins.env through --env-file, and the shell would win over
         it), every key the wrapper defaults with its effective value, and
-        the calling user as the container identity. The token is in none
+        the calling user as the container identity (and, unset, as
+        HOST_MODEL_GID). The token is in none
         of those (`load` moved it into `hf_token`). Exporting the effective
         values keeps Compose from applying a default of its own."""
         env = dict(self.file_values)
@@ -372,6 +375,9 @@ class Settings:
         env["LATENTCRATE_ROOT"] = str(self.root)
         env["HOST_UID"] = str(os.getuid())
         env["HOST_GID"] = str(os.getgid())
+        # Docker maps no host group into the container, so the caller's
+        # group is the default model-storage group.
+        env.setdefault("HOST_MODEL_GID", env["HOST_GID"])
         env.update(extra)
         return env
 

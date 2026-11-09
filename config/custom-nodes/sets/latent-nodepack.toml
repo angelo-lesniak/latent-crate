@@ -1,4 +1,4 @@
-version = 1
+schema = 1
 description = "Pinned nodes for video, image, and general ComfyUI workflows"
 
 [[node]]

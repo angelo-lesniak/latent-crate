@@ -13,7 +13,6 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path, PurePosixPath
 from urllib.parse import unquote, urlsplit
 
-
 NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 REPOSITORY_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -57,9 +56,7 @@ def installed_assets() -> tuple[Path, dict[str, tuple[str, Path]], str]:
     try:
         from comfyui_workflow_templates_core import get_asset_path, iter_templates
     except ImportError as error:
-        raise TemplateError(
-            "the selected image does not contain the official ComfyUI template package"
-        ) from error
+        raise TemplateError("the selected image does not contain the official ComfyUI template package") from error
 
     workflows: dict[str, tuple[str, Path]] = {}
     index_path: Path | None = None
@@ -85,9 +82,7 @@ def installed_assets() -> tuple[Path, dict[str, tuple[str, Path]], str]:
     return index_path, workflows, package_version
 
 
-def local_templates(
-    index_document: object, workflows: dict[str, tuple[str, Path]]
-) -> list[Template]:
+def local_templates(index_document: object, workflows: dict[str, tuple[str, Path]]) -> list[Template]:
     if not isinstance(index_document, list):
         raise TemplateError("the installed template index must be a JSON array")
 
@@ -117,9 +112,7 @@ def local_templates(
                 continue
             if raw.get("status", "active") != "active":
                 continue
-            if distributions is not None and (
-                not isinstance(distributions, list) or "local" not in distributions
-            ):
+            if distributions is not None and (not isinstance(distributions, list) or "local" not in distributions):
                 continue
             # The package bundle is a stronger signal than a filename prefix.
             # A live /object_info check is still needed to prove every node is local.
@@ -143,9 +136,7 @@ def local_templates(
                     description=description.strip(),
                     media_type=media_type,
                     bundle=bundle,
-                    custom_nodes=tuple(
-                        item for item in custom_nodes if isinstance(item, str) and item
-                    ),
+                    custom_nodes=tuple(item for item in custom_nodes if isinstance(item, str) and item),
                     workflow_path=workflow_path,
                 )
             )
@@ -166,20 +157,11 @@ def print_templates(templates: list[Template], package_version: str) -> None:
     ]
     headers = ("TEMPLATE ID", "TYPE", "EXTRA NODES", "TITLE")
     widths = [max(len(headers[index]), *(len(row[index]) for row in rows)) for index in range(3)]
-    print(
-        f"{headers[0]:<{widths[0]}}  {headers[1]:<{widths[1]}}  "
-        f"{headers[2]:<{widths[2]}}  {headers[3]}"
-    )
+    print(f"{headers[0]:<{widths[0]}}  {headers[1]:<{widths[1]}}  {headers[2]:<{widths[2]}}  {headers[3]}")
     for row in rows:
-        print(
-            f"{row[0]:<{widths[0]}}  {row[1]:<{widths[1]}}  "
-            f"{row[2]:<{widths[2]}}  {row[3]}"
-        )
+        print(f"{row[0]:<{widths[0]}}  {row[1]:<{widths[1]}}  {row[2]:<{widths[2]}}  {row[3]}")
     print()
-    print(
-        f"{len(rows)} local-compatible template(s) from "
-        f"comfyui-workflow-templates {package_version}."
-    )
+    print(f"{len(rows)} local-compatible template(s) from comfyui-workflow-templates {package_version}.")
     print("This metadata check does not confirm that extra nodes or model files are installed.")
 
 
@@ -327,15 +309,13 @@ def render_draft(
                 + (
                     ""
                     if revision
-                    else " # TODO: replace the embedded "
-                    f"{comment_text(hint.revision_hint)!r} reference with a commit"
+                    else f" # TODO: replace the embedded {comment_text(hint.revision_hint)!r} reference with a commit"
                 ),
                 f"source = {toml_string(hint.source)}",
                 f"destination = {toml_string(hint.destination)}"
                 + (" # TODO: choose the ComfyUI model directory" if hint.destination.startswith("TODO/") else ""),
                 f"size = {hint.size}" + (" # TODO: exact byte size" if not hint.size else ""),
-                f"sha256 = {toml_string(hint.sha256)}"
-                + (" # TODO: lowercase SHA-256" if not hint.sha256 else ""),
+                f"sha256 = {toml_string(hint.sha256)}" + (" # TODO: lowercase SHA-256" if not hint.sha256 else ""),
             ]
         )
     if unsupported_urls:
@@ -369,9 +349,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="action", required=True)
     subparsers.add_parser("list", help="list local-compatible official templates")
-    create = subparsers.add_parser(
-        "create-model-set", help="create a reviewable model-set manifest draft"
-    )
+    create = subparsers.add_parser("create-model-set", help="create a reviewable model-set manifest draft")
     create.add_argument("template")
     create.add_argument("--name")
     create.add_argument("--output-dir", type=Path, default=Path("/output"))
@@ -396,8 +374,7 @@ def main() -> int:
         selected = next((item for item in templates if item.template_id == args.template), None)
         if selected is None:
             raise TemplateError(
-                f"unknown or non-local template: {args.template} "
-                "(run: bash bin/latentcrate templates list)"
+                f"unknown or non-local template: {args.template} (run: bash bin/latentcrate templates list)"
             )
         name = args.name or selected.template_id
         if NAME_RE.fullmatch(name) is None or name == "all":

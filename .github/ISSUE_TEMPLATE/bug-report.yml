@@ -16,11 +16,15 @@ body:
       description: Include the command, expected result, and actual result.
     validations:
       required: true
-  - type: input
-    id: profile
+  - type: textarea
+    id: pins
     attributes:
-      label: Version profile and frontend mode
-      placeholder: current, release
+      label: Pins and selection
+      description: >-
+        Paste the output of `bash bin/latentcrate pins` and
+        `git rev-parse --short HEAD`, and name the frontend mode and the Sage
+        mode.
+      placeholder: release, off
     validations:
       required: true
   - type: dropdown
@@ -28,8 +32,8 @@ body:
     attributes:
       label: Container engine
       options:
-        - Docker Compose
-        - Rootless Podman Compose
+        - Rootless Podman with podman-compose
+        - Docker Engine with Compose v2
         - Other / configuration only
     validations:
       required: true
@@ -37,13 +41,15 @@ body:
     id: host
     attributes:
       label: Host and GPU details
-      description: Include OS, engine/Compose, NVIDIA driver, GPU, and nvidia-ctk versions when relevant.
+      description: >-
+        Include OS, engine/Compose, NVIDIA driver, GPU, and nvidia-ctk versions
+        when relevant.
     validations:
       required: true
   - type: textarea
     id: logs
     attributes:
-      label: Sanitized logs
+      label: Sanitized logs or reports
       render: shell
   - type: checkboxes
     id: checks
@@ -52,5 +58,5 @@ body:
       options:
         - label: I removed credentials and private paths from this report.
           required: true
-        - label: I ran `bash bin/latentcrate doctor` when the problem involves a Linux container host.
+        - label: I ran `bash bin/latentcrate doctor` when the problem involves the host or the GPU.
           required: false

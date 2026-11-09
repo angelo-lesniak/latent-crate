@@ -6,7 +6,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = PROJECT_ROOT / "services" / "comfy" / "rewrite-node-requirements.py"
 COMMIT = "a" * 40
@@ -46,22 +45,22 @@ class RewriteNodeRequirementsTests(unittest.TestCase):
     def test_rewrites_a_raw_tree_and_is_idempotent(self):
         raw = (
             "git+https://github.com/ltdrdata/img2texture.git\n"
-            "  opencv-python-headless[ffmpeg,extra]>=4.8 ; python_version < \"3.14\"  # cv2\n"
-            "sam-2 @ git+https://github.com/facebookresearch/sam2 ; python_version < \"3.14\"\n"
+            '  opencv-python-headless[ffmpeg,extra]>=4.8 ; python_version < "3.14"  # cv2\n'
+            'sam-2 @ git+https://github.com/facebookresearch/sam2 ; python_version < "3.14"\n'
             f"demo @ git+https://github.com/example/demo.git@{COMMIT}\n"
-            "-e git+https://github.com/ltdrdata/img2texture.git ; python_version < \"3.14\"  # dev\n"
+            '-e git+https://github.com/ltdrdata/img2texture.git ; python_version < "3.14"  # dev\n'
             "-r extra/more.txt\n"
             "numpy\r\n"
         )
         expected = (
             "img2texture @ git+https://github.com/ltdrdata/img2texture.git@"
             "d6159abea44a0b2cf77454d3d46962c8b21eb9d3\n"
-            "  opencv-contrib-python[extra]>=4.8 ; python_version < \"3.14\"  # cv2\n"
+            '  opencv-contrib-python[extra]>=4.8 ; python_version < "3.14"  # cv2\n'
             "sam-2 @ git+https://github.com/facebookresearch/sam2.git@"
-            "2b90b9f5ceec907a1c18123530e92e794ad901a4 ; python_version < \"3.14\"\n"
+            '2b90b9f5ceec907a1c18123530e92e794ad901a4 ; python_version < "3.14"\n'
             f"demo @ git+https://github.com/example/demo.git@{COMMIT}\n"
             "-e img2texture @ git+https://github.com/ltdrdata/img2texture.git@"
-            "d6159abea44a0b2cf77454d3d46962c8b21eb9d3 ; python_version < \"3.14\"  # dev\n"
+            'd6159abea44a0b2cf77454d3d46962c8b21eb9d3 ; python_version < "3.14"  # dev\n'
             "-r extra/more.txt\n"
             "numpy\n"
         )
@@ -100,6 +99,67 @@ class RewriteNodeRequirementsTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_rewrites_bare_reviewed_urls_to_named_full_commits(self):
+        with tempfile.TemporaryDirectory() as directory:
+            tree = self.write_tree(
+                Path(directory),
+                {
+                    "Example/requirements.txt": (
+                        "git+https://github.com/facebookresearch/sam2\n"
+                        "git+https://github.com/ltdrdata/cstr\n"
+                        "git+https://github.com/ltdrdata/ffmpy.git\n"
+                    )
+                },
+            )
+
+            result = self.run_rewrite(tree)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(
+                (tree / "Example" / "requirements.txt").read_text(encoding="utf-8"),
+                "sam-2 @ git+https://github.com/facebookresearch/sam2.git@"
+                "2b90b9f5ceec907a1c18123530e92e794ad901a4\n"
+                "cstr @ git+https://github.com/ltdrdata/cstr.git@"
+                "0520c29a18a7a869a6e5983861d6f7a4c86f8e9b\n"
+                "ffmpy @ git+https://github.com/ltdrdata/ffmpy.git@"
+                "f000737698b387ffaeab7cd871b0e9185811230d\n",
+            )
+
+    def test_does_not_parse_git_text_in_a_comment(self):
+        original = "packaging==25.0  # see git+https://example.invalid/repo\n"
+        with tempfile.TemporaryDirectory() as directory:
+            tree = self.write_tree(Path(directory), {"Example/requirements.txt": original})
+
+            result = self.run_rewrite(tree)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual((tree / "Example" / "requirements.txt").read_text(encoding="utf-8"), original)
+
+    def test_replaces_every_opencv_variant_with_the_contrib_package(self):
+        with tempfile.TemporaryDirectory() as directory:
+            tree = self.write_tree(
+                Path(directory),
+                {
+                    "Example/requirements.txt": (
+                        "opencv-python\n"
+                        'opencv-python-headless[ffmpeg]>=4.10 ; python_version >= "3.10"  # video\n'
+                        "opencv-contrib-python-headless==5.0.0.93\n"
+                        "opencv-contrib-python\n"
+                    )
+                },
+            )
+
+            result = self.run_rewrite(tree)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(
+                (tree / "Example" / "requirements.txt").read_text(encoding="utf-8"),
+                "opencv-contrib-python\n"
+                'opencv-contrib-python>=4.10 ; python_version >= "3.10"  # video\n'
+                "opencv-contrib-python==5.0.0.93\n"
+                "opencv-contrib-python\n",
+            )
+
     def test_refuses_unreviewed_sources_and_options(self):
         bad_lines = {
             "--index-url http://example.invalid/simple\n": "pip source and resolver options",
@@ -109,6 +169,9 @@ class RewriteNodeRequirementsTests(unittest.TestCase):
             "--editable git+https://gitlab.com/ltdrdata/cstr.git\n": "allowed-git-hosts.txt",
             "demo @ https://example.invalid/demo.whl\n": "direct URL requirements",
             "demo @ file:///tmp/demo.whl\n": "direct URL requirements",
+            "demo@file:/tmp/demo.whl\n": "direct URL requirements",
+            "demo@ssh://example.invalid/demo.whl\n": "direct URL requirements",
+            "demo@ftp://alice:secret@example.invalid/demo.whl\n": "possible credential",
             "./local-package\n": "invalid custom-node requirement",
             "git+https://github.com/example/unpinned.git\n": "unpinned Git requirement",
             "git+https://gitlab.com/ltdrdata/cstr.git\n": "allowed-git-hosts.txt",

@@ -41,7 +41,7 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(settings.port, "4207")
         self.assertEqual(settings.sage, "off")
         self.assertEqual(settings.cuda_arch_list, "12.0")
-        self.assertEqual(settings.host_model_gid, "1000")
+        self.assertEqual(settings.host_model_gid, str(os.getgid()))
         self.assertEqual(settings.get("CONTAINER_ENGINE"), "")
         self.assertFalse(settings.allow_remote)
         self.assertNotIn("HF_TOKEN", settings.defaults)
@@ -198,6 +198,18 @@ class SettingsTests(unittest.TestCase):
         refusal = "^LATENTCRATE_SAGE must be off, available, or global$"
         self.assertRaisesRegex(LatentCrateError, refusal, getattr, settings, "sage")
         self.assertEqual(env.SAGE_WORDS, "off, available, or global")
+
+    def test_the_docker_model_group_defaults_to_the_calling_users_group(self) -> None:
+        self.assertEqual(env.load(self.tmp, {}).subprocess_env()["HOST_MODEL_GID"], str(os.getgid()))
+        with mock.patch("latentcrate.env.os.getgid", return_value=4321):
+            self.assertEqual(env.load(self.tmp, {}).host_model_gid, "4321")
+        self.write_env("HOST_MODEL_GID=1234\n")
+        settings = env.load(self.tmp, {})
+        self.assertEqual(settings.subprocess_env()["HOST_MODEL_GID"], "1234")
+        self.assertEqual(settings.host_model_gid, "1234")
+        settings = env.load(self.tmp, {"HOST_MODEL_GID": "1235"})
+        self.assertEqual(settings.subprocess_env()["HOST_MODEL_GID"], "1235")
+        self.assertEqual(settings.host_model_gid, "1235")
 
     def test_the_docker_model_group_is_a_numeric_id(self) -> None:
         self.assertEqual(env.load(self.tmp, {"HOST_MODEL_GID": "1234"}).host_model_gid, "1234")

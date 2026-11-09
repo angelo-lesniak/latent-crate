@@ -38,7 +38,7 @@ USAGE_LINES = (
     "nodes sync <set>",
     "nodes status <set>",
     "nodes check <set>",
-    "nodes export <set>",
+    "nodes export <custom-nodes-dir>",
     "templates list",
     "templates create-model-set <template> [--name name]",
     "pins",
@@ -214,18 +214,56 @@ class CliTests(unittest.TestCase):
         self.assertIn("[ok] docker engine is reachable\n", result.stdout)
         self.assertNotIn("hf_secret", result.stdout + result.stderr)
 
-    def test_commands_not_yet_ported_name_the_wrapper_to_run(self) -> None:
-        for arguments in (
-            ("up",),
-            ("down",),
-            ("nodes", "list"),
-            ("models", "list"),
-            ("templates", "list"),
-            ("smoke-gpu",),
-        ):
+    def test_the_shim_runs_the_package(self) -> None:
+        for arguments in (("help",), ("pins",)):
             with self.subTest(arguments=arguments):
-                name = " ".join(arguments)
-                self.expect_failure(f"{name} is not ported yet; run: bash bin/latentcrate {name} ...", *arguments)
+                shim, direct = self.scratch.run_shim(*arguments, **NO_ENGINE), self.scratch.run(*arguments, **NO_ENGINE)
+                self.assertEqual((shim.returncode, shim.stdout, shim.stderr), (0, direct.stdout, ""))
+
+    def test_every_command_family_reaches_its_module(self) -> None:
+        # Each family once, cheaply: a listing, a quiet no-op against the
+        # fake engine, or the refusal its module words.
+        self.assertEqual(self.succeed("status"), "")
+        self.assertEqual(self.succeed("down"), "")
+        self.expect_failure("the ComfyUI container does not exist; run: bash bin/latentcrate up", "logs")
+        self.assertIn("args=logs --follow fake-comfy-container", self.succeed("logs", FAKE_ENGINE_COMFY_EXITED="true"))
+        self.assertRegex(self.succeed("models", "list", **NO_ENGINE), r"\nminimax-h3-i2v - .+\n")
+        self.assertIn("latent-nodepack - ", self.succeed("nodes", "list", **NO_ENGINE))
+        self.assertRegex(self.succeed("nodes", "check", "latent-nodepack", **NO_ENGINE), r"\n\S+ [0-9a-f]{40} https://")
+        empty = self.scratch.tmp / "custom_nodes"
+        empty.mkdir()
+        self.expect_failure(
+            f"no clean public node checkouts could be exported from {empty}", "nodes", "export", str(empty)
+        )
+        self.expect_failure(
+            "is not built; run: bash bin/latentcrate build", "templates", "list", FAKE_ENGINE_IMAGE_MISSING="true"
+        )
+        self.expect_failure(
+            "use individual --model-set names with up; all is available through models fetch",
+            "up",
+            "--model-set",
+            "all",
+            **NO_ENGINE,
+        )
+        self.expect_failure("unknown model set: nope", "up", "--model-set", "nope", **NO_ENGINE)
+        missing = self.scratch.tmp / "no-dist"
+        self.expect_failure(
+            f"frontend dist/index.html is missing or unreadable: {missing}",
+            "up",
+            "--frontend-dist",
+            str(missing),
+            **NO_ENGINE,
+        )
+        self.expect_failure(
+            "build supports the pinned and Git frontends; use up for --frontend-source or --frontend-dist",
+            "build",
+            COMFY_FRONTEND_MODE="dist",
+            COMFY_FRONTEND_DIST_DIR=str(SOURCE_ROOT / "tests" / "fixtures" / "frontend-dist"),
+            **NO_ENGINE,
+        )
+        self.expect_failure(
+            "fix the [fail] lines above before starting (bash bin/latentcrate doctor repeats them)", "up"
+        )
 
     def test_option_errors(self) -> None:
         self.expect_failure("unexpected argument for down: extra", "down", "extra")

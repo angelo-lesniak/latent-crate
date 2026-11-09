@@ -510,7 +510,7 @@ class GatherTests(unittest.TestCase):
             ],
         )
         self.assertEqual(facts.models_gid, (self.scratch.storage / "models").stat().st_gid)
-        self.assertEqual((facts.host_model_gid, facts.host_model_gid_refusal), ("1000", ""))
+        self.assertEqual((facts.host_model_gid, facts.host_model_gid_refusal), (str(os.getgid()), ""))
         self.assertEqual((facts.bind_address, facts.bind_refusal), ("127.0.0.1", ""))
         self.assertEqual((facts.port, facts.port_refusal), (self.scratch.port, ""))
         self.assertEqual(facts.port_error, "")

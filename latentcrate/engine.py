@@ -314,12 +314,11 @@ class Engine:
     def lock(self, command: str = ""):
         """Serialize the steps that change this checkout's stack or the node
         sources its image is built from: `up` and `build` hold it from the
-        requirement-file copy to the container start (one service, one
-        project: nothing else needs the stack while an image builds),
-        `down` holds it, and every `nodes` command holds it for its
-        duration; `status` and `logs` take none. The holder writes its PID
-        and `command` into the lock file, so a second command can say whom
-        it waits for before it blocks."""
+        requirement-file copy through the build to the container start,
+        `nodes install|sync` hold it for their duration, and nobody else
+        (`down`, `status`, `logs`, and the other `nodes` commands take
+        none). The holder writes its PID and `command` into the lock file,
+        so a second command can say whom it waits for before it blocks."""
         self.lock_file.parent.mkdir(parents=True, exist_ok=True)
         with os.fdopen(os.open(self.lock_file, os.O_RDWR | os.O_CREAT, 0o644), "r+") as handle:
             try:
@@ -375,12 +374,15 @@ class Engine:
             text in (message or "").lower() for text in ("no such container", "no such object", "no container with")
         )
 
-    def remove_containers(self, owned: list[dict]) -> None:
+    def remove_containers(self, owned: list[dict], *, timeout: int = 10) -> None:
+        """Stop (with `timeout` seconds of grace, the engines' own default
+        when none is given) and remove each container."""
         for item in owned:
             for action in ("stop", "rm"):
                 deadline = time.monotonic() + 30
                 while True:
-                    result = self.command(action, item["Id"], capture=True, check=False)
+                    grace = ["--time", str(timeout)] if action == "stop" else []
+                    result = self.command(action, *grace, item["Id"], capture=True, check=False)
                     # Stopping a run --rm container also removes it. Docker
                     # may still be removing it when stop returns, so the
                     # `rm` is retried until that removal is done.

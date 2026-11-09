@@ -18,8 +18,22 @@ from functools import cached_property, partial
 from pathlib import Path
 from typing import Any
 
-from . import PROJECT_ROOT, LatentCrateError, checkpins, doctor, env, files, warn
-from .names import SET_NAME_RE
+from . import (
+    PROJECT_ROOT,
+    LatentCrateError,
+    checkpins,
+    doctor,
+    env,
+    files,
+    models,
+    nodes,
+    runtime,
+    templates,
+    variants,
+    warn,
+)
+from . import engine as engines
+from .names import SET_NAME_RE, select_sets
 
 POSITIVE_INTEGER_RE = re.compile(r"^[1-9][0-9]*$")
 
@@ -205,14 +219,61 @@ def parse(command: Command, arguments: list[str]) -> tuple[Options, list[str]]:
 # -- Handlers ------------------------------------------------------------------
 
 
-def cmd_init(context: Context, _options: Options, _names: list[str]) -> None:
-    settings = context.settings
+def create_host_directories(settings: env.Settings) -> None:
+    """The storage directories `init` owns, refused as a whole when one of
+    them exists as something other than a directory."""
     created = [place for place in settings.storage if place.created_by_init]
     for place in created:
         if place.path.exists() and not place.path.is_dir():
             raise LatentCrateError(f"{place.key or place.label} is not a directory: {place.path}")
     for place in created:
         place.path.mkdir(parents=True, exist_ok=True)
+
+
+def sage_in_force(context: Context, options: Options) -> str:
+    return options["--sage"].strip().lower() if "--sage" in options else context.settings.sage
+
+
+def selected_variant(context: Context, options: Options, names: list[str]) -> variants.Variant:
+    """The variant the flags name; `names` are the URL and reference of a
+    `--frontend-git` row. Not resolved: `build` and `up` resolve it once
+    the engine is known."""
+    return variants.select(
+        context.settings,
+        context.pinned,
+        sage=options.get("--sage"),
+        frontend_git=(names[0], names[1]) if "--frontend-git" in options else None,
+        frontend_dist=options.get("--frontend-dist"),
+        frontend_source=options.get("--frontend-source"),
+    )
+
+
+def require_models_dir(settings: env.Settings) -> None:
+    if not settings.models_dir.is_dir():
+        raise LatentCrateError(
+            f"models directory does not exist: {settings.models_dir}; run: bash bin/latentcrate init"
+        )
+
+
+def fetch_models(settings: env.Settings, selected: list[models.ModelSet]) -> None:
+    roots = models.allowed_roots(settings.models_dir, settings.get("MODEL_SET_EXTRA_WRITE_ROOTS"))
+    with models.model_download_lock(settings.models_dir):
+        models.fetch(selected, settings.models_dir, roots, settings.hf_token)
+
+
+def selected_model_sets(context: Context, names: list[str]) -> list[models.ModelSet]:
+    return select_sets(models.catalog(context.settings.config_dir), names, "model set")
+
+
+def selected_node_set(context: Context, name: str) -> nodes.NodeSet:
+    config_dir = context.settings.config_dir
+    sets = nodes.catalog(config_dir, nodes.load_allowed_hosts(config_dir))
+    return select_sets(sets, [name], "custom-node set")[0]
+
+
+def cmd_init(context: Context, _options: Options, _names: list[str]) -> None:
+    settings = context.settings
+    create_host_directories(settings)
     env_file = settings.root / ".env"
     if env_file.is_file():
         print(f"Keeping existing {env_file}")
@@ -223,12 +284,145 @@ def cmd_init(context: Context, _options: Options, _names: list[str]) -> None:
 
 
 def cmd_doctor(context: Context, options: Options, _names: list[str]) -> int:
-    sage = options["--sage"].strip().lower() if "--sage" in options else context.settings.sage
     return doctor.run(
         context.settings,
         min_driver_major=int(context.pinned["CUDA_MIN_DRIVER_MAJOR"]),
         allow_no_gpu="--allow-no-gpu" in options,
-        sage=sage,
+        sage=sage_in_force(context, options),
+    )
+
+
+def cmd_up(context: Context, options: Options, names: list[str]) -> int:
+    settings = context.settings
+    model_sets = options.get("--model-set", [])
+    if "all" in model_sets:
+        raise LatentCrateError("use individual --model-set names with up; all is available through models fetch")
+    selected = selected_model_sets(context, model_sets) if model_sets else []
+    # The local inputs (flags, dist tree, Git URL) are judged before the
+    # host probes and the reference lookup, so a typo fails at once.
+    variant = selected_variant(context, options, names)
+    facts = doctor.gather(settings)
+    if doctor.run(
+        settings,
+        min_driver_major=int(context.pinned["CUDA_MIN_DRIVER_MAJOR"]),
+        allow_no_gpu=False,
+        sage=sage_in_force(context, options),
+        facts=facts,
+    ):
+        raise LatentCrateError("fix the [fail] lines above before starting (bash bin/latentcrate doctor repeats them)")
+    create_host_directories(settings)
+    engine = engines.detect(settings, selection=facts.selection)
+    variant = variants.resolve(variant, settings.subprocess_env())
+    if selected:
+        fetch_models(settings, selected)
+    if variant.source_dir:
+        variant.dist_dir = variants.build_source(settings, engine, context.pinned, variant.source_dir)
+    return runtime.start_stack(
+        settings,
+        engine,
+        variant,
+        context.pinned,
+        timeout=int(options.get("--timeout", 300)),
+        detach="--detach" in options,
+    )
+
+
+def cmd_build(context: Context, options: Options, names: list[str]) -> None:
+    variant = selected_variant(context, options, names)
+    if variant.dist_overlay:
+        raise LatentCrateError(
+            "build supports the pinned and Git frontends; use up for --frontend-source or --frontend-dist"
+        )
+    engine = engines.detect(context.settings)
+    runtime.build_image(
+        context.settings, engine, variants.resolve(variant, context.settings.subprocess_env()), context.pinned
+    )
+
+
+def cmd_down(context: Context, _options: Options, _names: list[str]) -> None:
+    settings = context.settings
+    runtime.stop_stack(engines.detect(settings, launching=False), stop_seconds=runtime.grace_seconds(settings))
+
+
+def cmd_status(context: Context, _options: Options, _names: list[str]) -> None:
+    runtime.print_containers(context.settings, engines.detect(context.settings, launching=False))
+
+
+def cmd_logs(context: Context, _options: Options, _names: list[str]) -> int:
+    return runtime.follow_logs(engines.detect(context.settings, launching=False))
+
+
+def cmd_smoke_gpu(context: Context, options: Options, names: list[str]) -> int:
+    variant = selected_variant(context, options, names)
+    return runtime.smoke_gpu(context.settings, engines.detect(context.settings), variant, context.pinned)
+
+
+def cmd_models_list(context: Context, _options: Options, _names: list[str]) -> None:
+    for name, model_set in models.catalog(context.settings.config_dir).items():
+        print(f"{name} - {model_set.description}")
+
+
+def cmd_models_fetch(context: Context, _options: Options, names: list[str]) -> None:
+    selected = selected_model_sets(context, names)
+    require_models_dir(context.settings)
+    fetch_models(context.settings, selected)
+
+
+def cmd_models_status(context: Context, options: Options, names: list[str]) -> int:
+    settings = context.settings
+    selected = selected_model_sets(context, names)
+    require_models_dir(settings)
+    roots = models.allowed_roots(settings.models_dir, settings.get("MODEL_SET_EXTRA_WRITE_ROOTS"))
+    return models.status(selected, settings.models_dir, roots, verify="--verify" in options)
+
+
+def cmd_models_check(context: Context, options: Options, names: list[str]) -> int:
+    return models.check(selected_model_sets(context, names), context.settings.hf_token, remote="--remote" in options)
+
+
+def cmd_models_draft(context: Context, _options: Options, names: list[str]) -> None:
+    print(models.draft(names[0], context.settings.hf_token), end="")
+
+
+def cmd_nodes_list(context: Context, _options: Options, _names: list[str]) -> None:
+    config_dir = context.settings.config_dir
+    for name, node_set in nodes.catalog(config_dir, nodes.load_allowed_hosts(config_dir)).items():
+        print(f"{name} - {node_set.description}")
+
+
+def cmd_nodes_install(replace_clean: bool, context: Context, _options: Options, names: list[str]) -> None:
+    node_set = selected_node_set(context, names[0])
+    engine = engines.detect(context.settings, launching=False)
+    nodes.install(context.settings, engine, node_set, replace_clean=replace_clean)
+
+
+def cmd_nodes_status(context: Context, _options: Options, names: list[str]) -> int:
+    settings = context.settings
+    return nodes.status(settings, selected_node_set(context, names[0]), settings.subprocess_env())
+
+
+def cmd_nodes_check(context: Context, _options: Options, names: list[str]) -> None:
+    nodes.check(selected_node_set(context, names[0]))
+
+
+def cmd_nodes_export(context: Context, _options: Options, names: list[str]) -> None:
+    settings = context.settings
+    hosts = nodes.load_allowed_hosts(settings.config_dir)
+    print(nodes.export(Path(names[0]), settings.subprocess_env(), hosts), end="")
+
+
+def cmd_templates_list(context: Context, _options: Options, _names: list[str]) -> int:
+    settings = context.settings
+    engine = engines.detect(settings, launching=False)
+    return templates.list_templates(engine, templates.release_variant(settings, context.pinned), context.pinned)
+
+
+def cmd_templates_create(context: Context, options: Options, names: list[str]) -> int:
+    settings = context.settings
+    engine = engines.detect(settings, launching=False)
+    variant = templates.release_variant(settings, context.pinned)
+    return templates.create_model_set(
+        settings, engine, variant, context.pinned, names[0], options.get("--name", names[0])
     )
 
 
@@ -243,10 +437,6 @@ def cmd_pins_check(context: Context, _options: Options, names: list[str]) -> Non
     except checkpins.LookupsFailed as failure:
         sys.stdout.write(failure.report)
         raise
-
-
-def not_ported(name: str, _context: Context, _options: Options, _names: list[str]) -> None:
-    raise LatentCrateError(f"{name} is not ported yet; run: bash bin/latentcrate {name} ...")
 
 
 # -- The table -----------------------------------------------------------------
@@ -268,7 +458,7 @@ COMMANDS = (
         "[--frontend-dist dir | --frontend-source dir]",
         "Build the image if needed, start ComfyUI, and return once it is healthy or has failed.",
         RUN | {"--frontend-dist": DIRECTORY, "--frontend-source": DIRECTORY},
-        partial(not_ported, "up"),
+        cmd_up,
         exclusive=(("--frontend-dist", "--frontend-source"),),
     ),
     Command(
@@ -276,7 +466,7 @@ COMMANDS = (
         "<https-url> <ref> [--sage mode] [--detach] [--timeout seconds] [--model-set name]...",
         "The same, with the frontend built from the named Git reference.",
         RUN | {"--frontend-git": SWITCH},
-        partial(not_ported, "up --frontend-git"),
+        cmd_up,
         arguments=(2, 2),
     ),
     Command(
@@ -284,33 +474,33 @@ COMMANDS = (
         "[--sage mode]",
         "Build the image without starting ComfyUI.",
         {"--sage": SAGE},
-        partial(not_ported, "build"),
+        cmd_build,
     ),
     Command(
         "build --frontend-git",
         "<https-url> <ref> [--sage mode]",
         "Build the image with the frontend built from the named Git reference.",
         {"--frontend-git": SWITCH, "--sage": SAGE},
-        partial(not_ported, "build --frontend-git"),
+        cmd_build,
         arguments=(2, 2),
     ),
-    Command("down", "", "Stop and remove the ComfyUI container.", {}, partial(not_ported, "down")),
-    Command("status", "", "Show the ComfyUI container status.", {}, partial(not_ported, "status")),
-    Command("logs", "", "Follow the ComfyUI container logs.", {}, partial(not_ported, "logs")),
+    Command("down", "", "Stop and remove the ComfyUI container.", {}, cmd_down),
+    Command("status", "", "Show the ComfyUI container status.", {}, cmd_status),
+    Command("logs", "", "Follow the ComfyUI container logs.", {}, cmd_logs),
     Command(
         "smoke-gpu",
         "[--sage mode]",
         "Run the GPU verification suite in the running container and save a report.",
         {"--sage": SAGE},
-        partial(not_ported, "smoke-gpu"),
+        cmd_smoke_gpu,
     ),
-    Command("models list", "", "List the available pinned model-file sets.", {}, partial(not_ported, "models list")),
+    Command("models list", "", "List the available pinned model-file sets.", {}, cmd_models_list),
     Command(
         "models fetch",
         SETS,
         "Download and verify one or more model sets from Hugging Face.",
         {},
-        partial(not_ported, "models fetch"),
+        cmd_models_fetch,
         arguments=(1, None),
     ),
     Command(
@@ -318,7 +508,7 @@ COMMANDS = (
         f"[--verify] {SETS}",
         "Report the selected files present in the models directory; --verify re-reads their checksums.",
         {"--verify": SWITCH},
-        partial(not_ported, "models status"),
+        cmd_models_status,
         arguments=(1, None),
     ),
     Command(
@@ -326,7 +516,7 @@ COMMANDS = (
         f"[--remote] {SETS}",
         "Validate the selected manifests; --remote compares their sizes with Hugging Face.",
         {"--remote": SWITCH},
-        partial(not_ported, "models check"),
+        cmd_models_check,
         arguments=(1, None),
     ),
     Command(
@@ -334,7 +524,7 @@ COMMANDS = (
         "hf:<owner>/<repo>:<file>",
         "Print a manifest entry for one Hugging Face file, with its size and checksum.",
         {},
-        partial(not_ported, "models draft"),
+        cmd_models_draft,
         arguments=(1, 1),
     ),
     Command(
@@ -342,14 +532,14 @@ COMMANDS = (
         "",
         "List the available custom-node sets with their descriptions.",
         {},
-        partial(not_ported, "nodes list"),
+        cmd_nodes_list,
     ),
     Command(
         "nodes install",
         "<set>",
         "Install a pinned custom-node set (stop ComfyUI first).",
         {},
-        partial(not_ported, "nodes install"),
+        partial(cmd_nodes_install, False),
         arguments=(1, 1),
     ),
     Command(
@@ -357,7 +547,7 @@ COMMANDS = (
         "<set>",
         "Install the set, replacing clean checkouts pinned at other commits.",
         {},
-        partial(not_ported, "nodes sync"),
+        partial(cmd_nodes_install, True),
         arguments=(1, 1),
     ),
     Command(
@@ -365,7 +555,7 @@ COMMANDS = (
         "<set>",
         "Report how the managed third-party nodes compare to the set.",
         {},
-        partial(not_ported, "nodes status"),
+        cmd_nodes_status,
         arguments=(1, 1),
     ),
     Command(
@@ -373,15 +563,15 @@ COMMANDS = (
         "<set>",
         "Validate the set's manifest against the allowlist without touching the checkouts.",
         {},
-        partial(not_ported, "nodes check"),
+        cmd_nodes_check,
         arguments=(1, 1),
     ),
     Command(
         "nodes export",
-        "<set>",
-        "Print a manifest for the clean public checkouts under the managed custom nodes.",
+        "<custom-nodes-dir>",
+        "Print a manifest for the clean public checkouts under a custom_nodes directory.",
         {},
-        partial(not_ported, "nodes export"),
+        cmd_nodes_export,
         arguments=(1, 1),
     ),
     Command(
@@ -389,14 +579,14 @@ COMMANDS = (
         "",
         "List official templates marked for local ComfyUI use in the built image.",
         {},
-        partial(not_ported, "templates list"),
+        cmd_templates_list,
     ),
     Command(
         "templates create-model-set",
         "<template> [--name name]",
         "Create a reviewable model-set manifest draft from a template.",
         {"--name": NAME},
-        partial(not_ported, "templates create-model-set"),
+        cmd_templates_create,
         arguments=(1, 1),
     ),
     Command("pins", "", "Print the pinned components from pins.env.", {}, cmd_pins),

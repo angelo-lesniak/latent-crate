@@ -27,9 +27,7 @@ INCLUDE_RE = re.compile(
     r"^\s*(?:-r|--requirement|-c|--constraint)(?:\s+|=)(?P<path>[^\s#]+)"
     r"(?:\s+#.*)?\s*$"
 )
-EMBEDDED_CREDENTIAL_RE = re.compile(
-    r"[a-z][a-z0-9+.-]*://[^/\s@]+@", re.IGNORECASE
-)
+EMBEDDED_CREDENTIAL_RE = re.compile(r"[a-z][a-z0-9+.-]*://[^/\s@]+@", re.IGNORECASE)
 TOKEN_RE = re.compile(
     r"(?:ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|glpat-[A-Za-z0-9_-]{20,}|pypi-[A-Za-z0-9_-]{20,})"
 )
@@ -80,11 +78,7 @@ def read_text(path: Path, description: str) -> str:
 
 
 def load_allowed_hosts(text: str) -> set[str]:
-    hosts = {
-        line.strip().lower()
-        for line in text.splitlines()
-        if line.strip() and not line.lstrip().startswith("#")
-    }
+    hosts = {line.strip().lower() for line in text.splitlines() if line.strip() and not line.lstrip().startswith("#")}
     if not hosts:
         fail("allowed Git hosts file must contain at least one host")
     for host in hosts:
@@ -188,8 +182,7 @@ def load_package_replacements(text: str) -> dict[str, PackageReplacement]:
         if not isinstance(target, str) or not NAME_RE.fullmatch(target):
             fail(f"invalid target name in package replacement: {target!r}")
         if not isinstance(raw_drop_extras, list) or any(
-            not isinstance(extra, str) or not NAME_RE.fullmatch(extra)
-            for extra in raw_drop_extras
+            not isinstance(extra, str) or not NAME_RE.fullmatch(extra) for extra in raw_drop_extras
         ):
             fail(f"drop_extras must list safe extra names for package replacement {source}")
         canonical_source = package_base(source)
@@ -203,10 +196,7 @@ def load_package_replacements(text: str) -> dict[str, PackageReplacement]:
 
     for replacement in replacements.values():
         if package_base(replacement.target) in replacements:
-            fail(
-                f"package replacement chains are not supported: "
-                f"{replacement.source} -> {replacement.target}"
-            )
+            fail(f"package replacement chains are not supported: {replacement.source} -> {replacement.target}")
     return replacements
 
 
@@ -262,9 +252,7 @@ def rewrite_vcs_line(
     parsed = urlsplit(vcs_url[len("git+") :])
     if parsed.query:
         fail(f"Git requirement URLs must not contain a query: {path}: {line.strip()}")
-    if parsed.fragment and not re.fullmatch(
-        r"(?:subdirectory=[A-Za-z0-9._/-]+|egg=[A-Za-z0-9._-]+)", parsed.fragment
-    ):
+    if parsed.fragment and not re.fullmatch(r"(?:subdirectory=[A-Za-z0-9._/-]+|egg=[A-Za-z0-9._-]+)", parsed.fragment):
         fail(f"unsupported Git requirement fragment: {path}: {parsed.fragment}")
     if parsed.fragment.startswith("subdirectory="):
         subdirectory = PurePosixPath(parsed.fragment.removeprefix("subdirectory="))
@@ -292,10 +280,7 @@ def rewrite_vcs_line(
             f"override permits only {expected} for {matching_pin.repository}"
         )
     if package is not None and package_base(package) != package_base(matching_pin.package):
-        fail(
-            f"VCS pin package {matching_pin.package} does not match requirement package "
-            f"{package} in {path}"
-        )
+        fail(f"VCS pin package {matching_pin.package} does not match requirement package {package} in {path}")
 
     fragment = f"#{parsed.fragment}" if parsed.fragment else ""
     return (
@@ -339,15 +324,10 @@ def rewrite_package_line(
     if requirement.url is not None:
         fail(f"package replacements do not support direct URLs: {path}: {body}")
 
-    retained_extras = {
-        extra for extra in requirement.extras if extra.lower() not in replacement.drop_extras
-    }
+    retained_extras = {extra for extra in requirement.extras if extra.lower() not in replacement.drop_extras}
     extras = f"[{','.join(sorted(retained_extras))}]" if retained_extras else ""
     marker = f" ; {requirement.marker}" if requirement.marker is not None else ""
-    return (
-        f"{indent}{replacement.target}{extras}{requirement.specifier}"
-        f"{marker}{comment_suffix}"
-    )
+    return f"{indent}{replacement.target}{extras}{requirement.specifier}{marker}{comment_suffix}"
 
 
 def validate_requirement_line(path: Path, line: str) -> None:
@@ -362,19 +342,13 @@ def validate_requirement_line(path: Path, line: str) -> None:
     if VCS_PREFIX_RE.search(body):
         return
     if body.startswith("-"):
-        fail(
-            f"pip source and resolver options are not allowed in custom-node "
-            f"requirements: {path}: {body}"
-        )
+        fail(f"pip source and resolver options are not allowed in custom-node requirements: {path}: {body}")
     try:
         requirement = Requirement(body)
     except InvalidRequirement as error:
         fail(f"invalid custom-node requirement in {path}: {body}: {error}")
     if requirement.url is not None:
-        fail(
-            f"direct URL requirements must use a reviewed full-commit git+https "
-            f"source: {path}: {body}"
-        )
+        fail(f"direct URL requirements must use a reviewed full-commit git+https source: {path}: {body}")
 
 
 def rewrite_requirements(
@@ -445,9 +419,7 @@ def main() -> None:
         fail(f"custom-node requirement tree is not a directory: {args.tree}")
     allowed_hosts = load_allowed_hosts(read_text(args.allowed_git_hosts, "allowed Git hosts"))
     pins = load_vcs_pins(read_text(args.vcs_pins, "VCS pins"), allowed_hosts)
-    replacements = load_package_replacements(
-        read_text(args.package_replacements, "package replacements")
-    )
+    replacements = load_package_replacements(read_text(args.package_replacements, "package replacements"))
     count = rewrite_tree(args.tree, pins, replacements, allowed_hosts)
     print(f"LatentCrate: validated {count} custom-node requirement file(s) in {args.tree}")
 

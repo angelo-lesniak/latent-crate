@@ -9,6 +9,8 @@ import socket
 import subprocess
 import sys
 import tempfile
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 SOURCE_ROOT = Path(__file__).resolve().parents[1]
@@ -32,6 +34,31 @@ def free_port() -> int:
     with contextlib.closing(socket.socket()) as sock:
         sock.bind(("127.0.0.1", 0))
         return sock.getsockname()[1]
+
+
+class _Answering(BaseHTTPRequestHandler):
+    def do_GET(self) -> None:
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"ok")
+
+    def log_message(self, *_: object) -> None:
+        return
+
+
+@contextlib.contextmanager
+def serving(port: int):
+    """A loopback HTTP server answering GET on the port, standing in for
+    ComfyUI while a readiness poll runs."""
+    server = HTTPServer(("127.0.0.1", port), _Answering)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
 
 
 class Scratch:
@@ -79,6 +106,17 @@ class Scratch:
         return subprocess.run(
             [sys.executable, "-m", "latentcrate", *arguments],
             cwd=cwd or self.root,
+            env=self.environment(**overrides),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    def run_shim(self, *arguments: str, **overrides: str) -> subprocess.CompletedProcess:
+        """Run the command through bin/latentcrate, as a user does."""
+        return subprocess.run(
+            ["bash", str(self.root / "bin" / "latentcrate"), *arguments],
+            cwd=self.root,
             env=self.environment(**overrides),
             capture_output=True,
             text=True,
