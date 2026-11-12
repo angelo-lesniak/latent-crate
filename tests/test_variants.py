@@ -15,7 +15,7 @@ from unittest.mock import patch
 import yaml
 
 from latentcrate import LatentCrateError, engine, env, variants
-from tests.support import ENGINE_BIN, SOURCE_ROOT, Scratch
+from tests.support import SOURCE_ROOT, Scratch
 
 FIXTURES = SOURCE_ROOT / "tests" / "fixtures"
 GIT_BIN = FIXTURES / "git-bin"
@@ -269,10 +269,16 @@ class VariantTests(unittest.TestCase):
             self.assertIn("--env HOME=/work/home", trace)
             self.assertIn(f"{image} sh -c", trace)
             self.assertNotIn(TOKEN, trace)
-        self.assertIn(f"npm install -g --prefix /tools pnpm@{self.pinned['FRONTEND_PNPM_VERSION']}", traces[0])
-        self.assertIn("pnpm install --frozen-lockfile --ignore-scripts --store-dir /pnpm/store", traces[0])
         self.assertIn(
-            "pnpm install --offline --frozen-lockfile --store-dir /pnpm/store && /tools/bin/pnpm build", traces[1]
+            f"sh -c 'export PATH=/tools/bin:$PATH && npm install -g --prefix /tools "
+            f"pnpm@{self.pinned['FRONTEND_PNPM_VERSION']} "
+            "&& pnpm install --frozen-lockfile --ignore-scripts --store-dir /pnpm/store'",
+            traces[0],
+        )
+        self.assertIn(
+            "sh -c 'export PATH=/tools/bin:$PATH && pnpm install --offline --frozen-lockfile --store-dir /pnpm/store "
+            "&& pnpm build'",
+            traces[1],
         )
         # A second build replaces the published tree; Podman passes no --user.
         (dist / "stale.js").write_text("")
@@ -376,4 +382,3 @@ class VariantTests(unittest.TestCase):
         for overlay in ("compose.podman.yaml", "compose.docker.yaml"):
             services = yaml.safe_load((SOURCE_ROOT / overlay).read_text(encoding="utf-8"))["services"]
             self.assertEqual(list(services), ["comfy"], overlay)
-        self.assertTrue((ENGINE_BIN / "docker").is_symlink())

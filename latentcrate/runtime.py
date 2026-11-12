@@ -21,6 +21,7 @@ from pathlib import Path
 from . import LatentCrateError, warn
 from .engine import PROJECT_LABEL, SERVICE, Engine
 from .env import Settings
+from .files import publish_tree
 from .localhttp import http_get
 from .nodes import require_selected_set
 from .variants import Variant
@@ -138,18 +139,10 @@ def copy_requirements(settings: Settings) -> None:
         entries.sort(key=str.casefold)
         (staging / "manifest.txt").write_text("".join(f"{entry}\n" for entry in entries), encoding="utf-8")
         (staging / ".gitkeep").touch()
-        if destination.exists():
-            os.rename(destination, previous)
-        try:
-            os.rename(staging, destination)
-        except BaseException:
-            if previous.exists():
-                os.rename(previous, destination)
-            raise
+        publish_tree(staging, destination, previous)
     except BaseException:
         shutil.rmtree(staging, ignore_errors=True)
         raise
-    shutil.rmtree(previous, ignore_errors=True)
 
 
 # --- Build and start ------------------------------------------------------------

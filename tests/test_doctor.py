@@ -158,8 +158,8 @@ class EvaluateTests(unittest.TestCase):
         self.assertEqual(
             warnings(lines),
             [
-                "[warn] WSL detected; complete the WSL2/NVIDIA validation checklist "
-                "before describing this platform as tested"
+                "[warn] WSL detected; WSL2 is not validated, and docs/validation.md#known-gaps "
+                "lists what a run must show"
             ],
         )
         self.assertEqual(

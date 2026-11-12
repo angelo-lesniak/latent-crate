@@ -1,8 +1,9 @@
-"""Write a file atomically: the whole text appears under its name or nothing does."""
+"""Publish files and trees atomically: a reader sees the previous content or the complete new one."""
 
 from __future__ import annotations
 
 import os
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -22,3 +23,18 @@ def write_atomic(path: Path, text: str, mode: int = 0o644) -> None:
     except BaseException:
         Path(temporary).unlink(missing_ok=True)
         raise
+
+
+def publish_tree(staging: Path, destination: Path, previous: Path) -> None:
+    """Move the destination tree aside to previous, rename staging into its
+    place, and remove previous; when the second rename fails, the previous
+    tree is put back and the error propagates with staging untouched."""
+    if destination.exists():
+        os.rename(destination, previous)
+    try:
+        os.rename(staging, destination)
+    except BaseException:
+        if previous.exists():
+            os.rename(previous, destination)
+        raise
+    shutil.rmtree(previous, ignore_errors=True)

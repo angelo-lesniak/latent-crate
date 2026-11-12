@@ -165,8 +165,8 @@ def parse_env_file(path: Path, *, plain: bool = False) -> dict[str, str]:
 
 def documented_keys(example: Path) -> set[str]:
     """Every key `.env.example` lists, commented out or not, so a key that
-    neither the wrapper nor the Compose files read can be reported instead
-    of silently doing nothing."""
+    neither the wrapper nor the Compose files read is refused instead of
+    silently doing nothing."""
     lines = example.read_text(encoding="utf-8").splitlines()
     return {match.group(1) for line in lines if (match := DOCUMENTED_KEY_RE.match(line.strip()))}
 
@@ -255,7 +255,7 @@ class Settings:
     values: dict[str, str]
     # The keys `.env.example` sets: what the wrapper defaults and exports.
     defaults: dict[str, str]
-    # The `.env` keys the example file lists; the others were reported.
+    # The `.env` keys the example file lists; an unlisted key is refused.
     file_values: dict[str, str]
     environ: dict[str, str]
     # The token found in the shell environment or `.env`, if any.

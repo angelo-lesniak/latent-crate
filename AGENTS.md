@@ -19,12 +19,13 @@ a user needs first, and where the deep dive is.
 
 ## Know this repository
 
-[Layout](CONTRIBUTING.md#layout) says where CLI code belongs;
-[Tests](CONTRIBUTING.md#tests) says what the static gate runs and which
-GPU checks a change needs; [Documentation
-changes](CONTRIBUTING.md#documentation-changes) says which page owns
-which facts and what the link check covers. Check every other fact by
-hand against the implementation.
+[Layout](CONTRIBUTING.md#layout) says where the package modules and the
+image files live; [Tests](CONTRIBUTING.md#tests) says what the static
+gate runs; [Documentation changes](CONTRIBUTING.md#documentation-changes)
+says which page owns which facts and what the contracts test checks in
+the pages. Check every other fact by hand against the implementation.
+There is no glossary, word list, or changelog before the first tagged
+release; Git history records changes.
 
 ## Code
 

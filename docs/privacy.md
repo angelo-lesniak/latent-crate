@@ -1,155 +1,76 @@
-# Privacy and containment
+# Privacy
 
-LatentCrate is local-first, but it runs third-party Python and JavaScript. Its
-privacy defaults reduce accidental exposure and persistence; they cannot make
-an unreviewed third-party node trustworthy.
+ComfyUI, Manager, and every custom node run in one container on your
+machine; the package runs the rest on the host. Nothing below makes
+third-party code trustworthy.
 
-For a normal local computer, keep the defaults. Common deliberate changes
-are:
+## What runs where
 
-| Goal | Setting or action |
+| Component | Runs |
 | --- | --- |
-| Do not use Manager | `COMFY_ENABLE_MANAGER=false` |
-| Remove prompts and workflows from generated-file metadata | `COMFY_DISABLE_METADATA=true` |
-| Block API nodes and frontend internet | `COMFY_DISABLE_API_NODES=true` |
-| Use a strict browser-offline setup | Also set `COMFY_ENABLE_MANAGER=false` |
-| Reach another computer safely | Keep the local bind and use an SSH tunnel |
+| ComfyUI, Manager, custom nodes | in the `comfy` container, as the calling user |
+| model downloads, checks, and drafts (`models ...`) | in the package on the host |
+| node-set installs (`nodes install`, `nodes sync`) | as `git` on the host, against allowlisted public HTTPS hosts |
+| source-mode frontend builds | in the pinned Node image through `engine run`: one phase with network for the package store, one with `--network none` for the build |
+| `pins check` | in the package on the host, reading public registries over HTTPS |
+| the image build | in the engine's builder |
 
-Review the limits below before processing sensitive material or enabling code
-from a new third-party node.
+`HF_TOKEN` is read from the shell or `.env`
+by the model commands only and removed from the environment of every
+subprocess; it reaches no container, Compose file, or image. The package
+sends it as an `Authorization` header to `huggingface.co` only and drops
+it on a redirect to another host. See
+[Models](models.md#fetch-a-set) for the token setup and the licenses the
+downloader prints.
 
-## Defaults
+## Defaults and their limits
 
-- The host port binds to `127.0.0.1`. The wrapper refuses any non-loopback
-  `COMFY_BIND_ADDRESS` unless `COMFY_ALLOW_REMOTE=true` explicitly acknowledges
-  that authentication and TLS are external responsibilities.
-- `COMFY_DISABLE_API_NODES=false` keeps ComfyUI's external API nodes available
-  and lets Manager's Extensions UI reach `https://api.comfy.org`. The upstream
-  [`--disable-api-nodes`](https://github.com/Comfy-Org/ComfyUI/blob/master/comfy/cli_args.py)
-  flag combines API-node removal with a browser-offline Content Security Policy,
-  so these behaviors cannot be selected separately. The link shows upstream
-  `master`; LatentCrate builds the ComfyUI version pinned in the selected
-  `versions/*.env` profile.
-- Manager hides sharing, keeps TLS verification enabled, rejects direct Git URL
-  and arbitrary pip installs, and does not persist its file log. It remains in
-  `network_mode=public` so its catalogue and registered-node/model installation
-  work. Set `network_mode=offline` in the persisted Manager config, or disable
-  Manager with `COMFY_ENABLE_MANAGER=false`, when those functions are not needed.
-- The service uses a read-only root filesystem, a constrained `/tmp`, no Linux
-  capabilities, `no-new-privileges`, and a PID limit. Only the declared data,
-  model, cache, local-node, and frontend-dist mounts remain accessible according
-  to their mount options. Local-node source and mounted frontend dist assets are
-  read-only.
+The UI port binds to `127.0.0.1`; `[::1]` is the other address that needs
+no acknowledgement. Any other `COMFY_BIND_ADDRESS` is refused unless
+`COMFY_ALLOW_REMOTE=true` acknowledges that authentication and TLS exist
+in front of ComfyUI, and `localhost` is not a binding Compose accepts.
 
-Manager configuration is initialized only for a fresh data directory. Existing
-`/data/user/__manager/config.ini` and the alternate Manager configuration path
-are preserved.
-To adopt the privacy defaults in an existing installation, review and add
-these shipped defaults, copied from `config/comfy/manager-config.ini`:
+With Manager enabled, the first start of a fresh data directory writes the
+Manager policy file to `/data/user/__manager/config.ini`; an existing
+file there, or at `/data/user/default/ComfyUI-Manager/config.ini`, is
+left alone. The policy disables sharing, direct Git URL and arbitrary pip
+installs, agent model downloads, and file logging, keeps TLS
+verification, and leaves the public channel on so the catalogue and
+registry installs work; the shipped file is
+[`config/comfy/manager-config.ini`](../config/comfy/manager-config.ini).
 
-```ini
-[default]
-security_level = normal
-downgrade_blacklist = torch, torchvision, torchaudio, triton
-share_option = none
-network_mode = public
-http_channel_enabled = false
-bypass_ssl = false
-allow_git_url_install = false
-allow_pip_install = false
-model_download_by_agent = false
-default_cache_as_channel_url = false
-file_logging = false
-```
+The `comfy` service runs with a read-only root filesystem, every Linux
+capability dropped, `no-new-privileges`, a process limit, and a bounded
+in-memory `/tmp`; only the four mounts of
+[Storage layout](configuration.md#storage-layout) and a dist-mode
+frontend are reachable. Third-party nodes are not sandboxed: they run in
+the ComfyUI process with its access to every mount and to the network.
 
-## Strict browser-offline mode
+## Strict mode
 
-Set both values when API nodes, Manager, and frontend internet access are not
-needed:
+`COMFY_DISABLE_API_NODES=true` passes `--disable-api-nodes` to ComfyUI,
+which removes the external API nodes and adds a Content Security Policy
+that blocks frontend internet access; it also blocks Manager's Extensions
+UI. Set `COMFY_ENABLE_MANAGER=false` with it when Manager is not needed.
+`COMFY_DISABLE_METADATA=true` passes `--disable-metadata`, so generated
+files carry no prompt or workflow. Neither setting limits what Python
+code inside the container sends out.
 
-```dotenv
-COMFY_DISABLE_API_NODES=true
-COMFY_ENABLE_MANAGER=false
-```
+## No internal network
 
-The API-node setting adds ComfyUI's strict Content Security Policy. Enabling it
-while keeping Manager enabled is expected to block browser requests used by the
-Extensions UI; this check is not yet validated (see
-[validation status](validation-status.md)). This mode does not block runtime
-network access for third-party Python code; use host firewall rules when
-outbound containment is required.
+A Compose `internal` network would cut the container's outbound traffic,
+but it also drops the published port, so the UI would be unreachable from
+the host. LatentCrate therefore offers no offline network mode; outbound
+containment is a host firewall rule on the container's traffic, or a
+proxy, maintained outside this project.
 
-## Output metadata
+## What is not covered
 
-Set `COMFY_DISABLE_METADATA=true` to pass `--disable-metadata`. This prevents
-ComfyUI from embedding prompts and workflows in generated files, which is useful
-before publishing outputs. This setting is disabled by default because embedded
-workflows are also valuable for reproducing results.
-
-## What the protections do not cover
-
-> **Warning:** third-party nodes execute in the ComfyUI process. They can read
-> mounted inputs, outputs, workflows, cache content, and models, and the
-> normal runtime network allows outbound connections. The API-node flag and
-> container restrictions do not prevent deliberate data theft by such code.
-> Review and pin nodes, capture their dependencies, avoid putting unrelated
-> secrets under mounted paths, and use a firewall or another outbound-network
-> rule when processing sensitive data.
-
-Node-set installation and dependency capture do not receive engine credentials.
-Node sets allow only configured public HTTPS hosts and exact commits. This
-improves repeatability, but commit pinning is not a code audit: installed node
-source still executes with the runtime's access to mounted data and network.
-
-Model-set downloads use a separate helper with access only to the model-set
-manifests, model library, Hugging Face sub-cache, temporary directory, and
-normal network. The status helper receives only the manifests and read-only model
-library, with networking disabled. When `HF_TOKEN` is set, the wrapper pipes it
-through the fetch helper's standard input; it is not added to Compose
-configuration or a container environment. The downloaded files and Hugging
-Face cache are still untrusted input. Model licenses and repository access
-rules remain the user's responsibility.
-
-The frontend release pin helper has normal network access but no host bind
-mounts. It downloads the selected `dist.zip` into container tmpfs, validates
-the archive, and prints its digest. The wrapper validates that output before it
-updates the selected version profile on the host. This helper and the version
-update helper use a dedicated Compose network that is not shared with ComfyUI.
-
-The version update helper likewise has normal network access and no host bind
-mounts or engine credentials. It receives only the checked-in version values
-needed for resolution and queries public GitHub, GitLab, npm, PyTorch package
-index, and Docker Hub endpoints. Every frontend resolution downloads the
-selected release archive into tmpfs so it can verify the digest even when the
-tag is unchanged. The helper cannot edit the repository: it prints a labeled
-proposal, and the host wrapper allowlists the keys and value formats before
-atomically updating the selected profile. Version profiles are not a place for
-secrets; the supplied values appear in the short-lived container's command
-arguments.
-
-Dependency isolation works like this:
-
-- **What enters the final image:** the isolated package tree built from the
-  saved node requirements, plus aggregate build IDs. The tree necessarily
-  exposes installed import and distribution names.
-- **What is deliberately excluded:** the wheels themselves, NVCC and the CUDA
-  development toolchain, host node paths, and the package-lock records used to
-  construct the tree. Installation happens in an unprivileged intermediate
-  stage. General build helpers such as GCC, CMake, and Ninja remain available
-  for Triton/PyTorch JIT work; third-party nodes can invoke them.
-- **What this prevents:** build-time packages replacing root-owned
-  entrypoints, and private node directory names appearing in image metadata.
-- **What it does not prevent:** anything the node does after ComfyUI imports
-  it at runtime. The node is not sandboxed.
-
-An engine-level `internal` network is not offered as a portable offline mode
-because it can block the published localhost port together with egress.
-Docker and Podman need a separately tested proxy or host-firewall design for an
-offline UI that remains reachable.
-
-The supported interface is `bash bin/latentcrate ...` (see the
-[CLI reference](cli.md)). Manually bypassing it with direct Compose calls also
-bypasses the remote-bind acknowledgement and
-requires internal build variables and engine overlays. Keep
-`COMFY_BIND_ADDRESS=127.0.0.1`, or put an authenticated TLS reverse proxy in
-front of ComfyUI before opting into remote access.
+The defaults do not protect against an untrusted node, which runs with
+the container's access; against exposing the UI beyond loopback, where
+authentication and TLS are the acknowledging user's responsibility;
+against the engine itself, whose security model is the host's; or against
+the outbound traffic of nodes and of the frontend outside strict mode.
+Direct Compose calls bypass the package's checks: the bind-address
+acknowledgement, the `.env` rules, the project lock, and the stack
+record. [SECURITY.md](../SECURITY.md) says how to report a vulnerability.

@@ -24,6 +24,7 @@ from pathlib import Path
 from . import LatentCrateError
 from .engine import Engine
 from .env import Settings, sage_mode
+from .files import publish_tree
 from .names import COMMIT_RE
 
 RELEASE_URL = "https://github.com/Comfy-Org/ComfyUI_frontend"
@@ -321,14 +322,15 @@ def build_source(settings: Settings, engine: Engine, pinned: dict[str, str], sou
         "--workdir",
         "/work/source",
     ]
-    pnpm = "/tools/bin/pnpm"
+    # The checkout's scripts call `pnpm` by name, so the tools prefix leads PATH.
+    path = "export PATH=/tools/bin:$PATH"
     engine.command(
         *options,
         image,
         "sh",
         "-c",
-        f"npm install -g --prefix /tools pnpm@{pinned['FRONTEND_PNPM_VERSION']} "
-        f"&& {pnpm} install --frozen-lockfile --ignore-scripts --store-dir /pnpm/store",
+        f"{path} && npm install -g --prefix /tools pnpm@{pinned['FRONTEND_PNPM_VERSION']} "
+        "&& pnpm install --frozen-lockfile --ignore-scripts --store-dir /pnpm/store",
     )
     engine.command(
         *options,
@@ -337,7 +339,7 @@ def build_source(settings: Settings, engine: Engine, pinned: dict[str, str], sou
         image,
         "sh",
         "-c",
-        f"{pnpm} install --offline --frozen-lockfile --store-dir /pnpm/store && {pnpm} build",
+        f"{path} && pnpm install --offline --frozen-lockfile --store-dir /pnpm/store && pnpm build",
     )
     built = work / "source" / "dist"
     if not (built / "index.html").is_file():
@@ -349,14 +351,6 @@ def build_source(settings: Settings, engine: Engine, pinned: dict[str, str], sou
             shutil.rmtree(leftover)
     shutil.move(built, staging)
     require_dist_tree(staging)
-    if dist.exists():
-        os.rename(dist, previous)
-    try:
-        os.rename(staging, dist)
-    except BaseException:
-        if previous.exists():
-            os.rename(previous, dist)
-        raise
-    shutil.rmtree(previous, ignore_errors=True)
+    publish_tree(staging, dist, previous)
     shutil.rmtree(work)
     return dist

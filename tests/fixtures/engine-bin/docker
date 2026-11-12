@@ -1,1 +1,2 @@
-podman
+#!/usr/bin/env bash
+FAKE_ENGINE_NAME=docker exec "$(dirname "$0")/podman" "$@"

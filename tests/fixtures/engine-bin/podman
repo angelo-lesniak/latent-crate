@@ -2,9 +2,10 @@
 """Fake container engine for the package tests. Answers the probes the wrapper
 makes and records every `compose` invocation on stdout so tests can check the
 routing; no container ever runs. Behaves as `podman` or `docker` from its
-own file name, exits 1 when HF_TOKEN is in its environment, where no
-credential may be, and exits 1 for a `--format` template other than the
-exact ones the wrapper sends. Controls (environment variables):
+own file name or FAKE_ENGINE_NAME, exits 1 when HF_TOKEN is in its
+environment, where no credential may be, and exits 1 for a `--format` template
+other than the exact ones the wrapper sends. Controls (environment variables):
+  FAKE_ENGINE_NAME=docker           the engine name; the `docker` fake sets it and execs this file
   FAKE_PODMAN_ROOTLESS=false / FAKE_PODMAN_RUNTIME=runc   `podman info --format` values
   FAKE_PODMAN_COMPOSE_DOCKER_PLUGIN=true   `podman compose version` names the Docker plugin
   FAKE_ENGINE_STORAGE_ROOT=<dir>    what `info --format` reports as the storage root (default /)
@@ -32,7 +33,7 @@ import os
 import shlex
 import sys
 
-name = os.path.basename(sys.argv[0])
+name = os.environ.get("FAKE_ENGINE_NAME") or os.path.basename(sys.argv[0])
 arguments = sys.argv[1:]
 project = os.environ.get("FAKE_ENGINE_PROJECT") or os.environ.get("COMPOSE_PROJECT_NAME", "latentcrate")
 CDI_DIRS_TEMPLATE = '{{range .CDISpecDirs}}{{.}}{{"\\n"}}{{end}}'

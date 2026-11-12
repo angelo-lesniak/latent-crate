@@ -42,7 +42,7 @@ CDI_NOTE = (
     "       CDI checks read configuration only; "
     "the first up and bash bin/latentcrate smoke-gpu prove device resolution."
 )
-# Run 1 measured about 35 GB per full build including caches; two variants fit under 75.
+# A full build with its caches measured about 35 GB on the validation host; two variants fit under 75.
 BUILD_GB = 75
 NVIDIA_SMI_QUERY = [
     "nvidia-smi",
@@ -284,7 +284,7 @@ def _platform_findings(facts: HostFacts) -> list[Finding]:
         findings.append(
             Finding(
                 "warn",
-                "WSL detected; complete the WSL2/NVIDIA validation checklist before describing this platform as tested",
+                "WSL detected; WSL2 is not validated, and docs/validation.md#known-gaps lists what a run must show",
             )
         )
     return findings

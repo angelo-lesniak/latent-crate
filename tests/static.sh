@@ -84,8 +84,7 @@ else
 fi
 
 if command -v rg >/dev/null 2>&1; then
-  # No tracked or new file may name a machine-specific host path. The port
-  # plan describes this scan and the host; it leaves with the plan. Each
+  # No tracked or new file may name a machine-specific host path. Each
   # match is printed on its own line so that a line can hold both. The
   # first alternative is spelled with a class so it does not match this
   # script. Without a work tree (a `git archive` extract) the whole
@@ -106,7 +105,7 @@ if command -v rg >/dev/null 2>&1; then
     printf 'static: the host path scan failed (rg exit %s)\n' "$rg_status" >&2
     exit 1
   fi
-  if printf '%s\n' "$matches" | grep -Ev '^$|^BACKPORT_REVISED\.md:'; then
+  if printf '%s\n' "$matches" | grep -Ev '^$'; then
     printf 'static: machine-specific absolute host paths remain\n' >&2
     exit 1
   fi

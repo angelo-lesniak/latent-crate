@@ -529,8 +529,8 @@ RUN --mount=type=cache,id=latentcrate-apt-debian-cache,target=/var/cache/apt,sha
 
 WORKDIR /frontend
 
-# The Git config/env hardening below mirrors the canonical Bash copy in
-# scripts/resolve-frontend.sh (hardened_git); keep the two aligned. The digest
+# The Git config/env hardening below is a Bash copy of GIT_OPTIONS and
+# git_environment in latentcrate/variants.py; keep the two aligned. The digest
 # subshell requires cd, hence the DL3003 ignore.
 # hadolint ignore=DL3003
 RUN --mount=type=cache,id=latentcrate-frontend-pnpm,target=/root/.local/share/pnpm/store \
@@ -553,13 +553,7 @@ RUN --mount=type=cache,id=latentcrate-frontend-pnpm,target=/root/.local/share/pn
     && printf '%s\n' "${FRONTEND_GIT_REQUESTED_REF}" > /opt/latentcrate-frontend-build-info/frontend.ref \
     && git rev-parse HEAD > /opt/latentcrate-frontend-build-info/frontend.commit \
     && printf '%s\n' "${FRONTEND_NODE_TAG}" > /opt/latentcrate-frontend-build-info/frontend.node-image \
-    && printf '%s\n' "${FRONTEND_PNPM_VERSION}" > /opt/latentcrate-frontend-build-info/frontend.pnpm-version \
-    && (export LC_ALL=C; cd /frontend/dist \
-        && find . -type f -print0 \
-            | sort -z \
-            | xargs -0 sha256sum \
-            | sha256sum \
-            | cut -d ' ' -f 1) > /opt/latentcrate-frontend-build-info/frontend.content.sha256
+    && printf '%s\n' "${FRONTEND_PNPM_VERSION}" > /opt/latentcrate-frontend-build-info/frontend.pnpm-version
 
 
 # Target: adds the frontend built from Git. The default build passes the

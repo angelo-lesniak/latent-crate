@@ -25,7 +25,7 @@ except ImportError:
         "(a silent skip would hollow out the gate, so the dependency is mandatory)"
     ) from None
 
-from latentcrate import PROJECT_ROOT, engine, env, models, nodes, templates
+from latentcrate import PROJECT_ROOT, cli, engine, env, models, nodes, templates
 
 DOCKERFILE = "services/comfy/Dockerfile"
 ENTRYPOINT = "services/comfy/entrypoint.sh"
@@ -667,6 +667,39 @@ class ProjectContractTests(unittest.TestCase):
         self.assertEqual(listed["pip"]["schedule"]["interval"], "monthly")
         self.assertEqual(listed["github-actions"]["schedule"]["interval"], "weekly")
         self.assertIn("docker", read_text(".github/dependabot.yml"), "the file says why there is no docker entry")
+
+    # `help` is the syntax source; one verbatim copy sits on the page that
+    # owns the command, so a flag change has one page to update (plan 3.7 b).
+    def test_every_usage_line_sits_on_exactly_one_page(self) -> None:
+        pages = {
+            path.relative_to(PROJECT_ROOT).as_posix(): {
+                line.strip() for line in path.read_text(encoding="utf-8").splitlines()
+            }
+            for path in tracked("README.md") + tracked("docs/*.md")
+        }
+        for command in cli.COMMANDS:
+            usage = command.usage.strip()
+            holders = sorted(name for name, lines in pages.items() if usage in lines)
+            self.assertEqual(
+                len(holders), 1, f"the usage line `{usage}` sits on {len(holders)} pages, not one: {holders or 'none'}"
+            )
+
+    # The README table is the one map of the documentation: every page under
+    # docs/ has a row, and no row points at a page that is not there.
+    def test_the_readme_table_links_every_docs_page(self) -> None:
+        readme = read_text("README.md")
+        match = re.search(r"^## Choose what to do next\n(?P<body>.*?)(?=^## |\Z)", readme, re.MULTILINE | re.DOTALL)
+        self.assertIsNotNone(match, "README.md has a section `## Choose what to do next`")
+        linked = {
+            re.sub(r"#.*$", "", link.group("target").strip())
+            for link in MARKDOWN_LINK_RE.finditer(match.group("body"))
+            if link.group("target").strip().startswith("docs/")
+        }
+        pages = {path.relative_to(PROJECT_ROOT).as_posix() for path in tracked("docs/*.md")}
+        self.assertEqual(
+            sorted(pages - linked), [], "the README table `Choose what to do next` links every page under docs/"
+        )
+        self.assertEqual(sorted(linked - pages), [], "every docs/ link in the README table names a tracked page")
 
     def test_the_documentation_links_and_anchors_resolve(self) -> None:
         pages = {path: path.read_text(encoding="utf-8") for path in tracked("*.md")}

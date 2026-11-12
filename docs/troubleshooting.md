@@ -1,184 +1,282 @@
 # Troubleshooting
 
-Start with these two commands:
+One section per message the package or the container prints, with the
+cause and the remedy. `bash bin/latentcrate doctor` repeats every host
+check; `bash bin/latentcrate logs` follows the container.
 
-```bash
-bash bin/latentcrate doctor current
-bash bin/latentcrate logs current
+## The `.env` file is not private
+
+```text
+<path> must be owned by your user (uid <uid>), since it may hold credentials
+<path> must be readable by your user only; run: chmod 600 <path>
 ```
 
-Use the same version profile that you used when starting the container. Repeat
-the same `--sage` mode with `doctor`, `config`, or `smoke-gpu` when you opted in
-to a Sage-capable image. The sections below cover common first-run problems.
+`.env` may hold `HF_TOKEN`, so another owner or a wider mode is refused.
+Run the `chmod`, or `chown` the file to yourself. See
+[Settings](configuration.md#settings) for the file's rules.
 
-## `doctor` cannot find an NVIDIA CDI device
+## `.env` sets a key `.env.example` does not list
 
-**Likely cause:** NVIDIA Container Toolkit is missing, its CDI file is stale, or
-`GPU_DEVICE` names a device that is not present.
-
-```bash
-nvidia-smi
-nvidia-ctk cdi list
+```text
+.env sets <keys>, which .env.example does not list; remove the line or set the variable in the shell instead
 ```
 
-Follow the current NVIDIA Container Toolkit setup for your engine, regenerate
-CDI devices, and check `GPU_DEVICE` in `.env`. Avoid using CDI and an older
-NVIDIA OCI hook at the same time. Run `bash bin/latentcrate doctor current`
-again and confirm the CDI check no longer fails.
+The key is a typo, a removed setting, or an engine variable. Remove the
+line or export the variable in the shell. See
+[Settings](configuration.md#settings) for the precedence.
 
-## The CUDA architecture check fails
+## No CDI spec was found
 
-**Likely cause:** the version profile targets compute capability 12.0
-(RTX 50-series), but your GPU has another capability.
-
-Show your card's capability. Plain `nvidia-smi` does not display it; use the
-query form:
-
-```bash
-nvidia-smi --query-gpu=compute_cap --format=csv,noheader
+```text
+no nvidia.com/gpu CDI spec was found under /etc/cdi or /var/run/cdi; run: sudo nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml
 ```
 
-Copy `versions/current.env` to a new profile and change
-`CUSTOM_NODE_CUDA_ARCH_LIST` to that value. If you use Sage with that profile,
-also change `SAGE_CUDA_ARCH_LIST`. The
-[getting-started guide](getting-started.md#first-launch) shows the exact
-commands. Native packages must be rebuilt for the selected capability.
-Complete the relevant GPU validation guide before describing that profile as
-validated.
+The NVIDIA Container Toolkit has not generated a CDI specification where
+the engine reads it. Run the printed command. See
+[GPU and engine support](configuration.md#gpu-and-engine-support) for the
+CDI selector and where the engine reads the spec.
 
-## Docker or Podman is not selected correctly
+## Docker reports no CDI spec directories
 
-**Likely cause:** both engines are installed and automatic selection picked
-the other one, or the selected engine has no working Compose provider.
-
-Set one engine in `.env`:
-
-```dotenv
-CONTAINER_ENGINE=docker
+```text
+Docker reports no CDI spec directories; enable CDI in /etc/docker/daemon.json ("features": {"cdi": true}) or upgrade Docker so <GPU_DEVICE> can resolve
 ```
 
-or:
+The Docker daemon runs without CDI. Add the feature to `daemon.json` and
+restart the daemon. See
+[GPU and engine support](configuration.md#gpu-and-engine-support) for the
+Docker requirements.
 
-```dotenv
-CONTAINER_ENGINE=podman
+## The arch list does not cover the GPU
+
+```text
+COMFY_CUDA_ARCH_LIST=<list> does not cover compute capability <capability>; add it to the list in .env
 ```
 
-Podman must be rootless, use `crun`, and have a working Compose provider. In
-WSL2, use a Linux client inside the distribution. A forwarded Windows `.exe`
-client is not supported. Run `bash bin/latentcrate doctor current` again and
-confirm that no `[fail]` line mentions the engine or Compose.
+The build compiles for the listed architectures only. Add the printed
+capability to `COMFY_CUDA_ARCH_LIST` in `.env` and run `build`. See
+[GPU and engine support](configuration.md#gpu-and-engine-support) for the
+arch list setting.
 
-## The first build runs out of disk or memory
+## The driver is older than the pinned minimum
 
-The CUDA bases, FFmpeg stages, and build cache are large. Keep at least 75 GB
-free for a first release build and more when building several profiles. An
-opted-in Sage build adds compilation work and uses a low-memory default of two
-compiler jobs. Reduce `SAGE_BUILD_JOBS` in the selected profile if that compiler
-is killed for memory.
-
-## The UI does not become healthy
-
-Follow the logs:
-
-```bash
-bash bin/latentcrate logs current
+```text
+NVIDIA driver <version> is older than the pinned minimum major <major> (CUDA_MIN_DRIVER_MAJOR)
 ```
 
-Check for a missing model/data mount, a custom-node import error, an invalid
-Manager configuration, or another program already using port `4207` (see
-[the port is already in use](#the-port-is-already-in-use)). Inspect service
-state with:
+The pinned CUDA family needs a newer host driver. Update the driver. See
+[Pins and upgrading](configuration.md#pins-and-upgrading) for the pin.
 
-```bash
-bash bin/latentcrate status current
+## Neither engine is usable
+
+```text
+neither Podman nor Docker has both a reachable engine and Compose provider; run: bash bin/latentcrate doctor
 ```
 
-## The port is already in use
+No engine passed every probe. `doctor` prints one line per probe of each
+engine it found; fix the first failed one. See
+[GPU and engine support](configuration.md#gpu-and-engine-support) for the
+Podman and Docker requirements.
 
-**Symptom:** startup fails and the engine reports an error such as
-`port is already allocated` or `address already in use`. Another program on
-the host already holds port `4207`.
+## The Podman compose provider is the Docker Compose plugin
 
-Set a different host port in `.env`:
-
-```dotenv
-COMFY_PORT=4210
+```text
+the Podman compose provider is the Docker Compose plugin, which drops CDI GPU devices; install podman-compose
 ```
 
-Or override it for one command; shell environment variables take precedence
-over `.env`:
+`podman compose` delegates to a provider that loses the GPU request.
+Install `podman-compose`. See
+[GPU and engine support](configuration.md#gpu-and-engine-support) for the
+engine selection.
 
-```bash
-COMFY_PORT=4210 bash bin/latentcrate up current --detach
+## The stack runs on another engine
+
+```text
+the stack runs on <recorded>, not <requested> (build/stack.json); run: CONTAINER_ENGINE=<recorded> bash bin/latentcrate down
 ```
 
-> **Note:** inside WSL2, a Windows program can hold the port. Linux-side tools,
-> including `doctor`, cannot see it. Check from Windows with
-> `netstat -ano | findstr 4207` in PowerShell or Command Prompt.
+A running stack holds the GPU and the port on the recorded engine. Run
+the printed `down` first. See
+[GPU and engine support](configuration.md#gpu-and-engine-support) for the
+stack record.
 
-## Permission denied under data, models, or cache
+## WSL must use a Linux client
 
-Run `bash bin/latentcrate init` again; it keeps `.env` but prepares missing
-directories. Confirm `HOST_UID` and `HOST_GID` match `id -u` and `id -g`.
-
-For a group-owned model library, Docker can add `HOST_MODEL_GID`. Rootless
-Podman uses the current user's supplementary groups through `keep-groups` and
-therefore requires `crun`.
-
-## A third-party node cannot import a Python package
-
-Manager's immediate runtime install is disposable. Save the node requirements
-in the image and recreate the container:
-
-```bash
-bash bin/latentcrate up current --detach
-bash bin/latentcrate wait current
+```text
+WSL must use a Linux <engine> client inside the distribution, not <path>
 ```
 
-If the build fails, the previous buildable dependency snapshot is restored.
-Read the build error before adding a constraint or Dockerfile package. See the
-[third-party node guide](third-party-nodes.md).
+The Windows `.exe` on the interop path cannot run the stack. Install the
+engine inside the distribution. See
+[Validation](validation.md#procedures) for the WSL2 differences.
 
-## A frontend change is not visible
+## Cannot use the host port
 
-Repeat the same frontend option used for the previous start. For local source:
-
-```bash
-bash bin/latentcrate up edge \
-  --frontend-source /path/to/ComfyUI_frontend \
-  --detach
+```text
+cannot use host port <port> on <address>: <cause>
 ```
 
-LatentCrate rebuilds the frontend files and recreates the container. For a
-public branch or pull request, it resolves the current commit before the image
-build. See [frontend modes](frontends.md).
+Another program holds the port; under WSL2 `doctor` appends `; under WSL2
+a Windows-side program can hold a port invisibly to Linux tools (check
+with netstat -ano from Windows)`. Stop that program or set another
+`COMFY_PORT`. See [Settings](configuration.md#settings) for overriding a
+setting for one command.
 
-## SageAttention is installed but a workflow does not use it
+## The container is not ready
 
-The Sage-capable image does not force global replacement. Select the Sage option
-inside the workflow or use the KJNodes patch required by that workflow.
+```text
+container is <state> before it was ready. Check the logs: bash bin/latentcrate logs
+container did not become healthy within <timeout>s. Check the logs: bash bin/latentcrate logs
+```
 
-Set `LATENTCRATE_SAGE=global` only after representative workflows pass with
-ComfyUI's global `--use-sage-attention` behavior.
+ComfyUI exited or did not answer on the published address in time. Run
+`bash bin/latentcrate logs` and fix the first error it shows. See
+[Start here](../README.md#start-here) for what `up` does and its
+`--timeout`.
 
-## WSL2 bind mounts are slow
+## The selected image does not exist locally
 
-Move the checkout, data, and cache from `/mnt/c/...` to the WSL Linux
-filesystem, such as `~/src/latentcrate` and `~/latentcrate-data`. Keep model
-storage close to the engine when possible.
+```text
+selected image does not exist locally: <image>; run: bash bin/latentcrate build
+```
+
+`smoke-gpu` resolved an image that was never built for this Sage and
+frontend selection. Run `build` with the same `--sage` mode, or pass the
+mode the stack runs with. See
+[Pins and upgrading](configuration.md#pins-and-upgrading).
+
+## The running container uses another image
+
+```text
+the running container uses another image than <image>; rerun up with the same --sage and frontend selection (or run down first)
+```
+
+`smoke-gpu` was given a different `--sage` mode or frontend mode than
+`up`. Repeat the mode `up` ran with. See
+[Dist mode](frontends.md#dist-mode) for smoking a stack started with a
+frontend flag.
+
+## SageAttention was required but the container is not Sage-capable
+
+```text
+LatentCrate: SageAttention was required, but the running container is not Sage-capable.
+Recreate it with a Sage-capable image: bash bin/latentcrate up --sage available --detach
+```
+
+`smoke-gpu --sage available` or `global` found a container from the image
+without SageAttention. Run the printed `up`. See
+[SageAttention](nodes.md#sageattention).
+
+## A custom-node set is missing nodes
+
+```text
+custom-node set <name> is missing <nodes>; run: bash bin/latentcrate nodes install <name>
+```
+
+`up` found the set's record but not every checkout. Run the printed
+install. See [Node sets](nodes.md#node-sets).
+
+## Stop ComfyUI before installing a node set
+
+```text
+stop ComfyUI before installing or syncing a custom-node set: bash bin/latentcrate down
+```
+
+The image is built from these sources, so they change only while the
+stack is down. Run `down`, then the install. See
+[Node sets](nodes.md#node-sets).
+
+## Cached runtime packages have dependency conflicts
+
+```text
+LatentCrate: cached runtime packages have dependency conflicts.
+Rebuild the image (bash bin/latentcrate build), then clear <PYTHONUSERBASE>.
+```
+
+Packages Manager installed into the cache disagree with the image. Run
+`build`, then delete the printed directory under `COMFY_CACHE_DIR`. See
+[After a Manager change](nodes.md#after-a-manager-change).
+
+## The image is not built
+
+```text
+the image <image> is not built; run: bash bin/latentcrate build
+```
+
+`templates` runs inside the image and never builds it. Run `build`. See
+[Add a set](models.md#add-a-set) for the templates tools.
+
+## Cannot access a gated repository
+
+```text
+cannot access <repository>/<file> at <revision> (HTTP 401). For gated repositories, accept the license and set HF_TOKEN in .env.
+```
+
+The code is `401` or `403`. Accept the license on Hugging Face and set
+`HF_TOKEN` in `.env`. See [Fetch a set](models.md#fetch-a-set).
+
+## A file has other content
+
+```text
+<destination> has the <state>; move it aside before downloading the pinned file
+```
+
+A file at the destination differs from the pinned one, and the downloader
+never overwrites. Move it aside and fetch again. See
+[Fetch a set](models.md#fetch-a-set).
+
+## A download stopped
+
+```text
+download of <destination> stopped after <received> of <size> bytes; run models fetch again to resume
+```
+
+The connection ended. Run `models fetch` again; it resumes the partial
+file. See [Fetch a set](models.md#fetch-a-set).
+
+## The selected files need more free space
+
+```text
+the selected files need <needed> GB but only <free> GB are free below <models directory>; make room or fetch fewer sets
+```
+
+The bytes still to download exceed the free space. Make room or fetch
+fewer sets. See [Storage layout](configuration.md#storage-layout).
+
+## Another download is using the models directory
+
+```text
+another model-set download is using this models directory
+```
+
+One `models fetch` runs per models directory. Wait for it, or stop it.
+See [Fetch a set](models.md#fetch-a-set).
+
+## The destination escapes the allowed model storage
+
+```text
+destination escapes the allowed model storage: <destination>; list its symlink target in MODEL_SET_EXTRA_WRITE_ROOTS
+```
+
+A symbolic link below the models directory points to a directory not
+listed in `MODEL_SET_EXTRA_WRITE_ROOTS`. List the target. See
+[Storage layout](configuration.md#storage-layout) for the link rule.
+
+## The frontend reference is ambiguous
+
+```text
+frontend reference <ref> is ambiguous; write refs/heads/<ref> or refs/tags/<ref>
+```
+
+A branch and a tag carry the same name. Write the full reference. See
+[Git mode](frontends.md#git-mode).
 
 ## Asking for help
 
 Open an issue in the
-[LatentCrate issue tracker](https://github.com/angelo-lesniak/latent-crate/issues).
-For security problems, follow [SECURITY.md](../SECURITY.md) instead of opening
-a public issue. Include:
-
-- the exact command that failed;
-- the selected version profile and engine;
-- relevant `doctor` and log output;
-- GPU and driver information from `nvidia-smi`;
-- a GPU report from `reports/` when `smoke-gpu` ran.
-
-Remove host paths, prompts, workflow data, and other private information before
-sharing logs or reports.
+[issue tracker](https://github.com/angelo-lesniak/latent-crate/issues);
+for a vulnerability, follow [SECURITY.md](../SECURITY.md) instead. Attach
+the output of `bash bin/latentcrate pins`, `doctor`, and `status`, the
+output of the failing command, the report path `smoke-gpu` printed, and
+the engine and driver versions. Remove private paths, prompts, and
+workflows, and never include `HF_TOKEN`.
