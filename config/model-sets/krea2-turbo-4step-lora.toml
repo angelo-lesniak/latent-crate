@@ -1,5 +1,5 @@
 schema = 1
-description = "Krea 2 Turbo 4-step LoRA add-on for the INT8 text-to-image workflow"
+description = "Krea 2 Turbo 4-step LoRA add-on for the INT8 text-to-image workflow; fewer steps at visibly lower quality"
 workflow_urls = ["https://github.com/Comfy-Org/workflow_templates/blob/c8e48bdcfc7241d7af588d20d4f924caf9d9d953/templates/image_krea2_turbo_t2i_int8.json"]
 
 [[license]]
