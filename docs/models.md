@@ -87,12 +87,13 @@ checksum. `check --remote` compares only the pins a file carries.
 A `[[file]]` entry may name `civitai_version`, the number in
 `https://civitai.com/api/download/models/<version>`, in place of
 `repository`, `revision`, and `source`. The package builds that URL and
-saves the version's primary file at `destination`; the file name Civitai
-offers is ignored. Version ids and accounts are shared with
+saves the version's primary file, or the one `civitai_file` names, at
+`destination`; the file name Civitai offers is ignored. Version ids and accounts are shared with
 `civitai.red` and `civitai.com` serves
 the API for both. `models draft civitai:<version>` prints the entry with
-the size and checksum from Civitai's record, and refuses a version
-without a single primary file, naming its files. A file the creator
+the size and checksum from Civitai's record, lists the version's other
+files with their ids as comments, and refuses a version without a single
+primary file, naming its files. A file the creator
 limits to signed-in accounts needs `CIVITAI_TOKEN` in `.env`.
 
 Before adding a Civitai file, weigh its risks:
@@ -103,7 +104,7 @@ Before adding a Civitai file, weigh its risks:
   can stop resolving; `fetch` then refuses instead of taking other bytes.
 - The content and license are the uploader's, and nobody reviews them. A
   model page is edited in place, so only a private set may name
-  `https://civitai.com/models/<id>` (or `civitai.red`) as its license; keep any file whose
+  `https://civitai.com/models/<id>` as its license; keep any file whose
   license is not clear in a [private set](#private-sets).
 - Civitai redirects the download to a CDN host, which receives the
   request without the token.
@@ -122,12 +123,13 @@ refuses any other key.
 | `workflow_urls` | yes | Unique commit-pinned `Comfy-Org/workflow_templates` blob URLs |
 | `[[license]]` | one or more | A model license the user accepts before downloading |
 | `license.name` | yes | Shown by `fetch` |
-| `license.url` | yes | An HTTPS URL pinned to a 40-character commit on `huggingface.co`, `github.com`, or `cdn.jsdelivr.net`; a private set may also name `https://civitai.com/models/<id>` or its `civitai.red` form |
+| `license.url` | yes | An HTTPS URL pinned to a 40-character commit on `huggingface.co`, `github.com`, or `cdn.jsdelivr.net`; a private set may also name `https://civitai.com/models/<id>` |
 | `[[file]]` | one or more | One pinned Hugging Face file or Civitai model version |
 | `file.repository` | Hugging Face files | `<owner>/<repository>` |
 | `file.revision` | Hugging Face files | Full lowercase commit of the repository |
 | `file.source` | Hugging Face files | Path of the file in the repository at that commit |
 | `file.civitai_version` | Civitai files | Civitai model-version id, a positive integer; excludes the three keys above |
+| `file.civitai_file` | no | With `civitai_version`: the id of a non-primary file of that version, a positive integer |
 | `file.destination` | yes | Path below `/models`; unique within the set |
 | `file.size` | shipped sets | Byte size, a positive integer |
 | `file.sha256` | shipped sets | Lowercase hexadecimal SHA-256 of the file |

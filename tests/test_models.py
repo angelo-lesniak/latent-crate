@@ -285,14 +285,25 @@ class ModelSetTests(unittest.TestCase):
                 self.read(MANIFEST_HEAD + row + pins + extra)
         with self.assertRaisesRegex(LatentCrateError, "unknown field.*download_url"):
             self.read(MANIFEST_HEAD + row + pins + 'download_url = "https://evil.example/x"\n')
+        self.assertEqual(self.read(MANIFEST_HEAD + row + pins + "civitai_file = 8\n").files[0].civitai_file, 8)
+        self.assertIsNone(model_file.civitai_file)
+        for value in ("0", "-1", "true", '"8"', "1.5"):
+            with (
+                self.subTest(civitai_file=value),
+                self.assertRaisesRegex(LatentCrateError, "civitai_file must be a positive"),
+            ):
+                self.read(MANIFEST_HEAD + row + pins + f"civitai_file = {value}\n")
+        with self.assertRaisesRegex(LatentCrateError, "file 1 names civitai_file without civitai_version"):
+            self.read(MANIFEST_HEAD + file_row("a", "b") + "civitai_file = 8\n")
 
         # A model page is mutable, so only a private set may cite it as its license.
-        for url in ("https://civitai.com/models/77", "https://civitai.red/models/77"):
-            page = MANIFEST_HEAD.replace(LICENSE_URL, url)
-            self.assertEqual(self.read(page + row, private=True).licenses[0].url, url)
-            with self.assertRaisesRegex(LatentCrateError, "license 1 needs an immutable approved HTTPS URL"):
-                self.read(page + row + pins)
+        url = "https://civitai.com/models/77"
+        page = MANIFEST_HEAD.replace(LICENSE_URL, url)
+        self.assertEqual(self.read(page + row, private=True).licenses[0].url, url)
+        with self.assertRaisesRegex(LatentCrateError, "license 1 needs an immutable approved HTTPS URL"):
+            self.read(page + row + pins)
         for url in (
+            "https://civitai.red/models/77",
             "https://civitai.green/models/77",
             "https://civitai.com/models/77?x=1",
             "http://civitai.com/models/77",
@@ -495,9 +506,11 @@ class ModelSetTests(unittest.TestCase):
         content = b"small civitai model"
         model_set, model_file = self.civitai_set(content)
         cdn_requests: list[tuple[str, str | None]] = []
+        agents: set[str | None] = set()
 
         def cdn(handler):
             cdn_requests.append((handler.path, handler.headers.get("Authorization")))
+            agents.add(handler.headers.get("User-Agent"))
             serve_bytes(
                 handler, content, extra_headers={"Content-Disposition": 'attachment; filename="../../evil.bin"'}
             )
@@ -517,6 +530,7 @@ class ModelSetTests(unittest.TestCase):
         civitai_requests: list[tuple[str, str | None]] = []
 
         def civitai(handler):
+            agents.add(handler.headers.get("User-Agent"))
             handler.send_response(307)
             handler.send_header("Location", f"{hub.CIVITAI_RED_URL}{handler.path}")
             handler.end_headers()
@@ -546,6 +560,28 @@ class ModelSetTests(unittest.TestCase):
         self.assertEqual(set(red_requests), {(f"/api/download/models/{VERSION}?fileId=9", f"Bearer {CIVITAI_TOKEN}")})
         self.assertEqual(set(cdn_requests), {("/file?X-Signature=signed", None)})
         self.assertEqual(hub_requests, [])
+        # Cloudflare in front of Civitai refuses urllib's default agent.
+        self.assertEqual(agents, {hub.USER_AGENT})
+
+    def test_civitai_file_downloads_that_file_of_the_version(self):
+        content = b"small civitai model"
+        model_set, model_file = self.civitai_set(content)
+        chosen = models.ModelFile(**{**model_file.__dict__, "civitai_file": 8})
+        requests: list[tuple[str, str | None]] = []
+        self.serve_civitai(lambda handler: serve_bytes(handler, content), requests)
+        with tempfile.TemporaryDirectory() as directory:
+            self.fetch(models.ModelSet(**{**model_set.__dict__, "files": (chosen,)}), Path(directory), None)
+            self.assertEqual((Path(directory) / chosen.destination).read_bytes(), content)
+        self.assertIn((f"/api/download/models/{VERSION}?fileId=8", None), requests)
+        self.assertNotEqual(
+            library.staging_directory(chosen, Path("/m/x")), library.staging_directory(model_file, Path("/m/x"))
+        )
+        missing = models.ModelFile(**{**model_file.__dict__, "civitai_file": 7})
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            self.assertRaisesRegex(LatentCrateError, f"^Civitai model version {VERSION} has no file 7$"),
+        ):
+            self.fetch(models.ModelSet(**{**model_set.__dict__, "files": (missing,)}), Path(directory), None)
 
     def test_a_civitai_redirect_off_its_scheme_is_refused_without_the_signed_query(self):
         model_set, _ = self.civitai_set()
@@ -1240,8 +1276,9 @@ class ModelSetTests(unittest.TestCase):
     def test_draft_renders_the_primary_file_of_a_civitai_version(self):
         content = b"small civitai model" * 100
         files = [
-            {"name": "data.zip", "type": "Training Data", "primary": False, "sizeKB": 1.0},
+            {"id": 8, "name": "data.zip", "type": "Training Data", "primary": False, "sizeKB": 1.0},
             {
+                "id": 9,
                 "name": "style.safetensors",
                 "primary": True,
                 "sizeKB": len(content) / 1024,
@@ -1253,6 +1290,7 @@ class ModelSetTests(unittest.TestCase):
 
         self.assertEqual(requests, [(f"/api/v1/model-versions/{VERSION}", f"Bearer {CIVITAI_TOKEN}")])
         self.assertIn(f"# Model page and license: {hub.CIVITAI_URL}/models/77\n", text)
+        self.assertTrue(text.endswith("\n#   civitai_file = 8: 'data.zip', size 1024, sha256 unknown\n"))
         self.assertEqual(
             tomllib.loads(text)["file"][0],
             {
@@ -1276,8 +1314,10 @@ class ModelSetTests(unittest.TestCase):
             models.draft(f"civitai:{VERSION}", models.Tokens())
 
         self.civitai_api({"files": [{"name": 'my "lora"\n.safetensors', "sizeKB": 0.3, "hashes": {"SHA256": "X"}}]})
-        entry = tomllib.loads(models.draft(f"civitai:{VERSION}", models.Tokens()))["file"][0]
+        text = models.draft(f"civitai:{VERSION}", models.Tokens())
+        entry = tomllib.loads(text)["file"][0]
         self.assertEqual((entry["destination"], entry["size"], entry["sha256"]), ("TODO", "TODO", "TODO"))
+        self.assertNotIn("civitai_file", text)
 
     def test_remote_check_compares_a_civitai_version_with_its_record(self):
         model_set, model_file = self.civitai_set()
@@ -1302,6 +1342,12 @@ class ModelSetTests(unittest.TestCase):
         self.assertIsNone(drafts.civitai_mismatch(unpinned, {"files": [{"sizeKB": 1.0}]}))
         self.assertEqual(
             drafts.civitai_mismatch(model_file, {"files": [{"sizeKB": 1.0}]}),
+            f"remote size 1024, manifest {model_file.size}",
+        )
+        chosen = models.ModelFile(**{**model_file.__dict__, "civitai_file": 8})
+        self.assertIsNone(drafts.civitai_mismatch(chosen, {"files": [{"id": 9, "primary": True}, {**record, "id": 8}]}))
+        self.assertEqual(
+            drafts.civitai_mismatch(chosen, {"files": [{**record, "id": 9}, {"id": 8, "sizeKB": 1.0}]}),
             f"remote size 1024, manifest {model_file.size}",
         )
 

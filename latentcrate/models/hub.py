@@ -108,10 +108,20 @@ def redirect_target(url: str, location: str) -> str:
     return target
 
 
-def primary_file(version: int, payload: dict) -> dict:
-    """The file a Civitai version record marks primary, or its only file.
-    Names come from the uploader, so they are shown quoted."""
-    files = [item for item in payload.get("files", []) if isinstance(item, dict)]
+def civitai_files(payload: dict) -> list[dict]:
+    return [item for item in payload.get("files", []) if isinstance(item, dict)]
+
+
+def version_file(version: int, payload: dict, file_id: int | None = None) -> dict:
+    """The file of a Civitai version record with id file_id, or without one
+    the file it marks primary, or its only file. Names come from the
+    uploader, so they are shown quoted."""
+    files = civitai_files(payload)
+    if file_id is not None:
+        chosen = [item for item in files if item.get("id") == file_id]
+        if len(chosen) != 1:
+            raise LatentCrateError(f"Civitai model version {version} has no file {file_id}")
+        return chosen[0]
     primary = files if len(files) == 1 else [item for item in files if item.get("primary") is True]
     if len(primary) != 1:
         names = ", ".join(repr(item.get("name")) for item in files) or "none"
@@ -121,11 +131,12 @@ def primary_file(version: int, payload: dict) -> dict:
 
 def file_url(model_file: ModelFile, tokens: Tokens) -> str:
     """The download URL, built here and never read from the manifest. A
-    Civitai version is asked for its primary file by id: without one,
+    Civitai version is asked for its chosen file by id: without one,
     Civitai picks a file by the signed-in account's preferences."""
     if model_file.civitai_version is not None:
         version = model_file.civitai_version
-        file_id = primary_file(version, hub_json(version_url(version), tokens)).get("id")
+        chosen = version_file(version, hub_json(version_url(version), tokens), model_file.civitai_file)
+        file_id = chosen.get("id")
         if not isinstance(file_id, int) or isinstance(file_id, bool) or file_id <= 0:
             raise LatentCrateError(f"Civitai names no file id for the primary file of model version {version}")
         return f"{CIVITAI_URL}/api/download/models/{version}?fileId={file_id}"

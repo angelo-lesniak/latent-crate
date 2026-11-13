@@ -10,7 +10,7 @@ from pathlib import PurePosixPath
 from .. import LatentCrateError
 from ..names import COMMIT_RE, RELATIVE_PATH_RE, SHA256_RE, relative_path
 from . import hub
-from .hub import Tokens, hub_json, open_url, primary_file, revision_url, version_url
+from .hub import Tokens, civitai_files, hub_json, open_url, revision_url, version_file, version_url
 from .manifest import REPOSITORY_RE, ModelFile, ModelSet
 
 GITHUB_BLOB_RE = re.compile(r"^https://github\.com/([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)/blob/([0-9a-f]{40})/(.+)$")
@@ -40,7 +40,7 @@ def civitai_record(item: dict) -> tuple[int | None, str | None]:
 
 def draft_civitai(version: int, tokens: Tokens) -> str:
     payload = hub_json(version_url(version), tokens)
-    item = primary_file(version, payload)
+    item = version_file(version, payload)
     name = item.get("name")
     size, digest = civitai_record(item)
     model = payload.get("modelId")
@@ -54,6 +54,15 @@ def draft_civitai(version: int, tokens: Tokens) -> str:
         f"size = {size}" if size is not None else 'size = "TODO"',
         f"sha256 = {toml_string(digest)}" if digest is not None else 'sha256 = "TODO"',
     ]
+    others = [other for other in civitai_files(payload) if other is not item]
+    if others:
+        lines.append("# Other files of this version; to take one, set civitai_file and its destination, size, sha256:")
+    for other in others:
+        other_size, other_digest = civitai_record(other)
+        lines.append(
+            f"#   civitai_file = {other.get('id')!r}: {other.get('name')!r}, "
+            f"size {other_size or 'unknown'}, sha256 {other_digest or 'unknown'}"
+        )
     return "\n".join(lines) + "\n"
 
 
@@ -108,8 +117,8 @@ def remote_mismatch(model_file: ModelFile, siblings: dict[str, dict]) -> str | N
 
 
 def civitai_mismatch(model_file: ModelFile, payload: dict) -> str | None:
-    """How Civitai's record of a pinned version's primary file disagrees with the manifest, or None."""
-    size, digest = civitai_record(primary_file(model_file.civitai_version, payload))
+    """How Civitai's record of a pinned version's chosen file disagrees with the manifest, or None."""
+    size, digest = civitai_record(version_file(model_file.civitai_version, payload, model_file.civitai_file))
     if model_file.size is not None and size != model_file.size:
         return f"remote size {size}, manifest {model_file.size}"
     if None not in (digest, model_file.sha256) and digest != model_file.sha256:

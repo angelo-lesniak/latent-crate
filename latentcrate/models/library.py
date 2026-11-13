@@ -218,6 +218,7 @@ def staging_directory(model_file: ModelFile, destination: Path) -> Path:
     a stale partial download."""
     if model_file.civitai_version is not None:
         pinned = f"civitai\0{model_file.civitai_version}"
+        pinned += "" if model_file.civitai_file is None else f"\0{model_file.civitai_file}"
     else:
         pinned = f"{model_file.repository}\0{model_file.revision}\0{model_file.source}"
     return destination.parent / STAGING_NAME / hashlib.sha256(pinned.encode()).hexdigest()[:24]

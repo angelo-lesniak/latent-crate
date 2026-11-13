@@ -22,8 +22,10 @@ LICENSE_URL_RE = re.compile(
     r")$"
 )
 # A model page is edited in place by its uploader and has no pinned form,
-# so only a private set may name one as its license.
-CIVITAI_MODEL_URL_RE = re.compile(r"^https://civitai\.(?:com|red)/models/[1-9][0-9]*$")
+# so only a private set may name one as its license. civitai.red is left
+# out: Cloudflare challenges its pages over HTTP/1.1, so check --remote
+# could never reach them.
+CIVITAI_MODEL_URL_RE = re.compile(r"^https://civitai\.com/models/[1-9][0-9]*$")
 
 
 @dataclass(frozen=True)
@@ -35,7 +37,8 @@ class License:
 @dataclass(frozen=True)
 class ModelFile:
     # A Hugging Face file names repository, revision, and source; a Civitai
-    # file names civitai_version and leaves the three None.
+    # file names civitai_version, and civitai_file for a non-primary file,
+    # and leaves the three None.
     repository: str | None
     revision: str | None
     source: str | None
@@ -44,6 +47,7 @@ class ModelFile:
     size: int | None
     sha256: str | None
     civitai_version: int | None = None
+    civitai_file: int | None = None
 
     @property
     def origin(self) -> str:
@@ -133,17 +137,22 @@ def read_file(raw: object, index: int, name: str, private: bool) -> ModelFile:
         raise LatentCrateError(f"{name}: file {index} must be a table")
     context = f"{name} file {index}"
     hub_keys = {"repository", "revision", "source"}
-    require_keys(raw, {*hub_keys, "civitai_version", "destination", "size", "sha256"}, context)
+    require_keys(raw, {*hub_keys, "civitai_version", "civitai_file", "destination", "size", "sha256"}, context)
     destination = relative_path(raw.get("destination"), "destination", context)
     size = raw.get("size")
     digest = raw.get("sha256")
     version = raw.get("civitai_version")
+    file_id = raw.get("civitai_file")
     repository = revision = source = None
     if "civitai_version" in raw:
         if hub_keys & set(raw):
             raise LatentCrateError(f"{name}: file {index} names civitai_version beside repository, revision, or source")
         if not isinstance(version, int) or isinstance(version, bool) or version <= 0:
             raise LatentCrateError(f"{name}: file {index} civitai_version must be a positive integer")
+        if "civitai_file" in raw and (not isinstance(file_id, int) or isinstance(file_id, bool) or file_id <= 0):
+            raise LatentCrateError(f"{name}: file {index} civitai_file must be a positive integer")
+    elif "civitai_file" in raw:
+        raise LatentCrateError(f"{name}: file {index} names civitai_file without civitai_version")
     else:
         repository = raw.get("repository")
         revision = raw.get("revision")
@@ -156,7 +165,7 @@ def read_file(raw: object, index: int, name: str, private: bool) -> ModelFile:
         raise LatentCrateError(f"{name}: file {index} size must be a positive integer")
     if not (private and digest is None) and (not isinstance(digest, str) or not SHA256_RE.fullmatch(digest)):
         raise LatentCrateError(f"{name}: file {index} sha256 must be lowercase hexadecimal")
-    return ModelFile(repository, revision, source, destination, size, digest, version)
+    return ModelFile(repository, revision, source, destination, size, digest, version, file_id)
 
 
 def catalog(config_dir: Path, local_dir: Path | None = None) -> dict[str, ModelSet]:
