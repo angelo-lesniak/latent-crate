@@ -10,11 +10,12 @@ only in a build stage or a build container, never in the runtime image.
 `COMFY_FRONTEND_MODE` in `.env` selects `release`, `git`, `dist`, or
 `source`; a frontend flag of `up` or `build` selects a mode for one
 command and wins over the setting. `release`, the default, is the Git
-build of the tag `pins.env` pins as `COMFYUI_FRONTEND_REF`.
+build of `COMFYUI_FRONTEND_COMMIT` in `pins.env`, the commit of the tag
+pinned as `COMFYUI_FRONTEND_REF`; `pins check` reports a tag that moved.
 
 | Mode | Input | Where its code runs |
 | --- | --- | --- |
-| `release` | The pinned upstream tag | Build stage of the image |
+| `release` | The pinned upstream tag and commit | Build stage of the image |
 | `git` | A public HTTPS repository and a reference | Build stage of the image |
 | `source` | A checkout on the host | Two runs of the pinned Node image |
 | `dist` | A prebuilt `dist/` tree on the host | Nowhere; served as is |

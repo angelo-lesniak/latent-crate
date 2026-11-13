@@ -21,21 +21,33 @@ PINS = {
     "TORCHCODEC_VERSION": "0.16.0+cu130",
     "CUDA_NPP_VERSION": "13.0.1.2",
     "COMFYUI_REF": "v0.34.0",
+    "COMFYUI_COMMIT": "1" * 40,
     "COMFYUI_FRONTEND_REF": "v1.53.1",
+    "COMFYUI_FRONTEND_COMMIT": "2" * 40,
     "FFMPEG_REF": "n9.0.1",
+    "FFMPEG_COMMIT": "3" * 40,
     "NV_CODEC_HEADERS_REF": "n13.1.15.0",
+    "NV_CODEC_HEADERS_COMMIT": "4" * 40,
     "SVT_AV1_REF": "v4.2.0",
+    "SVT_AV1_COMMIT": "5" * 40,
     "SAGEATTENTION_REF": "v2.2.0",
+    "SAGEATTENTION_COMMIT": "6" * 40,
     "FRONTEND_NODE_TAG": "26-bookworm-slim",
     "FRONTEND_NODE_DIGEST": "c" * 64,
     "FRONTEND_PNPM_VERSION": "11.24.0",
     "CUDA_MIN_DRIVER_MAJOR": "580",
 }
 COMMIT = "0123456789abcdef" * 2 + "01234567"
+UPSTREAM = "9" * 40
 
 
-def current(key: str, value: str) -> checkpins.Resolution:
-    return checkpins.Resolution(key, value, value)
+def current(key: str, value: str, commit: str = "") -> checkpins.Resolution:
+    return checkpins.Resolution(key, value, value, commit=commit, current_commit=commit, pinned_commit=commit)
+
+
+def ref_object(sha: str, kind: str) -> dict[str, object]:
+    """A GitHub `git/ref` or `git/tags` payload whose object is `sha` of `kind`."""
+    return {"object": {"sha": sha, "type": kind, "url": f"https://api.github.com/repos/x/git/{kind}s/{sha}"}}
 
 
 def resolve(key: str, values: dict[str, str]) -> checkpins.Resolution:
@@ -116,16 +128,91 @@ class PyTorchTests(NoNetworkTests):
 
 
 class GitRefTests(NoNetworkTests):
-    def test_github_releases_resolve_the_latest_release_tag(self) -> None:
-        with mock.patch.object(checkpins, "request_json", return_value={"tag_name": "v0.35.0"}) as request:
+    def test_github_releases_resolve_the_latest_release_tag_and_its_commit(self) -> None:
+        answers = [
+            {"tag_name": "v0.35.0"},
+            ref_object(UPSTREAM, "commit"),
+            ref_object(PINS["COMFYUI_COMMIT"], "commit"),
+        ]
+        with mock.patch.object(checkpins, "request_json", side_effect=answers) as request:
             result = resolve("COMFYUI_REF", PINS)
-        self.assertEqual(request.call_args.args[0], "https://api.github.com/repos/Comfy-Org/ComfyUI/releases/latest")
-        self.assertEqual(request.call_args.kwargs["accept"], "application/vnd.github+json")
+        self.assertEqual(
+            [call.args[0] for call in request.call_args_list],
+            [
+                "https://api.github.com/repos/Comfy-Org/ComfyUI/releases/latest",
+                "https://api.github.com/repos/Comfy-Org/ComfyUI/git/ref/tags/v0.35.0",
+                "https://api.github.com/repos/Comfy-Org/ComfyUI/git/ref/tags/v0.34.0",
+            ],
+        )
+        self.assertEqual({call.kwargs["accept"] for call in request.call_args_list}, {"application/vnd.github+json"})
         self.assertEqual((result.key, result.latest, result.digest), ("COMFYUI_REF", "v0.35.0", ""))
+        self.assertEqual(
+            (result.commit, result.current_commit, result.pinned_commit),
+            (UPSTREAM, PINS["COMFYUI_COMMIT"], PINS["COMFYUI_COMMIT"]),
+        )
         self.assertEqual(result.notes, ("  Release history: https://github.com/Comfy-Org/ComfyUI/releases",))
-        with mock.patch.object(checkpins, "request_json", return_value={"tag_name": "v1.53.1"}) as request:
-            self.assertEqual(resolve("COMFYUI_FRONTEND_REF", PINS), current("COMFYUI_FRONTEND_REF", "v1.53.1"))
-        self.assertIn("/repos/Comfy-Org/ComfyUI_frontend/releases/latest", request.call_args.args[0])
+        # A current pin reads the commit of its own tag.
+        answers = [{"tag_name": "v1.53.1"}, ref_object(PINS["COMFYUI_FRONTEND_COMMIT"], "commit")]
+        with mock.patch.object(checkpins, "request_json", side_effect=answers) as request:
+            self.assertEqual(
+                resolve("COMFYUI_FRONTEND_REF", PINS),
+                current("COMFYUI_FRONTEND_REF", "v1.53.1", PINS["COMFYUI_FRONTEND_COMMIT"]),
+            )
+        self.assertIn("/repos/Comfy-Org/ComfyUI_frontend/releases/latest", request.call_args_list[0].args[0])
+        self.assertIn("/repos/Comfy-Org/ComfyUI_frontend/git/ref/tags/v1.53.1", request.call_args_list[1].args[0])
+
+    def test_an_annotated_tag_is_peeled_and_a_moved_tag_is_reported(self) -> None:
+        peeled = {"tag": "n9.1", "object": {"sha": UPSTREAM, "type": "commit"}}
+        # The pinned tag below the latest one moved upstream as well.
+        answers = [tagged("n9.1", "n9.0.1"), ref_object("a" * 40, "tag"), peeled, ref_object("7" * 40, "commit")]
+        with mock.patch.object(checkpins, "request_json", side_effect=answers) as request:
+            result = resolve("FFMPEG_REF", PINS)
+        self.assertEqual(
+            [call.args[0] for call in request.call_args_list[1:]],
+            [
+                "https://api.github.com/repos/FFmpeg/FFmpeg/git/ref/tags/n9.1",
+                f"https://api.github.com/repos/FFmpeg/FFmpeg/git/tags/{'a' * 40}",
+                "https://api.github.com/repos/FFmpeg/FFmpeg/git/ref/tags/n9.0.1",
+            ],
+        )
+        self.assertEqual(
+            (result.latest, result.commit, result.current_commit, result.pinned_commit),
+            ("n9.1", UPSTREAM, "7" * 40, PINS["FFMPEG_COMMIT"]),
+        )
+        self.assertTrue(checkpins.tag_moved(result))
+        # The pinned tag is the latest but points elsewhere upstream.
+        answers = [tagged("n13.1.15.0"), ref_object(UPSTREAM, "commit")]
+        with mock.patch.object(checkpins, "request_json", side_effect=answers):
+            result = resolve("NV_CODEC_HEADERS_REF", PINS)
+        self.assertEqual((result.current, result.latest), ("n13.1.15.0", "n13.1.15.0"))
+        self.assertEqual(
+            (result.commit, result.current_commit, result.pinned_commit),
+            (UPSTREAM, UPSTREAM, PINS["NV_CODEC_HEADERS_COMMIT"]),
+        )
+
+    def test_a_tag_without_a_commit_or_a_ref_without_its_commit_pin_is_refused(self) -> None:
+        for answer in (
+            ref_object("abc1234", "commit"),
+            ref_object("A" * 40, "commit"),
+            ref_object(UPSTREAM, "blob"),
+            ref_object("", "tag"),
+            {"message": "Not Found"},
+        ):
+            with self.subTest(answer=answer):
+                with mock.patch.object(checkpins, "request_json", side_effect=[tagged("n9.1"), answer]):
+                    with self.assertRaisesRegex(
+                        LatentCrateError, "^GitHub FFmpeg/FFmpeg returned no commit for tag n9.1$"
+                    ):
+                        resolve("FFMPEG_REF", PINS)
+        with mock.patch.object(checkpins, "request_json", side_effect=[tagged("v4.3.0"), {"name": "v4.3.0"}]):
+            with self.assertRaisesRegex(
+                LatentCrateError, "^GitLab AOMediaCodec/SVT-AV1 returned no commit for tag v4.3.0$"
+            ):
+                resolve("SVT_AV1_REF", PINS)
+        with mock.patch.object(checkpins, "request_json") as request:
+            with self.assertRaisesRegex(LatentCrateError, "pins.env has no value for COMFYUI_COMMIT"):
+                resolve("COMFYUI_REF", {"COMFYUI_REF": "v0.34.0"})
+        request.assert_not_called()
 
     def test_github_releases_refuse_an_older_prerelease_or_missing_latest(self) -> None:
         with mock.patch.object(checkpins, "request_json", return_value={"tag_name": "v0.33.0"}):
@@ -140,18 +227,39 @@ class GitRefTests(NoNetworkTests):
 
     def test_github_tags_resolve_the_newest_stable_tag(self) -> None:
         listing = tagged("n9.1-dev", "n9.1", "n9.0.2", "n9.0.1") + ["junk", {"name": ""}]
-        with mock.patch.object(checkpins, "request_json", return_value=listing) as request:
+        with mock.patch.object(
+            checkpins,
+            "request_json",
+            side_effect=[listing, ref_object(UPSTREAM, "commit"), ref_object(PINS["FFMPEG_COMMIT"], "commit")],
+        ) as request:
             result = resolve("FFMPEG_REF", PINS)
-        self.assertEqual(request.call_args.args[0], "https://api.github.com/repos/FFmpeg/FFmpeg/tags?per_page=100")
-        self.assertEqual((result.key, result.latest), ("FFMPEG_REF", "n9.1"))
+        self.assertEqual(
+            request.call_args_list[0].args[0], "https://api.github.com/repos/FFmpeg/FFmpeg/tags?per_page=100"
+        )
+        self.assertEqual((result.key, result.latest, result.commit), ("FFMPEG_REF", "n9.1", UPSTREAM))
         self.assertEqual(result.notes, ("  Release history: https://github.com/FFmpeg/FFmpeg/tags",))
-        with mock.patch.object(checkpins, "request_json", return_value=tagged("n13.1.15.0", "n13.0.19.0")) as request:
-            self.assertEqual(resolve("NV_CODEC_HEADERS_REF", PINS), current("NV_CODEC_HEADERS_REF", "n13.1.15.0"))
-        self.assertIn("/repos/FFmpeg/nv-codec-headers/tags", request.call_args.args[0])
-        with mock.patch.object(checkpins, "request_json", return_value=tagged("v2.2.0", "v2.1.1")) as request:
-            self.assertEqual(resolve("SAGEATTENTION_REF", PINS), current("SAGEATTENTION_REF", "v2.2.0"))
-        self.assertIn("/repos/thu-ml/SageAttention/tags", request.call_args.args[0])
-        with mock.patch.object(checkpins, "request_json", return_value=tagged("v2.3.0")):
+        answers = [tagged("n13.1.15.0", "n13.0.19.0"), ref_object(PINS["NV_CODEC_HEADERS_COMMIT"], "commit")]
+        with mock.patch.object(checkpins, "request_json", side_effect=answers) as request:
+            self.assertEqual(
+                resolve("NV_CODEC_HEADERS_REF", PINS),
+                current("NV_CODEC_HEADERS_REF", "n13.1.15.0", PINS["NV_CODEC_HEADERS_COMMIT"]),
+            )
+        self.assertIn("/repos/FFmpeg/nv-codec-headers/tags", request.call_args_list[0].args[0])
+        answers = [tagged("v2.2.0", "v2.1.1"), ref_object(PINS["SAGEATTENTION_COMMIT"], "commit")]
+        with mock.patch.object(checkpins, "request_json", side_effect=answers) as request:
+            self.assertEqual(
+                resolve("SAGEATTENTION_REF", PINS), current("SAGEATTENTION_REF", "v2.2.0", PINS["SAGEATTENTION_COMMIT"])
+            )
+        self.assertIn("/repos/thu-ml/SageAttention/tags", request.call_args_list[0].args[0])
+        with mock.patch.object(
+            checkpins,
+            "request_json",
+            side_effect=[
+                tagged("v2.3.0"),
+                ref_object(UPSTREAM, "commit"),
+                ref_object(PINS["SAGEATTENTION_COMMIT"], "commit"),
+            ],
+        ):
             result = resolve("SAGEATTENTION_REF", PINS)
         self.assertEqual(result.notes, ("  Release history: https://github.com/thu-ml/SageAttention/tags",))
 
@@ -163,16 +271,24 @@ class GitRefTests(NoNetworkTests):
             with self.assertRaisesRegex(LatentCrateError, "GitHub FFmpeg/FFmpeg returned an invalid tag list"):
                 resolve("FFMPEG_REF", PINS)
 
-    def test_gitlab_tags_resolve_svt_av1(self) -> None:
-        with mock.patch.object(
-            checkpins, "request_json", return_value=tagged("v4.3.0-rc1", "v4.3.0", "v4.2.0")
-        ) as request:
+    def test_gitlab_tags_resolve_svt_av1_and_its_commit(self) -> None:
+        answers = [
+            tagged("v4.3.0-rc1", "v4.3.0", "v4.2.0"),
+            {"name": "v4.3.0", "commit": {"id": UPSTREAM}},
+            {"name": "v4.2.0", "commit": {"id": PINS["SVT_AV1_COMMIT"]}},
+        ]
+        with mock.patch.object(checkpins, "request_json", side_effect=answers) as request:
             result = resolve("SVT_AV1_REF", PINS)
         self.assertEqual(
-            request.call_args.args[0],
-            "https://gitlab.com/api/v4/projects/AOMediaCodec%2FSVT-AV1/repository/tags?per_page=100",
+            [call.args[0] for call in request.call_args_list],
+            [
+                "https://gitlab.com/api/v4/projects/AOMediaCodec%2FSVT-AV1/repository/tags?per_page=100",
+                "https://gitlab.com/api/v4/projects/AOMediaCodec%2FSVT-AV1/repository/tags/v4.3.0",
+                "https://gitlab.com/api/v4/projects/AOMediaCodec%2FSVT-AV1/repository/tags/v4.2.0",
+            ],
         )
-        self.assertEqual((result.key, result.latest), ("SVT_AV1_REF", "v4.3.0"))
+        self.assertEqual((result.key, result.latest, result.commit), ("SVT_AV1_REF", "v4.3.0", UPSTREAM))
+        self.assertEqual(result.pinned_commit, PINS["SVT_AV1_COMMIT"])
         self.assertEqual(result.notes, ("  Release history: https://gitlab.com/AOMediaCodec/SVT-AV1/-/tags",))
         with mock.patch.object(checkpins, "request_json", return_value=tagged("v4.1.0")):
             with self.assertRaisesRegex(
@@ -420,7 +536,7 @@ class RequestTests(unittest.TestCase):
 
 class ReportTests(NoNetworkTests):
     def test_the_component_names_are_derived_from_the_pin_keys(self) -> None:
-        names = [checkpins.component_name(key) for key in PINS if not key.endswith("_DIGEST")]
+        names = [checkpins.component_name(key) for key in PINS if not key.endswith(("_DIGEST", "_COMMIT"))]
         self.assertEqual(
             names,
             [
@@ -439,9 +555,12 @@ class ReportTests(NoNetworkTests):
                 "cuda-min-driver-major",
             ],
         )
+        # A commit pin names the component of its ref, so it is never a row.
+        self.assertEqual(checkpins.component_name("NV_CODEC_HEADERS_COMMIT"), "nv-codec-headers")
+        self.assertEqual(checkpins.commit_key("NV_CODEC_HEADERS_REF"), "NV_CODEC_HEADERS_COMMIT")
         # Every pin but the driver major has a resolver, and no resolver is
         # keyed by a pin the shipped file lacks.
-        pins = {key for key in PINS if not key.endswith("_DIGEST")}
+        pins = {key for key in PINS if not key.endswith(("_DIGEST", "_COMMIT"))}
         self.assertEqual(set(checkpins.RESOLVERS), pins - {"CUDA_NPP_VERSION", "CUDA_MIN_DRIVER_MAJOR"})
 
     def test_reports_every_pin_and_a_paste_block_for_the_newer_ones(self) -> None:
@@ -463,12 +582,22 @@ class ReportTests(NoNetworkTests):
             "TORCHCODEC_VERSION": checkpins.Resolution(
                 "TORCHCODEC_VERSION", "0.16.0+cu130", "0.17.0+cu130", ("  Release history: https://example/torchcodec",)
             ),
-            "COMFYUI_REF": current("COMFYUI_REF", "v0.34.0"),
-            "COMFYUI_FRONTEND_REF": current("COMFYUI_FRONTEND_REF", "v1.53.1"),
-            "FFMPEG_REF": current("FFMPEG_REF", "n9.0.1"),
-            "NV_CODEC_HEADERS_REF": current("NV_CODEC_HEADERS_REF", "n13.1.15.0"),
-            "SVT_AV1_REF": current("SVT_AV1_REF", "v4.2.0"),
-            "SAGEATTENTION_REF": current("SAGEATTENTION_REF", "v2.2.0"),
+            "COMFYUI_REF": checkpins.Resolution(
+                "COMFYUI_REF",
+                "v0.34.0",
+                "v0.35.0",
+                ("  Release history: https://example/comfyui",),
+                commit=UPSTREAM,
+                current_commit="7" * 40,
+                pinned_commit="1" * 40,
+            ),
+            "COMFYUI_FRONTEND_REF": current("COMFYUI_FRONTEND_REF", "v1.53.1", "2" * 40),
+            "FFMPEG_REF": checkpins.Resolution(
+                "FFMPEG_REF", "n9.0.1", "n9.0.1", commit="8" * 40, current_commit="8" * 40, pinned_commit="3" * 40
+            ),
+            "NV_CODEC_HEADERS_REF": current("NV_CODEC_HEADERS_REF", "n13.1.15.0", "4" * 40),
+            "SVT_AV1_REF": current("SVT_AV1_REF", "v4.2.0", "5" * 40),
+            "SAGEATTENTION_REF": current("SAGEATTENTION_REF", "v2.2.0", "6" * 40),
             "FRONTEND_NODE_TAG": current("FRONTEND_NODE_TAG", "26-bookworm-slim"),
             "FRONTEND_PNPM_VERSION": current("FRONTEND_PNPM_VERSION", "11.24.0"),
         }
@@ -488,9 +617,15 @@ class ReportTests(NoNetworkTests):
             "torchcodec: 0.16.0+cu130 -> 0.17.0+cu130\n"
             "  Release history: https://example/torchcodec\n"
             "cuda-npp: 13.0.1.2 (no resolver; look it up by hand)\n"
-            "comfyui: v0.34.0 (latest eligible)\n"
+            # A ref row carries the pinned and the upstream commit, short; the
+            # pinned tag moved upstream too.
+            "comfyui: v0.34.0 (1111111) -> v0.35.0 (9999999)\n"
+            "  Release history: https://example/comfyui\n"
+            "  Tag moved: pinned 1111111, upstream 7777777\n"
             "comfyui-frontend: v1.53.1 (latest eligible)\n"
-            "ffmpeg: n9.0.1 (latest eligible)\n"
+            # The pinned tag is still the latest and upstream names another commit for it: the
+            # pinned commit.
+            "ffmpeg: n9.0.1 (latest eligible; tag moved: pinned 3333333, upstream 8888888)\n"
             "nv-codec-headers: n13.1.15.0 (latest eligible)\n"
             "svt-av1: v4.2.0 (latest eligible)\n"
             "sageattention: v2.2.0 (latest eligible)\n"
@@ -506,7 +641,12 @@ class ReportTests(NoNetworkTests):
             f"PYTORCH_DEVEL_DIGEST={'1' * 64}\n"
             "PYTORCH_RUNTIME_TAG=2.14.0-cuda13.0-cudnn9-runtime\n"
             f"PYTORCH_RUNTIME_DIGEST={'2' * 64}\n"
-            "TORCHCODEC_VERSION=0.17.0+cu130\n",
+            "TORCHCODEC_VERSION=0.17.0+cu130\n"
+            # The commit belongs to the ref above it; a moved tag pastes its
+            # commit alone.
+            "COMFYUI_REF=v0.35.0\n"
+            f"COMFYUI_COMMIT={UPSTREAM}\n"
+            f"FFMPEG_COMMIT={'8' * 40}\n",
         )
         for resolver in resolvers.values():
             resolver.assert_called_once_with(PINS)

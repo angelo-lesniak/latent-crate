@@ -1,0 +1,15 @@
+schema = 1
+description = "LightX2V MiniMax H3 image-to-video Turbo 4-step v1.3 LoRA add-on"
+workflow_urls = ["https://github.com/Comfy-Org/workflow_templates/blob/c8e48bdcfc7241d7af588d20d4f924caf9d9d953/templates/video_minimax_h3_i2v.json"]
+
+[[license]]
+name = "MiniMax H3 Community License Agreement"
+url = "https://huggingface.co/lightx2v/Minimax-h3-Turbo/blob/1a4a150fc6707329409eb52e5d75a0e987ac1928/LICENSE"
+
+[[file]]
+repository = "lightx2v/Minimax-h3-Turbo"
+revision = "1a4a150fc6707329409eb52e5d75a0e987ac1928"
+source = "minimax_h3_fl2v_turbo_4step_v1.3_768p_comfyui_bf16.safetensors"
+destination = "loras/minimax_h3_fl2v_turbo_4step_v1.3_768p_comfyui_bf16.safetensors"
+size = 1956193000
+sha256 = "70103fd0d80a947ed4e7fe6f88915863d54ef22c5cab03bd5d2fd649385ffe1e"

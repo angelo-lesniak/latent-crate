@@ -472,7 +472,13 @@ class ProjectContractTests(unittest.TestCase):
                 "FROM comfy-python-base AS comfy-runtime-base"
             )
         ]
-        for unrelated in ("COMFYUI_FRONTEND_REF", "SAGEATTENTION_REF", "COMFY_CUDA_ARCH_LIST"):
+        for unrelated in (
+            "COMFYUI_FRONTEND_REF",
+            "COMFYUI_FRONTEND_COMMIT",
+            "SAGEATTENTION_REF",
+            "SAGEATTENTION_COMMIT",
+            "COMFY_CUDA_ARCH_LIST",
+        ):
             self.assertNotIn(unrelated, common, f"the common runtime cache is coupled to {unrelated}")
         runtime_base = stage(dockerfile, "comfy-runtime-base")
         for name in (
@@ -490,6 +496,39 @@ class ProjectContractTests(unittest.TestCase):
         self.assertIn('io.latentcrate.comfyui.ref="${COMFYUI_REF}"', runtime_base, "the image labels its ComfyUI pin")
         self.assertIn("io.latentcrate.frontend.", stage(dockerfile, "runtime"), "the image labels its frontend")
         self.assertIn("io.latentcrate.sageattention.", stage(dockerfile, "runtime-sage"), "the Sage image labels Sage")
+
+    def test_every_tag_fetch_asserts_the_pinned_commit(self) -> None:
+        # A tag can be moved, so every `_REF` in pins.env has its `_COMMIT`
+        # beside it, and each fetch of a `_REF` is followed in the same RUN,
+        # after the checkout, by a check of HEAD against that `_COMMIT`,
+        # which the stage declares. The frontend tag is the one `_REF` the
+        # Dockerfile never fetches: release mode passes its `_COMMIT` as
+        # FRONTEND_GIT_REF, which the frontend-git-builder checks.
+        rule = "every git fetch of a _REF asserts the pinned _COMMIT in the same RUN"
+        pins = env.load_pins(PROJECT_ROOT / "pins.env")
+        refs = {key for key in pins if key.endswith("_REF")}
+        commits = {key.removesuffix("_COMMIT") + "_REF" for key in pins if key.endswith("_COMMIT")}
+        self.assertEqual(commits, refs, "pins.env pairs every _REF with its _COMMIT and nothing else")
+        fetched: set[str] = set()
+        for chunk in code(DOCKERFILE).split("\nFROM ")[1:]:
+            for run in re.findall(r"^RUN (?:[^\n]*\\\n)*[^\n]*$", chunk, re.MULTILINE):
+                for directory, name in re.findall(r'git -C (\S+) fetch --depth 1 origin "\$\{([A-Z0-9_]+)_REF\}"', run):
+                    fetched.add(f"{name}_REF")
+                    checkout = run.index(f"git -C {directory} checkout --detach FETCH_HEAD")
+                    check = f'test "$(git -C {directory} rev-parse HEAD)" = "${{{name}_COMMIT}}"'
+                    self.assertIn(check, run[checkout:], f"{rule}: {name}_REF in {DOCKERFILE}")
+                    self.assertRegex(
+                        run[checkout:],
+                        rf"not the pinned {name}_COMMIT[^\n]*\n[^\n]*>&2; exit 1; \}}",
+                        f"{rule}: {name}_REF names both pins and exits",
+                    )
+                    self.assertTrue(
+                        re.search(rf"^ARG {name}_COMMIT$", chunk, re.MULTILINE),
+                        f"the stage fetching {name}_REF declares {name}_COMMIT",
+                    )
+        self.assertEqual(fetched, refs - {"COMFYUI_FRONTEND_REF"}, f"{rule}: a _REF the Dockerfile never fetches")
+        frontend = " ".join(stage(code(DOCKERFILE), "frontend-git-builder").split())
+        self.assertIn('test "$(git rev-parse HEAD)" = "${FRONTEND_GIT_REF}"', frontend, f"{rule}: the frontend commit")
 
     def test_third_party_node_packages_build_in_cuda_and_install_offline(self) -> None:
         # The copied requirement tree is rewritten and compiled in the pinned

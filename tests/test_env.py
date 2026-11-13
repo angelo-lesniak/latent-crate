@@ -386,7 +386,11 @@ class PinsTests(unittest.TestCase):
             "TORCHCODEC_VERSION": "0.16.0+cu130",
             "CUDA_NPP_VERSION": "13.0.1.2",
             "COMFYUI_REF": "v0.34.0",
+            "COMFYUI_COMMIT": "d" * 40,
+            "COMFYUI_FRONTEND_REF": "v1.53.1",
+            "COMFYUI_FRONTEND_COMMIT": "e" * 40,
             "FFMPEG_REF": "n9.0.1",
+            "FFMPEG_COMMIT": "f" * 40,
             "FRONTEND_NODE_TAG": "26-bookworm-slim",
             "FRONTEND_NODE_DIGEST": "c" * 64,
             "FRONTEND_PNPM_VERSION": "11.24.0",
@@ -403,10 +407,11 @@ class PinsTests(unittest.TestCase):
         self.assertEqual(env.cuda_family(values), "cu130")
 
     def test_a_new_pin_needs_no_code_when_it_follows_the_grammar(self) -> None:
-        self.write(TOOL_VERSION="1.2.3", OTHER_TAG="v2", OTHER_DIGEST="0" * 64, SOME_REF="abc123")
+        self.write(TOOL_VERSION="1.2.3", OTHER_TAG="v2", OTHER_DIGEST="0" * 64, SOME_REF="v3", SOME_COMMIT="1" * 40)
         values = env.load_pins(self.path)
         self.assertEqual(values["TOOL_VERSION"], "1.2.3")
-        self.assertEqual(values["SOME_REF"], "abc123")
+        self.assertEqual(values["SOME_REF"], "v3")
+        self.assertEqual(values["SOME_COMMIT"], "1" * 40)
         # File order is kept: `pins check` reports the pins in it.
         self.assertEqual(list(values)[:2], ["PYTORCH_DEVEL_TAG", "PYTORCH_DEVEL_DIGEST"])
 
@@ -421,7 +426,7 @@ class PinsTests(unittest.TestCase):
         with self.assertRaisesRegex(
             LatentCrateError,
             "must define PYTORCH_DEVEL_TAG, PYTORCH_RUNTIME_TAG, TORCHCODEC_VERSION, CUDA_NPP_VERSION, "
-            "COMFYUI_REF, CUDA_MIN_DRIVER_MAJOR",
+            "COMFYUI_REF, COMFYUI_FRONTEND_COMMIT, CUDA_MIN_DRIVER_MAJOR",
         ):
             env.load_pins(self.path)
         self.write()
@@ -433,8 +438,8 @@ class PinsTests(unittest.TestCase):
             self.path.write_text(self.path.read_text() + f"{key}=python\n")
             with self.assertRaisesRegex(
                 LatentCrateError,
-                f"unknown key\\(s\\) {key} \\(a pin is <NAME>_TAG with <NAME>_DIGEST, <NAME>_VERSION, <NAME>_REF, "
-                "or CUDA_MIN_DRIVER_MAJOR\\)",
+                f"unknown key\\(s\\) {key} \\(a pin is <NAME>_TAG with <NAME>_DIGEST, <NAME>_REF with <NAME>_COMMIT, "
+                "<NAME>_VERSION, or CUDA_MIN_DRIVER_MAJOR\\)",
             ):
                 env.load_pins(self.path)
 
@@ -458,6 +463,20 @@ class PinsTests(unittest.TestCase):
         with self.assertRaisesRegex(LatentCrateError, "TOOL_TAG has no TOOL_DIGEST beside it"):
             env.load_pins(self.path)
 
+    def test_a_commit_must_be_the_full_lowercase_hex(self) -> None:
+        for value in ("d" * 39, "D" * 40, "v0.34.0"):
+            self.write(COMFYUI_COMMIT=value)
+            with self.assertRaisesRegex(LatentCrateError, "COMFYUI_COMMIT must be the 40 lowercase hex characters"):
+                env.load_pins(self.path)
+
+    def test_a_ref_and_its_commit_come_as_a_pair(self) -> None:
+        self.write(TOOL_COMMIT="0" * 40)
+        with self.assertRaisesRegex(LatentCrateError, "TOOL_COMMIT has no TOOL_REF beside it"):
+            env.load_pins(self.path)
+        self.write(TOOL_REF="v1.0")
+        with self.assertRaisesRegex(LatentCrateError, "TOOL_REF has no TOOL_COMMIT beside it"):
+            env.load_pins(self.path)
+
     def test_the_four_cuda_family_pins_change_together(self) -> None:
         rule = f"^{env.FAMILY_RULE}$"
         self.assertEqual(env.cuda_family(env.load_pins(self.write())), "cu130")
@@ -475,7 +494,7 @@ class PinsTests(unittest.TestCase):
     def test_a_malformed_line_names_its_number(self) -> None:
         self.write()
         self.path.write_text(self.path.read_text() + "not a pin\n")
-        with self.assertRaisesRegex(LatentCrateError, r"pins\.env:15: expected KEY=VALUE"):
+        with self.assertRaisesRegex(LatentCrateError, r"pins\.env:19: expected KEY=VALUE"):
             env.load_pins(self.path)
         self.write()
         self.path.write_text(self.path.read_text().replace("COMFYUI_REF=", "export COMFYUI_REF=", 1))

@@ -1,4 +1,5 @@
-"""Report the latest eligible upstream versions of the pins in pins.env next to the current ones."""
+"""Report the latest eligible upstream versions of the pins in pins.env next
+to the current ones, with the commit each Git tag points at."""
 
 from __future__ import annotations
 
@@ -13,6 +14,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from . import LatentCrateError
+from .names import COMMIT_RE
 
 MAX_RESPONSE_BYTES = 16 * 1024 * 1024
 # Docker Hub answers an anonymous client's tag listing for ten pages of 100
@@ -54,13 +56,22 @@ class Resolution:
     # tag. Empty for a version or ref pin that has none, and for a current
     # pin, which is not pasted anywhere.
     digest: str = ""
+    # The commit of the tag `latest` names, the one the pinned tag names
+    # upstream today, and the one pins.env holds in <name>_COMMIT; empty for
+    # a pin without one. A pinned tag whose upstream commit differs from the
+    # pinned one has moved, which is the reason the commit pin exists.
+    commit: str = ""
+    current_commit: str = ""
+    pinned_commit: str = ""
 
 
 def component_name(key: str) -> str:
     """The name `pins check` takes for a pin: its key without the `_TAG`,
-    `_VERSION`, or `_REF` suffix, in lower case with hyphens
+    `_VERSION`, `_REF`, or `_COMMIT` suffix, in lower case with hyphens
     (NV_CODEC_HEADERS_REF: nv-codec-headers)."""
-    return key.removesuffix("_TAG").removesuffix("_VERSION").removesuffix("_REF").lower().replace("_", "-")
+    for suffix in ("_TAG", "_VERSION", "_REF", "_COMMIT"):
+        key = key.removesuffix(suffix)
+    return key.lower().replace("_", "-")
 
 
 class HttpsRedirects(urllib.request.HTTPRedirectHandler):
@@ -134,6 +145,27 @@ def digest_key(key: str) -> str:
     return key.removesuffix("_TAG") + "_DIGEST"
 
 
+def commit_key(key: str) -> str:
+    """Every ref pin has a commit pin beside it (COMFYUI_REF, COMFYUI_COMMIT),
+    because a tag can be moved."""
+    return key.removesuffix("_REF") + "_COMMIT"
+
+
+def tag_commit(value: Any, source: str, tag: str) -> str:
+    """The 40 hex characters of the commit a tag points at, as pins.env spells it."""
+    if not isinstance(value, str) or not COMMIT_RE.fullmatch(value):
+        raise LatentCrateError(f"{source} returned no commit for tag {tag}")
+    return value
+
+
+def short_commit(commit: str) -> str:
+    return f" ({commit[:7]})" if commit else ""
+
+
+def tag_moved(resolution: Resolution) -> bool:
+    return resolution.current_commit != resolution.pinned_commit
+
+
 def manifest_digest(value: str, source: str) -> str:
     """The hex digest of a `sha256:...` reference, as pins.env spells it."""
     match = DIGEST_RE.fullmatch(value)
@@ -188,21 +220,66 @@ def gitlab_tags(project: str) -> list[str]:
     return [str(item["name"]) for item in payload if isinstance(item, dict) and item.get("name")]
 
 
+def github_object(repository: str, path: str, tag: str) -> dict[str, Any]:
+    """The `object` a Git data endpoint of the repository returns for `tag`."""
+    payload = request_json(f"https://api.github.com/repos/{repository}/git/{path}", accept=GITHUB_ACCEPT)
+    target = payload.get("object") if isinstance(payload, dict) else None
+    if not isinstance(target, dict):
+        raise LatentCrateError(f"GitHub {repository} returned no commit for tag {tag}")
+    return target
+
+
+def github_tag_commit(repository: str, tag: str) -> str:
+    """The commit a tag points at; an annotated tag is peeled once."""
+    source = f"GitHub {repository}"
+    target = github_object(repository, f"ref/tags/{urllib.parse.quote(tag, safe='')}", tag)
+    if target.get("type") == "tag":
+        # Fetched by its sha, not by the URL the reference carries, so the
+        # request stays on api.github.com.
+        target = github_object(repository, f"tags/{tag_commit(target.get('sha'), source, tag)}", tag)
+    if target.get("type") != "commit":
+        raise LatentCrateError(f"{source} returned no commit for tag {tag}")
+    return tag_commit(target.get("sha"), source, tag)
+
+
+def gitlab_tag_commit(project: str, tag: str) -> str:
+    encoded = urllib.parse.quote(project, safe="")
+    url = f"https://gitlab.com/api/v4/projects/{encoded}/repository/tags/{urllib.parse.quote(tag, safe='')}"
+    payload = request_json(url)
+    commit = payload.get("commit") if isinstance(payload, dict) else None
+    return tag_commit(commit.get("id") if isinstance(commit, dict) else None, f"GitLab {project}", tag)
+
+
 def resolve_ref(
-    key: str, source: str, pattern: re.Pattern[str], listing: Callable[[], list[str]], link: str, values: dict[str, str]
+    key: str,
+    source: str,
+    pattern: re.Pattern[str],
+    listing: Callable[[], list[str]],
+    commit_of: Callable[[str], str],
+    link: str,
+    values: dict[str, str],
 ) -> Resolution:
-    """Resolve a `_REF` pin against the tags `listing` returns."""
+    """Resolve a `_REF` pin against the tags `listing` returns, with the
+    commit `commit_of` reads for the tag the report names and for the
+    pinned tag, so a moved tag shows whether or not a newer tag exists."""
     current, parsed = current_key(values, key, pattern)
+    pinned_commit = required_value(values, commit_key(key))
     latest = latest_tag(listing(), pattern, source)
     if current_is_latest(parsed, version_key(latest, pattern), source):
-        return Resolution(key, current, current)
-    return Resolution(key, current, latest, (f"  Release history: {link}",))
+        commit = commit_of(current)
+        return Resolution(key, current, current, commit=commit, current_commit=commit, pinned_commit=pinned_commit)
+    commit = commit_of(latest)
+    notes = (f"  Release history: {link}",)
+    return Resolution(
+        key, current, latest, notes, commit=commit, current_commit=commit_of(current), pinned_commit=pinned_commit
+    )
 
 
 def github_ref(key: str, repository: str, pattern: re.Pattern[str], *, releases: bool) -> Callable[..., Resolution]:
     listing = functools.partial(github_latest_release if releases else github_tags, repository)
+    commit_of = functools.partial(github_tag_commit, repository)
     link = f"https://github.com/{repository}/" + ("releases" if releases else "tags")
-    return functools.partial(resolve_ref, key, f"GitHub {repository}", pattern, listing, link)
+    return functools.partial(resolve_ref, key, f"GitHub {repository}", pattern, listing, commit_of, link)
 
 
 # --- Package registries: npm and PyPI ----------------------------------------
@@ -369,9 +446,9 @@ def resolve_pytorch(key: str, values: dict[str, str]) -> Resolution:
 
 
 # One resolver per pin key the check can look up; the digest beside a tag is
-# resolved with the tag. A pin of pins.env missing here is reported as such:
-# CUDA_NPP_VERSION follows the devel image's bundled NPP, which no index
-# lists ahead of the image.
+# resolved with the tag, the commit beside a ref with the ref. A pin of
+# pins.env missing here is reported as such: CUDA_NPP_VERSION follows the
+# devel image's bundled NPP, which no index lists ahead of the image.
 RESOLVERS: dict[str, Callable[[dict[str, str]], Resolution]] = {
     "PYTORCH_DEVEL_TAG": functools.partial(resolve_pytorch, "PYTORCH_DEVEL_TAG"),
     "PYTORCH_RUNTIME_TAG": functools.partial(resolve_pytorch, "PYTORCH_RUNTIME_TAG"),
@@ -390,6 +467,7 @@ RESOLVERS: dict[str, Callable[[dict[str, str]], Resolution]] = {
         "GitLab AOMediaCodec/SVT-AV1",
         re.compile(rf"^v{STABLE_TAG_RE}$"),
         functools.partial(gitlab_tags, "AOMediaCodec/SVT-AV1"),
+        functools.partial(gitlab_tag_commit, "AOMediaCodec/SVT-AV1"),
         "https://gitlab.com/AOMediaCodec/SVT-AV1/-/tags",
     ),
     "SAGEATTENTION_REF": github_ref(
@@ -416,7 +494,7 @@ def check(selection: str, values: dict[str, str]) -> str:
     cannot be read makes its pin's row say so and the whole report is
     raised as `LookupsFailed`, so the other pins are still reported and
     the exit status says a lookup failed."""
-    components = {component_name(key): key for key in values if not key.endswith("_DIGEST")}
+    components = {component_name(key): key for key in values if not key.endswith(("_DIGEST", "_COMMIT"))}
     if selection != "all" and selection not in components:
         raise LatentCrateError(f"unknown pin component {selection!r}; choose from: {', '.join(components)}, all")
     selected = components if selection == "all" else {selection: components[selection]}
@@ -436,20 +514,35 @@ def check(selection: str, values: dict[str, str]) -> str:
             lines.append(f"{name}: {values[selected[name]]} (no resolver; look it up by hand)")
         elif isinstance(resolution, LatentCrateError):
             lines.append(f"{name}: {values[selected[name]]} (lookup failed: {resolution})")
-        elif resolution.latest == resolution.current:
-            lines.append(f"{name}: {resolution.current} (latest eligible)")
-        else:
-            lines.append(f"{name}: {resolution.current} -> {resolution.latest}")
+        elif resolution.latest != resolution.current:
+            pinned, upstream = short_commit(resolution.pinned_commit), short_commit(resolution.commit)
+            lines.append(f"{name}: {resolution.current}{pinned} -> {resolution.latest}{upstream}")
             lines.extend(resolution.notes)
+            if tag_moved(resolution):
+                lines.append(
+                    f"  Tag moved: pinned {resolution.pinned_commit[:7]}, upstream {resolution.current_commit[:7]}"
+                )
+        elif tag_moved(resolution):
+            moved = f"tag moved: pinned {resolution.pinned_commit[:7]}, upstream {resolution.current_commit[:7]}"
+            lines.append(f"{name}: {resolution.current} (latest eligible; {moved})")
+        else:
+            lines.append(f"{name}: {resolution.current} (latest eligible)")
     resolved = [resolution for resolution in rows.values() if isinstance(resolution, Resolution)]
     failed = [name for name, resolution in rows.items() if isinstance(resolution, LatentCrateError)]
-    newer = [resolution for resolution in resolved if resolution.latest != resolution.current]
-    if newer:
+    changed = [
+        resolution for resolution in resolved if resolution.latest != resolution.current or tag_moved(resolution)
+    ]
+    if changed:
         lines += ["", "Paste into pins.env:"]
-        for resolution in newer:
-            lines.append(f"{resolution.key}={resolution.latest}")
+        for resolution in changed:
+            if resolution.latest != resolution.current:
+                lines.append(f"{resolution.key}={resolution.latest}")
             if resolution.digest:
                 lines.append(f"{digest_key(resolution.key)}={resolution.digest}")
+            if resolution.commit and resolution.latest != resolution.current:
+                lines.append(f"{commit_key(resolution.key)}={resolution.commit}")
+            elif tag_moved(resolution):
+                lines.append(f"{commit_key(resolution.key)}={resolution.current_commit}")
     elif len(resolved) == len(rows):
         lines.append("pins.env has the latest eligible pins.")
     elif resolved:

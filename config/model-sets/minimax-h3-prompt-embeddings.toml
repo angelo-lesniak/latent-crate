@@ -1,12 +1,12 @@
 schema = 1
 description = "Optional prompt embeddings for official MiniMax H3 workflows"
 workflow_urls = [
-  "https://github.com/Comfy-Org/workflow_templates/blob/66abae5205f7c5105281146fa109f7c12801d268/templates/video_minimax_h3_i2v.json",
-  "https://github.com/Comfy-Org/workflow_templates/blob/66abae5205f7c5105281146fa109f7c12801d268/templates/video_minimax_h3_r2v.json",
+  "https://github.com/Comfy-Org/workflow_templates/blob/c8e48bdcfc7241d7af588d20d4f924caf9d9d953/templates/video_minimax_h3_i2v.json",
+  "https://github.com/Comfy-Org/workflow_templates/blob/c8e48bdcfc7241d7af588d20d4f924caf9d9d953/templates/video_minimax_h3_r2v.json",
 ]
 
 [[license]]
-name = "MiniMax-H3 Model License"
+name = "MiniMax H3 Community License Agreement"
 url = "https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/42ed227ee7df40d41602854ae760620d6eb651fe/LICENSE"
 
 [[file]]

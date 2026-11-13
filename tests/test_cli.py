@@ -91,7 +91,7 @@ class CliTests(unittest.TestCase):
         ]
         self.assertEqual(self.succeed("pins", **NO_ENGINE).splitlines(), pinned)
         pins = self.scratch.root / "pins.env"
-        pins.write_text(pins.read_text().replace("TORCHCODEC_VERSION=0.16.0+cu130", "TORCHCODEC_VERSION=0.16.0+cu128"))
+        pins.write_text(pins.read_text().replace("+cu130\n", "+cu128\n"))
         self.expect_failure(env.FAMILY_RULE, "pins", **NO_ENGINE)
 
     def test_pins_check_prints_the_report_before_a_failed_lookup_is_raised(self) -> None:

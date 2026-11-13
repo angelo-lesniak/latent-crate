@@ -31,7 +31,7 @@ The first build compiles FFmpeg and the node dependencies;
 [Status](docs/validation.md#status) holds the measured build time.
 `doctor` warns when the engine's
 storage has less than 75 GB free. The `minimax-h3-i2v` model set downloads
-about 44 GB into the models directory.
+about 42 GB into the models directory.
 
 A GPU with a compute capability other than `12.0` (RTX 50-series) needs its
 value in `COMFY_CUDA_ARCH_LIST` in `.env` before the build; see [GPU and

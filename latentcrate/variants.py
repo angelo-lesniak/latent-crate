@@ -3,9 +3,10 @@ the SageAttention mode together name the Dockerfile target, the image tag
 `<repository>:<release|git|dist>[-sage]-<COMFYUI_REF>`, and whether the
 dist overlay (compose.frontend-dist.yaml) mounts a prebuilt tree. Release
 and git are one image target that records `git`; dist and source serve a
-host tree, so `release` is a variant name only. A Git reference is
-resolved to a commit for `build` and `up` through hardened Git (the
-helpers `nodes` shares); source mode builds a checkout into a dist tree
+host tree, so `release` is a variant name only. Release mode builds the
+commit pins.env holds; a Git-mode reference is resolved to a commit for
+`build` and `up` through hardened Git (the helpers `nodes` shares);
+source mode builds a checkout into a dist tree
 with two `engine run`s of the pinned Node image, the second without a
 network, so lifecycle scripts run offline.
 """
@@ -92,7 +93,8 @@ class Variant:
     repository: str
     git_url: str = ""
     requested_ref: str = ""
-    # Filled by `resolve`; the requested reference is exported until then.
+    # The pinned commit in release mode, else filled by `resolve`; the
+    # requested reference is exported until then.
     commit: str = ""
     dist_dir: Path | None = None
     source_dir: Path | None = None
@@ -179,6 +181,15 @@ def git_reference(url: str, ref: str) -> tuple[str, str]:
     return url, ref
 
 
+def pin_release(variant: Variant, pinned: dict[str, str]) -> None:
+    """The pinned frontend: the tag as the requested reference and
+    COMFYUI_FRONTEND_COMMIT as the commit the frontend-git-builder fetches,
+    with no lookup; a tag that moved shows up in `pins check`, not in the
+    build."""
+    variant.git_url, variant.requested_ref = git_reference(RELEASE_URL, pinned["COMFYUI_FRONTEND_REF"])
+    variant.commit = pinned["COMFYUI_FRONTEND_COMMIT"]
+
+
 def select(
     settings: Settings,
     pinned: dict[str, str],
@@ -205,7 +216,7 @@ def select(
     elif frontend_source is not None:
         variant.frontend = "source"
     if variant.frontend == "release":
-        variant.git_url, variant.requested_ref = git_reference(RELEASE_URL, pinned["COMFYUI_FRONTEND_REF"])
+        pin_release(variant, pinned)
     elif variant.frontend == "git":
         url, ref = frontend_git or (settings.get("FRONTEND_GIT_URL"), settings.get("FRONTEND_GIT_REF"))
         variant.git_url, variant.requested_ref = git_reference(url, ref)
@@ -225,17 +236,17 @@ def select(
     if variant.dist_overlay and variant.sage != "off":
         # runtime-sage builds on runtime, whose frontend stage needs a
         # reference; the overlay still serves the host tree.
-        variant.git_url, variant.requested_ref = git_reference(RELEASE_URL, pinned["COMFYUI_FRONTEND_REF"])
+        pin_release(variant, pinned)
     return variant
 
 
 def resolve(variant: Variant, env: dict[str, str]) -> Variant:
     """The variant with its Git reference resolved to a commit (`build` and
     `up`; every other rendering command exports the requested reference).
-    A full commit is taken as written; a branch or tag is listed with
-    `git ls-remote` under `env`, the peeled line of an annotated tag wins,
-    and a name both a branch and a tag carry is refused."""
-    if not variant.git_url:
+    A pinned or full commit is taken as written; a branch or tag is listed
+    with `git ls-remote` under `env`, the peeled line of an annotated tag
+    wins, and a name both a branch and a tag carry is refused."""
+    if not variant.git_url or variant.commit:
         return variant
     ref = variant.requested_ref
     if COMMIT_RE.fullmatch(ref.lower()):

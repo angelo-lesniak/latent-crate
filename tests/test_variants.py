@@ -21,6 +21,7 @@ FIXTURES = SOURCE_ROOT / "tests" / "fixtures"
 GIT_BIN = FIXTURES / "git-bin"
 URL = "https://github.com/example/ComfyUI_frontend.git"
 COMMIT = "0123456789ABCDEF0123456789abcdef01234567"
+FRONTEND_COMMIT = "f" * 40
 TOKEN = "fake-token-fixture"
 
 
@@ -28,7 +29,8 @@ class VariantTests(unittest.TestCase):
     def setUp(self) -> None:
         self.scratch = Scratch()
         self.addCleanup(self.scratch.close)
-        self.pinned = env.load_pins(self.scratch.root / "pins.env")
+        # A fixture commit, so the assertions do not track pins.env.
+        self.pinned = env.load_pins(self.scratch.root / "pins.env") | {"COMFYUI_FRONTEND_COMMIT": FRONTEND_COMMIT}
         self.dist = self.scratch.tmp / "dist"
         shutil.copytree(FIXTURES / "frontend-dist", self.dist)
         self.source = self.scratch.tmp / "source"
@@ -90,7 +92,7 @@ class VariantTests(unittest.TestCase):
         self.assertEqual(set(release), keys)
         self.assertEqual(release["FRONTEND_GIT_URL"], variants.RELEASE_URL)
         self.assertEqual(release["FRONTEND_GIT_REQUESTED_REF"], self.pinned["COMFYUI_FRONTEND_REF"])
-        self.assertEqual(release["FRONTEND_GIT_REF"], self.pinned["COMFYUI_FRONTEND_REF"])
+        self.assertEqual(release["FRONTEND_GIT_REF"], FRONTEND_COMMIT)
         self.assertEqual((release["COMFY_FRONTEND_MODE"], release["LATENTCRATE_SAGE"]), ("git", "off"))
         git = variants.select(self.settings(), self.pinned, sage="available", frontend_git=(URL, COMMIT))
         exported = git.compose_env(self.pinned)
@@ -127,15 +129,14 @@ class VariantTests(unittest.TestCase):
                 exported = sage.compose_env(self.pinned)
                 self.assertEqual(exported["COMFY_FRONTEND_MODE"], "dist")
                 self.assertEqual(exported["FRONTEND_GIT_URL"], variants.RELEASE_URL)
-                self.assertEqual((exported["FRONTEND_GIT_REF"], exported["FRONTEND_GIT_REQUESTED_REF"]), (tag, tag))
-                self.assertIn("COMFY_FRONTEND_DIST_DIR", exported)
-                # The pinned tag resolves through Git exactly as release mode does.
-                resolved = variants.resolve(sage, self.resolver_env("annotated-tag"))
-                self.assertEqual(resolved.compose_env(self.pinned)["FRONTEND_GIT_REF"], "3" * 40)
-                recorded = (self.scratch.tmp / "git-record").read_text().splitlines()
                 self.assertEqual(
-                    recorded[1 + len(variants.GIT_OPTIONS) :][:3], ["ls-remote", variants.RELEASE_URL, tag]
+                    (exported["FRONTEND_GIT_REF"], exported["FRONTEND_GIT_REQUESTED_REF"]), (FRONTEND_COMMIT, tag)
                 )
+                self.assertIn("COMFY_FRONTEND_DIST_DIR", exported)
+                # The pinned commit is the build argument, as in release mode.
+                resolved = variants.resolve(sage, self.resolver_env("fail", git_present=False))
+                self.assertEqual(resolved.compose_env(self.pinned)["FRONTEND_GIT_REF"], FRONTEND_COMMIT)
+                self.assertFalse((self.scratch.tmp / "git-record").exists())
 
     def test_select_refusals(self) -> None:
         link = self.dist / "assets"
@@ -209,6 +210,15 @@ class VariantTests(unittest.TestCase):
         record.unlink(missing_ok=True)
         return env_
 
+    def test_release_mode_exports_the_pinned_commit_without_git(self) -> None:
+        release = self.select()
+        self.assertEqual(
+            (release.requested_ref, release.commit), (self.pinned["COMFYUI_FRONTEND_REF"], FRONTEND_COMMIT)
+        )
+        resolved = variants.resolve(release, self.resolver_env("fail", git_present=False))
+        self.assertEqual(resolved.compose_env(self.pinned)["FRONTEND_GIT_REF"], FRONTEND_COMMIT)
+        self.assertFalse((self.scratch.tmp / "git-record").exists())
+
     def test_resolve_lists_the_reference_through_hardened_git(self) -> None:
         git = variants.select(self.settings(), self.pinned, sage=None, frontend_git=(URL, "main"))
         for mode, expected in (("branch", "1" * 40), ("annotated-tag", "3" * 40), ("tag", "4" * 40)):
@@ -235,6 +245,7 @@ class VariantTests(unittest.TestCase):
             ("ambiguous", "frontend reference main is ambiguous; write refs/heads/main or refs/tags/main"),
         ):
             with self.subTest(mode=mode):
+                git.commit = ""
                 with self.assertRaises(LatentCrateError) as refused:
                     variants.resolve(git, self.resolver_env(mode))
                 self.assertEqual(str(refused.exception), message)

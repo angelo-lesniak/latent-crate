@@ -38,6 +38,11 @@ every file, then downloads the files one after another. `up --model-set
 <name>` runs the same fetch before starting ComfyUI and takes set names;
 `all` belongs to the `models` commands.
 
+The MiniMax H3 license grants rights only inside its "Applicable
+Territory", which excludes the European Union, the United Kingdom, the
+Republic of Korea and the United States, so read the linked license
+before fetching a `minimax-h3-*` set.
+
 A gated repository needs `HF_TOKEN` in `.env`;
 [Privacy](privacy.md#what-runs-where) owns where the token goes.
 

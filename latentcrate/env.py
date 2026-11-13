@@ -31,7 +31,7 @@ from pathlib import Path
 
 from . import LatentCrateError
 from .files import read_utf8
-from .names import SHA256_RE
+from .names import COMMIT_RE, SHA256_RE
 
 # The model downloader's token: read into `Settings.hf_token`, never a
 # setting, never exported.
@@ -70,27 +70,30 @@ BIND_NOT_ACCEPTED = "COMFY_BIND_ADDRESS=localhost is not a binding Compose accep
 # pins.env is self-describing by its key names: `<NAME>_TAG` is an image tag
 # and pairs with `<NAME>_DIGEST`, the bare sha256 hex of the manifest the tag
 # points at (the Dockerfile adds the `@sha256:` prefix), because a tag can be
-# moved and the digest is what the build pulls; `<NAME>_VERSION` is a package
-# version; `<NAME>_REF` is a Git tag or commit of the repository the
-# Dockerfile names; CUDA_MIN_DRIVER_MAJOR is the driver major `doctor`
+# moved and the digest is what the build pulls; `<NAME>_REF` is a Git tag of
+# the repository the Dockerfile names and pairs with `<NAME>_COMMIT`, the
+# full lowercase commit the tag names, because a tag can be moved too and
+# the build refuses a checkout at another commit; `<NAME>_VERSION` is a
+# package version; CUDA_MIN_DRIVER_MAJOR is the driver major `doctor`
 # checks. Every key exactly once, a plain value without quotes or
 # whitespace, and no other key shape. Compose reads the file itself through
 # --env-file and passes every pin as a build argument; the wrapper reads it
-# for the keys below (the family rule, the image tag, `doctor`) and for
-# `pins check`.
-PIN_KEY_RE = re.compile(r"^[A-Z][A-Z0-9_]*_(TAG|DIGEST|VERSION|REF)$")
+# for the keys below (the family rule, the image tag, the frontend commit,
+# `doctor`) and for `pins check`.
+PIN_KEY_RE = re.compile(r"^[A-Z][A-Z0-9_]*_(TAG|DIGEST|VERSION|REF|COMMIT)$")
 WRAPPER_PIN_KEYS = (
     "PYTORCH_DEVEL_TAG",
     "PYTORCH_RUNTIME_TAG",
     "TORCHCODEC_VERSION",
     "CUDA_NPP_VERSION",
     "COMFYUI_REF",
+    "COMFYUI_FRONTEND_COMMIT",
     "CUDA_MIN_DRIVER_MAJOR",
 )
 # Image tags, package versions, Git references, digests, and integers: no
 # quotes, no whitespace.
 PIN_VALUE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
-# The CUDA family inside a PyTorch image tag (2.13.0-cuda13.0-cudnn9-runtime).
+# The CUDA family inside a PyTorch image tag (`<torch>-cuda13.0-cudnn9-runtime`).
 CUDA_FAMILY_RE = re.compile(r"-cuda(\d+)\.(\d+)-")
 FAMILY_RULE = (
     "PYTORCH_DEVEL_TAG, PYTORCH_RUNTIME_TAG, TORCHCODEC_VERSION, and CUDA_NPP_VERSION in pins.env "
@@ -188,7 +191,8 @@ def load_pins(path: Path) -> dict[str, str]:
     if unknown:
         raise LatentCrateError(
             f"pins file defines unknown key(s) {', '.join(unknown)} "
-            f"(a pin is <NAME>_TAG with <NAME>_DIGEST, <NAME>_VERSION, <NAME>_REF, or CUDA_MIN_DRIVER_MAJOR): {path}"
+            "(a pin is <NAME>_TAG with <NAME>_DIGEST, <NAME>_REF with <NAME>_COMMIT, <NAME>_VERSION, "
+            f"or CUDA_MIN_DRIVER_MAJOR): {path}"
         )
     if not values["CUDA_MIN_DRIVER_MAJOR"].isdigit():
         raise LatentCrateError(f"CUDA_MIN_DRIVER_MAJOR must be a driver major version: {path}")
@@ -201,6 +205,15 @@ def load_pins(path: Path) -> dict[str, str]:
         elif key.endswith("_TAG") and key.removesuffix("_TAG") + "_DIGEST" not in values:
             raise LatentCrateError(
                 f"{key} has no {key.removesuffix('_TAG')}_DIGEST beside it (the build pulls the digest): {path}"
+            )
+        elif key.endswith("_COMMIT"):
+            if not COMMIT_RE.fullmatch(value):
+                raise LatentCrateError(f"{key} must be the 40 lowercase hex characters of a commit: {path}")
+            if key.removesuffix("_COMMIT") + "_REF" not in values:
+                raise LatentCrateError(f"{key} has no {key.removesuffix('_COMMIT')}_REF beside it: {path}")
+        elif key.endswith("_REF") and key.removesuffix("_REF") + "_COMMIT" not in values:
+            raise LatentCrateError(
+                f"{key} has no {key.removesuffix('_REF')}_COMMIT beside it (the build checks out the commit): {path}"
             )
     cuda_family(values)
     return values

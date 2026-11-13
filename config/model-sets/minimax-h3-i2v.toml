@@ -1,14 +1,10 @@
 schema = 1
 description = "MiniMax H3 image-to-video models for the official ComfyUI workflow"
-workflow_urls = ["https://github.com/Comfy-Org/workflow_templates/blob/66abae5205f7c5105281146fa109f7c12801d268/templates/video_minimax_h3_i2v.json"]
+workflow_urls = ["https://github.com/Comfy-Org/workflow_templates/blob/c8e48bdcfc7241d7af588d20d4f924caf9d9d953/templates/video_minimax_h3_i2v.json"]
 
 [[license]]
-name = "MiniMax-H3 Model License"
+name = "MiniMax H3 Community License Agreement"
 url = "https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/42ed227ee7df40d41602854ae760620d6eb651fe/LICENSE"
-
-[[license]]
-name = "Apache License 2.0 (LightX2V MiniMax-H3 Turbo LoRA)"
-url = "https://huggingface.co/lightx2v/Minimax-h3-Turbo/blob/ec01fa4c86263832faa0bd1d6d8f36a281eaabb2/README.md"
 
 [[file]]
 repository = "Comfy-Org/MiniMax-H3"
@@ -36,15 +32,15 @@ sha256 = "8e505d95dd1561d47abd43d4238fd40d9bb1ae9e147ed0a4cba778d76ae4db48"
 
 [[file]]
 repository = "Comfy-Org/MiniMax-H3"
-revision = "4cc1d817b6184899b41293954329f576cb5ae86b"
-source = "vae/minimax_h3_video_vae_fp16.safetensors"
-destination = "vae/minimax_h3_video_vae_fp16.safetensors"
-size = 5207808496
-sha256 = "7c1f131492e7eddacaac9069a61b81bdd39de5cc96561e677c5eab1cdce5e522"
+revision = "54472221d27c695fca9621b0c3ed52f06c4af707"
+source = "vae/minimax_h3_video_vae_int8_convrot.safetensors"
+destination = "vae/minimax_h3_video_vae_int8_convrot.safetensors"
+size = 2811065184
+sha256 = "52a2c8c73583c86e4f41cdcce3a6ad0ea562987bc0bf3d60a0cef5f5c8e60c0e"
 
 [[file]]
 repository = "lightx2v/Minimax-h3-Turbo"
-revision = "ec01fa4c86263832faa0bd1d6d8f36a281eaabb2"
+revision = "1a4a150fc6707329409eb52e5d75a0e987ac1928"
 source = "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors"
 destination = "loras/minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors"
 size = 1956193000

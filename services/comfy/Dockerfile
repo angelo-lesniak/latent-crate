@@ -18,11 +18,17 @@ ARG FRONTEND_NODE_TAG
 ARG FRONTEND_NODE_DIGEST
 
 ARG COMFYUI_REF
+ARG COMFYUI_COMMIT
 ARG COMFYUI_FRONTEND_REF
+ARG COMFYUI_FRONTEND_COMMIT
 ARG FFMPEG_REF
+ARG FFMPEG_COMMIT
 ARG NV_CODEC_HEADERS_REF
+ARG NV_CODEC_HEADERS_COMMIT
 ARG SVT_AV1_REF
+ARG SVT_AV1_COMMIT
 ARG SAGEATTENTION_REF
+ARG SAGEATTENTION_COMMIT
 ARG FRONTEND_PNPM_VERSION
 ARG CUDA_NPP_VERSION
 ARG TORCHCODEC_VERSION
@@ -47,8 +53,11 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 ARG PYTORCH_DEVEL_TAG
 ARG FFMPEG_REF
+ARG FFMPEG_COMMIT
 ARG NV_CODEC_HEADERS_REF
+ARG NV_CODEC_HEADERS_COMMIT
 ARG SVT_AV1_REF
+ARG SVT_AV1_COMMIT
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PKG_CONFIG_PATH=/opt/latentcrate-media/lib/pkgconfig
@@ -85,6 +94,9 @@ RUN git init /tmp/nv-codec-headers \
     && git -C /tmp/nv-codec-headers remote add origin https://github.com/FFmpeg/nv-codec-headers.git \
     && git -C /tmp/nv-codec-headers fetch --depth 1 origin "${NV_CODEC_HEADERS_REF}" \
     && git -C /tmp/nv-codec-headers checkout --detach FETCH_HEAD \
+    && { test "$(git -C /tmp/nv-codec-headers rev-parse HEAD)" = "${NV_CODEC_HEADERS_COMMIT}" \
+         || { printf 'LatentCrate: NV_CODEC_HEADERS_REF %s resolves to %s, not the pinned NV_CODEC_HEADERS_COMMIT %s; change the two pins together.\n' \
+                "${NV_CODEC_HEADERS_REF}" "$(git -C /tmp/nv-codec-headers rev-parse HEAD)" "${NV_CODEC_HEADERS_COMMIT}" >&2; exit 1; }; } \
     && make -C /tmp/nv-codec-headers PREFIX=/opt/latentcrate-media install \
     && mkdir -p /opt/latentcrate-build-info \
     && printf '%s\n' "${PYTORCH_DEVEL_TAG}" > /opt/latentcrate-build-info/pytorch-devel.ref \
@@ -96,6 +108,9 @@ RUN git init /tmp/svt-av1 \
     && git -C /tmp/svt-av1 remote add origin https://gitlab.com/AOMediaCodec/SVT-AV1.git \
     && git -C /tmp/svt-av1 fetch --depth 1 origin "${SVT_AV1_REF}" \
     && git -C /tmp/svt-av1 checkout --detach FETCH_HEAD \
+    && { test "$(git -C /tmp/svt-av1 rev-parse HEAD)" = "${SVT_AV1_COMMIT}" \
+         || { printf 'LatentCrate: SVT_AV1_REF %s resolves to %s, not the pinned SVT_AV1_COMMIT %s; change the two pins together.\n' \
+                "${SVT_AV1_REF}" "$(git -C /tmp/svt-av1 rev-parse HEAD)" "${SVT_AV1_COMMIT}" >&2; exit 1; }; } \
     && cmake -S /tmp/svt-av1 -B /tmp/svt-av1/build -G Ninja \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_INSTALL_PREFIX=/opt/latentcrate-media \
@@ -114,6 +129,9 @@ RUN git init /tmp/ffmpeg \
     && git -C /tmp/ffmpeg remote add origin https://github.com/FFmpeg/FFmpeg.git \
     && git -C /tmp/ffmpeg fetch --depth 1 origin "${FFMPEG_REF}" \
     && git -C /tmp/ffmpeg checkout --detach FETCH_HEAD \
+    && { test "$(git -C /tmp/ffmpeg rev-parse HEAD)" = "${FFMPEG_COMMIT}" \
+         || { printf 'LatentCrate: FFMPEG_REF %s resolves to %s, not the pinned FFMPEG_COMMIT %s; change the two pins together.\n' \
+                "${FFMPEG_REF}" "$(git -C /tmp/ffmpeg rev-parse HEAD)" "${FFMPEG_COMMIT}" >&2; exit 1; }; } \
     && cd /tmp/ffmpeg \
     && ./configure \
         --prefix=/opt/latentcrate-media \
@@ -187,6 +205,7 @@ FROM docker.io/pytorch/pytorch:${PYTORCH_RUNTIME_TAG}@sha256:${PYTORCH_RUNTIME_D
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 ARG COMFYUI_REF
+ARG COMFYUI_COMMIT
 ARG PYTORCH_RUNTIME_TAG
 ARG TORCHCODEC_VERSION
 
@@ -287,6 +306,9 @@ RUN --mount=type=cache,id=latentcrate-pip-runtime,target=/cache/pip \
     && git -C /opt/comfyui remote add origin https://github.com/Comfy-Org/ComfyUI.git \
     && git -C /opt/comfyui fetch --depth 1 origin "${COMFYUI_REF}" \
     && git -C /opt/comfyui checkout --detach FETCH_HEAD \
+    && { test "$(git -C /opt/comfyui rev-parse HEAD)" = "${COMFYUI_COMMIT}" \
+         || { printf 'LatentCrate: COMFYUI_REF %s resolves to %s, not the pinned COMFYUI_COMMIT %s; change the two pins together.\n' \
+                "${COMFYUI_REF}" "$(git -C /opt/comfyui rev-parse HEAD)" "${COMFYUI_COMMIT}" >&2; exit 1; }; } \
     && git -C /opt/comfyui rev-parse HEAD > /usr/local/share/latentcrate/comfyui.commit \
     && printf '%s\n' "${COMFYUI_REF}" > /usr/local/share/latentcrate/comfyui.ref \
     && python -m pip install -r /opt/comfyui/requirements.txt \
@@ -587,13 +609,18 @@ FROM docker.io/pytorch/pytorch:${PYTORCH_DEVEL_TAG}@sha256:${PYTORCH_DEVEL_DIGES
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 ARG SAGEATTENTION_REF
+ARG SAGEATTENTION_COMMIT
 ARG COMFY_CUDA_ARCH_LIST
 ARG SAGE_BUILD_JOBS
 
-ENV DEBIAN_FRONTEND=noninteractive \
+# torch 2.14's extension headers need C++20; SageAttention's setup.py appends
+# CXX_APPEND_FLAGS and NVCC_APPEND_FLAGS after its own -std=c++17, and the
+# later -std wins (thu-ml/SageAttention#400).
+ENV CXX_APPEND_FLAGS=-std=c++20 \
+    DEBIAN_FRONTEND=noninteractive \
     EXT_PARALLEL=1 \
     MAX_JOBS=${SAGE_BUILD_JOBS} \
-    NVCC_APPEND_FLAGS="--threads ${SAGE_BUILD_JOBS}" \
+    NVCC_APPEND_FLAGS="-std=c++20 --threads ${SAGE_BUILD_JOBS}" \
     TORCH_CUDA_ARCH_LIST=${COMFY_CUDA_ARCH_LIST}
 
 # Distribution packages track the pinned base image; per-package apt pins
@@ -614,6 +641,9 @@ RUN --mount=type=cache,id=latentcrate-pip-sage,target=/root/.cache/pip \
     && git -C /tmp/SageAttention remote add origin https://github.com/thu-ml/SageAttention.git \
     && git -C /tmp/SageAttention fetch --depth 1 origin "${SAGEATTENTION_REF}" \
     && git -C /tmp/SageAttention checkout --detach FETCH_HEAD \
+    && { test "$(git -C /tmp/SageAttention rev-parse HEAD)" = "${SAGEATTENTION_COMMIT}" \
+         || { printf 'LatentCrate: SAGEATTENTION_REF %s resolves to %s, not the pinned SAGEATTENTION_COMMIT %s; change the two pins together.\n' \
+                "${SAGEATTENTION_REF}" "$(git -C /tmp/SageAttention rev-parse HEAD)" "${SAGEATTENTION_COMMIT}" >&2; exit 1; }; } \
     && mkdir -p /wheels /opt/latentcrate-build-info \
     && python -m pip wheel \
         --no-build-isolation \

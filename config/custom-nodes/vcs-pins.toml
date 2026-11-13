@@ -4,6 +4,7 @@ version = 1
 # LatentCrate rewrites matching requirements only in its saved build input; it
 # never edits the third-party node's own files. Full commits let pip and BuildKit
 # reuse the resulting wheel across builds.
+# comfyui-impact-pack names the unreleased main branch.
 [[pin]]
 # Upstream calls the installable distribution SAM-2; Python imports it as sam2.
 package = "sam-2"
@@ -11,6 +12,7 @@ repository = "https://github.com/facebookresearch/sam2.git"
 requested_ref = ""
 commit = "2b90b9f5ceec907a1c18123530e92e794ad901a4"
 
+# was-ns names the three ltdrdata forks below by branch.
 [[pin]]
 package = "img2texture"
 repository = "https://github.com/ltdrdata/img2texture.git"

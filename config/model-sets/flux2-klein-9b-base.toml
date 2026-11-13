@@ -1,8 +1,8 @@
 schema = 1
 description = "FLUX.2 Klein 9B base models for text-to-image and image-edit workflows"
 workflow_urls = [
-  "https://github.com/Comfy-Org/workflow_templates/blob/3db6490611e6a16b84b09110e61a07264ce47cd3/templates/image_flux2_text_to_image_9b.json",
-  "https://github.com/Comfy-Org/workflow_templates/blob/3db6490611e6a16b84b09110e61a07264ce47cd3/templates/image_flux2_klein_image_edit_9b_base.json",
+  "https://github.com/Comfy-Org/workflow_templates/blob/c8e48bdcfc7241d7af588d20d4f924caf9d9d953/templates/image_flux2_text_to_image_9b.json",
+  "https://github.com/Comfy-Org/workflow_templates/blob/c8e48bdcfc7241d7af588d20d4f924caf9d9d953/templates/image_flux2_klein_image_edit_9b_base.json",
 ]
 
 [[license]]

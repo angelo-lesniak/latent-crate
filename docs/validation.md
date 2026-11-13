@@ -13,18 +13,19 @@ checkout's `pins.env` and Dockerfile.
 
 | Date | Host | Engine | Procedure | Result |
 | --- | --- | --- | --- | --- |
-| 2026-11-13 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | `bash tests/static.sh` strict, from a `.venv` built from `requirements-dev.txt` | pass; 320 tests |
+| 2026-11-13 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | `bash tests/static.sh` strict, from a `.venv` built from `requirements-dev.txt` | pass; 326 tests |
 | 2026-11-13 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | `init`, `doctor` | pass; `doctor` ends with 0 failures and 0 warnings |
-| 2026-11-13 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | `build`, then `build --sage available` | pass; release 775 s with a cold engine cache (2026-11-12), 184 s warm; Sage 98 s on top; images 9.39 GB and 9.45 GB |
-| 2026-11-13 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | `up --detach`, release and `--sage available` | pass; healthy in 65 s and 63 s |
+| 2026-11-13 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | `build`, then `build --sage available` (ComfyUI v0.45.0, PyTorch 2.14.1 with CUDA 13.0, commit pins) | pass; release 1983 s with cold base images, Sage 446 s on top; images 10.2 GB each |
+| 2026-11-13 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | `up --detach`, release and `--sage available` | pass; healthy in 65 s and 67 s |
 | 2026-11-13 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | `smoke-gpu`, release and `--sage available` | pass; both reports end with `LatentCrate GPU verification passed.`, the Sage one holds `sageattention_result` |
-| 2026-11-13 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | `models check --remote`; `models fetch` interrupted with Ctrl+C after 8 s and run again; `models status --verify` | pass; the second fetch resumed the `.part` file in 24 s and installed it, every checksum matched |
-| 2026-11-13 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | `nodes install`, `nodes sync`, `nodes status` of `latent-nodepack`, then `up` | pass; 10 nodes ready, `up` healthy in 64 s |
-| 2026-11-13 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | `templates list` through the sandboxed `engine run` | pass; 172 local-compatible templates |
-| 2026-11-13 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | `up --frontend-source <checkout>` of the pinned frontend tag | pass; two runs of the Node image, the `dist` landed under `COMFY_CACHE_DIR/frontend-builds`, healthy in 106 s |
-| 2026-11-13 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | `up --frontend-dist <dir>` with that `dist`, then `smoke-gpu` without the frontend setting | pass; healthy in 59 s; the smoke refused as [The running container uses another image](troubleshooting.md#the-running-container-uses-another-image) describes |
+| 2026-11-13 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | `models check --remote`; `models fetch minimax-h3-i2v-turbo-4step` interrupted with Ctrl+C after 8 s and run again; `models status --verify` | pass; the second fetch resumed and installed the file in 26 s, every checksum matched |
+| 2026-11-13 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | `nodes install`, `nodes sync`, `nodes status` of `latent-nodepack` over a library at the previous commits, then `up` | pass; `install` refuses a checkout at another commit (`different-commit`), `sync` replaces it, 9 nodes ready, `up` healthy in 355 s after the dependency rebuild |
+| 2026-11-13 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | `templates list` through the sandboxed `engine run` | pass; 216 local-compatible templates from comfyui-workflow-templates 0.11.105 |
+| 2026-11-13 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | `up --frontend-source <checkout>` of the pinned frontend tag | pass; two runs of the Node image, the `dist` landed under `COMFY_CACHE_DIR/frontend-builds`, healthy in 107 s |
+| 2026-11-13 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | `up --frontend-dist <dir>` with that `dist`, then `smoke-gpu` without the frontend setting | pass; healthy in 65 s; the smoke refused as [The running container uses another image](troubleshooting.md#the-running-container-uses-another-image) describes |
 | 2026-11-13 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | `down` with no container of the project | pass; exit 0, no output |
 | 2026-11-13 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | writes into the models directory by ComfyUI, Manager, or the node set during the scripted run | none |
+| 2026-11-13 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | attention A/B: the official MiniMax H3 i2v template (124 frames, 1344×768, one seed) through the API per backend; wall seconds and device-wide peak GPU memory | SDPA 150 s; `--use-ck-attention` 93 s; Model Sparse Attention 83 s; KJNodes patch under `--sage available` 77 s; `--sage global` with the patch 76 s; `--sage global` alone 71 s; peak 31.1–31.3 GiB of 31.8 GiB in every run; 124 frames each |
 | 2026-11-12 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | image generation through the UI with the `flux2-klein-9b` edit workflow on the Sage stack; a saved workflow reopened after `down` and `up` | pass (maintainer) |
 
 ## Hosts

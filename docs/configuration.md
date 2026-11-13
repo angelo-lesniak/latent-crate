@@ -121,8 +121,10 @@ eligible version of each pin and prints it next to the pinned one; it
 writes nothing.
 
 `PYTORCH_DEVEL_TAG`, `PYTORCH_RUNTIME_TAG`, `TORCHCODEC_VERSION`, and
-`CUDA_NPP_VERSION` change together; [Add a pin](../CONTRIBUTING.md#add-a-pin)
-holds the pin grammar and the family rule.
+`CUDA_NPP_VERSION` change together. A source fetched by tag carries its
+commit beside the tag, and the build refuses a tag that moved to another
+commit. [Add a pin](../CONTRIBUTING.md#add-a-pin) holds the pin grammar
+and the family rule.
 
 `LATENTCRATE_SAGE`, or `--sage` for one command, selects the image target
 and the runtime flag together; [SageAttention](nodes.md#sageattention)

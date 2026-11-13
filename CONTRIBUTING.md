@@ -107,9 +107,11 @@ verbatim on exactly one page. Check the facts in the prose by hand.
 
 A pin in `pins.env` is `<NAME>_TAG` with `<NAME>_DIGEST` beside it (the
 tag names the image, the manifest digest is what the build pulls),
-`<NAME>_VERSION`, `<NAME>_REF`, or `CUDA_MIN_DRIVER_MAJOR`;
-`env.load_pins` refuses any other key name, and a tag or digest without
-its partner. `PYTORCH_DEVEL_TAG`, `PYTORCH_RUNTIME_TAG`,
+`<NAME>_REF` with `<NAME>_COMMIT` beside it (the tag names the source,
+the commit is what the build checks out and asserts), `<NAME>_VERSION`,
+or `CUDA_MIN_DRIVER_MAJOR`; `env.load_pins` refuses any other key name,
+a tag, digest, ref, or commit without its partner, and a commit that is
+not 40 lowercase hex characters. `PYTORCH_DEVEL_TAG`, `PYTORCH_RUNTIME_TAG`,
 `TORCHCODEC_VERSION`, and `CUDA_NPP_VERSION` must name one PyTorch
 release and CUDA family (`env.cuda_family`); change the four together.
 
@@ -119,8 +121,13 @@ release and CUDA family (`env.cuda_family`); change the four together.
    top-level `ARG KEY` without a default, redeclared in each stage that
    reads it, so that `pins.env` stays the only place the value lives;
    `test_pins_env_is_the_only_place_a_pinned_value_lives` fails
-   otherwise. `CUDA_MIN_DRIVER_MAJOR` is the one pin no build consumes;
-   `doctor` reads it.
+   otherwise. For a `<NAME>_REF`, the `RUN` that fetches it compares the
+   checked-out `HEAD` with `<NAME>_COMMIT` and refuses a moved tag;
+   `test_every_tag_fetch_asserts_the_pinned_commit` fails otherwise. The
+   frontend is the exception: the wrapper passes `COMFYUI_FRONTEND_COMMIT`
+   as `FRONTEND_GIT_REF`, which the frontend stage fetches and checks.
+   `CUDA_MIN_DRIVER_MAJOR` is the one pin no build consumes; `doctor`
+   reads it.
 3. For a pin that `pins check` resolves, add one `RESOLVERS` entry
    keyed by the pin in `latentcrate/checkpins.py` and a case in
    `tests/test_checkpins.py`.
@@ -216,7 +223,8 @@ against its reason.
   Reconsider if a command gains semantics no owner page can hold.
 - **Pin grammar plus the family rule.** The grammar in [Add a
   pin](#add-a-pin) refuses URLs and image references, so repository
-  names and the TorchCodec index live in the Dockerfile; the one
+  names and the TorchCodec index live in the Dockerfile; a commit
+  beside each ref lets the build refuse a moved tag; the one
   cross-check is the CUDA family the four PyTorch pins share.
   Reconsider if a pin needs a shape the grammar cannot name.
 - **Verification stamps hold SHA-256, size, and `mtime_ns`, not
