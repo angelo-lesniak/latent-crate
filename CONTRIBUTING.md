@@ -247,6 +247,12 @@ against its reason.
 - **`templates` refuses without the image instead of building it.** A
   build takes hours and a template listing must not start one; the
   refusal names `build`.
+- **Private sets live in `local/model-sets/` and may omit `size` and
+  `sha256`; the first download is trusted and recorded.** The author
+  would compute both from the same download, so a pin adds nothing for a
+  set nobody else fetches, while the shipped loader stays strict
+  ([Private sets](docs/models.md#private-sets)). Reconsider if a private
+  set is ever shared or a record-only file is found swapped.
 - **`smoke-gpu` proves function, not provenance.** Provenance is proven
   at build time by the pinned digests and commits; the smoke test
   checks that the running image works

@@ -261,8 +261,12 @@ def fetch_models(settings: env.Settings, selected: list[models.ModelSet]) -> Non
         models.fetch(selected, settings.models_dir, roots, settings.hf_token)
 
 
+def model_catalog(settings: env.Settings) -> dict[str, models.ModelSet]:
+    return models.catalog(settings.config_dir, settings.local_model_sets_dir)
+
+
 def selected_model_sets(context: Context, names: list[str]) -> list[models.ModelSet]:
-    return select_sets(models.catalog(context.settings.config_dir), names, "model set")
+    return select_sets(model_catalog(context.settings), names, "model set")
 
 
 def selected_node_set(context: Context, name: str) -> nodes.NodeSet:
@@ -358,8 +362,8 @@ def cmd_smoke_gpu(context: Context, options: Options, names: list[str]) -> int:
 
 
 def cmd_models_list(context: Context, _options: Options, _names: list[str]) -> None:
-    for name, model_set in models.catalog(context.settings.config_dir).items():
-        print(f"{name} - {model_set.description}")
+    for name, model_set in model_catalog(context.settings).items():
+        print(f"{name} - {model_set.description}" + (" (local)" if model_set.private else ""))
 
 
 def cmd_models_fetch(context: Context, _options: Options, names: list[str]) -> None:
@@ -494,7 +498,7 @@ COMMANDS = (
         {"--sage": SAGE},
         cmd_smoke_gpu,
     ),
-    Command("models list", "", "List the available pinned model-file sets.", {}, cmd_models_list),
+    Command("models list", "", "List the available model-file sets.", {}, cmd_models_list),
     Command(
         "models fetch",
         SETS,

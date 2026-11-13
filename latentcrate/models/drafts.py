@@ -64,12 +64,12 @@ def remote_mismatch(model_file: ModelFile, siblings: dict[str, dict]) -> str | N
     if remote is None:
         return "missing from the repository at the pinned revision"
     size = remote.get("size")
-    if size != model_file.size:
+    if model_file.size is not None and size != model_file.size:
         return f"remote size {size}, manifest {model_file.size}"
     # The Hub records a SHA-256 for LFS files only; a plain Git blob is
     # judged by its size here and by its checksum at fetch.
     digest = (remote.get("lfs") or {}).get("sha256")
-    if digest is not None and digest != model_file.sha256:
+    if None not in (digest, model_file.sha256) and digest != model_file.sha256:
         return f"remote sha256 {digest}, manifest {model_file.sha256}"
     return None
 

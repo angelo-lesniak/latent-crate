@@ -105,11 +105,17 @@ class ModelSetTests(unittest.TestCase):
         )
         return model_set, model_file
 
-    def read(self, body: str):
+    def read(self, body: str, *, private: bool = False):
         with tempfile.TemporaryDirectory() as directory:
             manifest = Path(directory) / "fixture.toml"
             manifest.write_text(body, encoding="utf-8")
-            return models.read_manifest(manifest)
+            return models.read_manifest(manifest, private=private)
+
+    def unpinned_set(self):
+        """A private set whose one file carries neither size nor sha256."""
+        model_set, model_file = self.fixture_set()
+        model_file = models.ModelFile(**{**model_file.__dict__, "size": None, "sha256": None})
+        return models.ModelSet(**{**model_set.__dict__, "files": (model_file,), "private": True}), model_file
 
     def serve(self, respond) -> int:
         """Start a local HTTP server whose GETs and HEADs call respond(handler); return its port."""
@@ -203,6 +209,43 @@ class ModelSetTests(unittest.TestCase):
         for pattern, body in refusals.items():
             with self.subTest(pattern=pattern), self.assertRaisesRegex(LatentCrateError, pattern):
                 self.read(body)
+
+    def test_a_private_set_may_leave_the_pins_out_and_a_shipped_set_may_not(self):
+        row = file_row("weights/model.bin", "diffusion_models/model.bin")
+        unpinned = "\n".join(line for line in row.splitlines() if not line.startswith(("size", "sha256"))) + "\n"
+
+        private = self.read(MANIFEST_HEAD + unpinned, private=True)
+        self.assertTrue(private.private)
+        self.assertEqual((private.files[0].size, private.files[0].sha256), (None, None))
+        self.assertFalse(self.read(MANIFEST_HEAD + row, private=True).files[0].size is None)
+        with self.assertRaisesRegex(LatentCrateError, "file 1 size must be a positive integer"):
+            self.read(MANIFEST_HEAD + unpinned)
+        with self.assertRaisesRegex(LatentCrateError, "file 1 sha256 must be lowercase hexadecimal"):
+            self.read(MANIFEST_HEAD + row.replace(f'sha256 = "{"a" * 64}"\n', ""))
+        with self.assertRaisesRegex(LatentCrateError, "file 1 size must be a positive integer"):
+            self.read(MANIFEST_HEAD + file_row("a", "b", size='"TODO"'), private=True)
+        with self.assertRaisesRegex(LatentCrateError, "file 1: destination must be a relative path"):
+            self.read(MANIFEST_HEAD + file_row("a", "../b"), private=True)
+
+    def test_the_catalog_adds_private_sets_after_the_shipped_ones_and_tolerates_their_absence(self):
+        shipped = models.catalog(CONFIG)
+        with tempfile.TemporaryDirectory() as directory:
+            local_dir = Path(directory) / "model-sets"
+            self.assertEqual(models.catalog(CONFIG, local_dir), shipped)
+
+            local_dir.mkdir()
+            (local_dir / "mine.toml").write_text(MANIFEST_HEAD + file_row("w.bin", "loras/w.bin"), encoding="utf-8")
+            merged = models.catalog(CONFIG, local_dir)
+            self.assertEqual(list(merged), [*shipped, "mine"])
+            self.assertTrue(merged["mine"].private)
+            self.assertFalse(any(model_set.private for model_set in shipped.values()))
+
+            taken = next(iter(shipped))
+            (local_dir / f"{taken}.toml").write_text(MANIFEST_HEAD + file_row("w.bin", "loras/w.bin"), encoding="utf-8")
+            with self.assertRaisesRegex(
+                LatentCrateError, f"^model set {taken} is declared twice: {MANIFESTS / taken}.toml and {local_dir}/"
+            ):
+                models.catalog(CONFIG, local_dir)
 
     # Fetch
 
@@ -664,7 +707,7 @@ class ModelSetTests(unittest.TestCase):
             with contextlib.redirect_stdout(io.StringIO()) as output:
                 self.assertEqual(self.status(model_set, models_root), 0)
             self.assertEqual(hashing.call_count, 1)
-            self.assertIn("verifying: 1 file(s) (0.0 GB) by checksum", output.getvalue())
+            self.assertIn("verifying: 1 file(s) (0.0 GB) by checksum; later runs trust the record", output.getvalue())
             self.assertEqual(library.read_stamp(destination), library.stamp_of(destination.stat(), model_file.sha256))
 
             with quiet():
@@ -736,6 +779,89 @@ class ModelSetTests(unittest.TestCase):
                 self.assertEqual(self.status(model_set, models_root, verify=True), 1)
             self.assertEqual(hashing.call_count, 2)
             self.assertIn("diffusion_models/model.bin: wrong checksum", output.getvalue())
+
+    def test_a_file_without_pins_is_completed_by_content_length_recorded_and_judged_by_its_record(self):
+        content = b"private model nobody else pins"
+        model_set, model_file = self.unpinned_set()
+        ranges: list[str | None] = []
+        self.use_hub(
+            self.serve(lambda handler: ranges.append(handler.headers.get("Range")) or serve_bytes(handler, content))
+        )
+        hashing = self.hashing()
+        with tempfile.TemporaryDirectory() as directory:
+            models_root = Path(directory)
+            destination = models_root / model_file.destination
+            # Stale bytes of an earlier attempt: no pin says they belong to the file, so they are not resumed.
+            staging = library.staging_directory(model_file, destination)
+            staging.mkdir(parents=True)
+            library.staged_paths(model_file, staging)[1].write_bytes(b"zzzz")
+            with contextlib.redirect_stdout(io.StringIO()) as output:
+                models.fetch([model_set], models_root, models.allowed_roots(models_root, ""), None)
+            self.assertIn("downloading: diffusion_models/model.bin (size not pinned)", output.getvalue())
+            self.assertEqual(ranges, ["bytes=0-0", None])
+            self.assertEqual(destination.read_bytes(), content)
+            record = library.read_stamp(destination)
+            self.assertEqual(record, library.stamp_of(destination.stat(), hashlib.sha256(content).hexdigest()))
+            self.assertFalse(list(models_root.rglob(".latentcrate-downloads")))
+
+            with contextlib.redirect_stdout(io.StringIO()) as output:
+                self.assertEqual(self.status(model_set, models_root), 0)
+            self.assertEqual(output.getvalue(), "diffusion_models/model.bin: recorded\n")
+            with quiet():
+                self.assertEqual(self.status(model_set, models_root, verify=True), 0)
+                self.fetch(model_set, models_root, None)
+            self.assertEqual(hashing.call_count, 1)
+
+            # A same-size swap with the timestamp put back passes the record; --verify compares with it.
+            destination.write_bytes(b"swapped model nobody else pins")
+            os.utime(destination, ns=(record["mtime_ns"], record["mtime_ns"]))
+            with quiet():
+                self.assertEqual(self.status(model_set, models_root), 0)
+            with contextlib.redirect_stdout(io.StringIO()) as output:
+                self.assertEqual(self.status(model_set, models_root, verify=True), 1)
+            self.assertEqual(output.getvalue().splitlines()[-1], "diffusion_models/model.bin: changed since recorded")
+            # A rewrite that leaves a new mtime is hashed against the record without --verify.
+            os.utime(destination, ns=(record["mtime_ns"], record["mtime_ns"] + 1))
+            with self.assertRaisesRegex(LatentCrateError, "has the changed since recorded; move it aside"):
+                self.fetch(model_set, models_root, None)
+            self.assertEqual(destination.read_bytes(), b"swapped model nobody else pins")
+
+    def test_a_present_file_without_pins_or_record_is_unverified_and_never_hashed_or_overwritten(self):
+        model_set, model_file = self.unpinned_set()
+        hashing = self.hashing()
+        requests: list[str] = []
+        self.use_hub(self.serve(lambda handler: requests.append(handler.path) or serve_bytes(handler, b"x")))
+        with tempfile.TemporaryDirectory() as directory:
+            models_root = Path(directory)
+            destination = self.install(models_root, model_file, b"placed by hand")
+            with contextlib.redirect_stdout(io.StringIO()) as output:
+                self.assertEqual(self.status(model_set, models_root), 1)
+            self.assertEqual(output.getvalue(), "diffusion_models/model.bin: unverified\n")
+            with self.assertRaisesRegex(LatentCrateError, "present without a record and the manifest pins no checksum"):
+                self.fetch(model_set, models_root, None)
+            self.assertEqual(destination.read_bytes(), b"placed by hand")
+            self.assertIsNone(library.read_stamp(destination))
+            library.stamp_path(destination).write_text(json.dumps({"sha256": "nope"}))
+            with quiet():
+                self.assertEqual(self.status(model_set, models_root, verify=True), 1)
+        self.assertEqual((hashing.call_count, requests), (0, []))
+
+    def test_a_server_that_names_no_size_for_an_unpinned_file_is_refused_before_a_byte_lands(self):
+        model_set, model_file = self.unpinned_set()
+
+        def respond(handler):
+            handler.send_response(200)
+            handler.send_header("Transfer-Encoding", "chunked")
+            handler.end_headers()
+            handler.wfile.write(b"1\r\nx\r\n0\r\n\r\n")
+
+        self.use_hub(self.serve(respond))
+        with tempfile.TemporaryDirectory() as directory:
+            models_root = Path(directory)
+            with self.assertRaisesRegex(LatentCrateError, "pins no size and the server reports none"):
+                self.fetch(model_set, models_root, None)
+            staging = library.staging_directory(model_file, models_root / model_file.destination)
+            self.assertEqual(list(staging.iterdir()), [])
 
     # Destinations and roots
 
@@ -874,6 +1000,19 @@ class ModelSetTests(unittest.TestCase):
 
         self.assertEqual(tomllib.loads(text)["file"][0]["size"], "TODO")
         self.assertEqual(tomllib.loads(text)["file"][0]["sha256"], "TODO")
+
+    def test_remote_check_compares_only_the_pins_a_file_carries(self):
+        _, model_file = self.fixture_set()
+        unpinned = models.ModelFile(**{**model_file.__dict__, "size": None, "sha256": None})
+        sized = models.ModelFile(**{**model_file.__dict__, "sha256": None})
+        remote = {"size": model_file.size + 1, "lfs": {"sha256": "f" * 64}}
+        siblings = {model_file.source: remote}
+
+        self.assertIsNone(drafts.remote_mismatch(unpinned, siblings))
+        self.assertEqual(
+            drafts.remote_mismatch(sized, siblings), f"remote size {remote['size']}, manifest {sized.size}"
+        )
+        self.assertEqual(drafts.remote_mismatch(unpinned, {}), "missing from the repository at the pinned revision")
 
     def test_check_reports_offline_and_compares_with_the_hub_remotely(self):
         model_set, model_file = self.fixture_set()

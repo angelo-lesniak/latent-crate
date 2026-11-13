@@ -15,6 +15,7 @@ from pathlib import Path, PurePosixPath
 
 from .. import LatentCrateError
 from ..files import write_atomic
+from ..names import SHA256_RE
 from .manifest import ModelFile
 
 # Written beside a file once its checksum matched; see file_state.
@@ -108,8 +109,18 @@ def write_stamp(path: Path, sha256: str) -> None:
         write_atomic(stamp_path(path), json.dumps(stamp_of(path.stat(), sha256)), mode=0o600)
 
 
-def is_stamped(path: Path, path_stat: os.stat_result, expected: ModelFile) -> bool:
-    return read_stamp(path) == stamp_of(path_stat, expected.sha256)
+def reference_sha256(path: Path, expected: ModelFile) -> str | None:
+    """The checksum a file is judged against: the manifest's pin, or for a
+    file without one the checksum its stamp recorded; None when neither exists."""
+    if expected.sha256 is not None:
+        return expected.sha256
+    stamp = read_stamp(path)
+    digest = stamp.get("sha256") if isinstance(stamp, dict) else None
+    return digest if isinstance(digest, str) and SHA256_RE.fullmatch(digest) else None
+
+
+def is_stamped(path: Path, path_stat: os.stat_result, reference: str) -> bool:
+    return read_stamp(path) == stamp_of(path_stat, reference)
 
 
 def file_state(path: Path, expected: ModelFile, *, verify: bool = False) -> str:
@@ -120,7 +131,12 @@ def file_state(path: Path, expected: ModelFile, *, verify: bool = False) -> str:
     the stamp while the file's size, mtime, and the manifest's checksum are
     the recorded ones. The container mounts the library writable, so a
     same-size swap that preserves the timestamp passes the stamp; ``verify``
-    hashes regardless and is the remedy."""
+    hashes regardless and is the remedy.
+
+    A file whose manifest pins no checksum is judged against its own stamp,
+    written at download: "unverified" without one, "recorded" while it
+    matches, "changed since recorded" otherwise; "ready" is reserved for a
+    file that matched its pin."""
     if path.is_symlink() and not path.exists():
         return "dangling symlink"
     if not path.exists():
@@ -128,27 +144,32 @@ def file_state(path: Path, expected: ModelFile, *, verify: bool = False) -> str:
     if not path.is_file():
         return "not a regular file"
     path_stat = path.stat()
-    if path_stat.st_size != expected.size:
+    if expected.size is not None and path_stat.st_size != expected.size:
         return "wrong size"
-    if verify or not is_stamped(path, path_stat, expected):
-        if sha256_file(path) != expected.sha256:
-            return "wrong checksum"
-        write_stamp(path, expected.sha256)
-    return "ready"
+    reference = reference_sha256(path, expected)
+    if reference is None:
+        return "unverified"
+    if verify or not is_stamped(path, path_stat, reference):
+        if sha256_file(path) != reference:
+            return "wrong checksum" if expected.sha256 is not None else "changed since recorded"
+        write_stamp(path, reference)
+    return "ready" if expected.sha256 is not None else "recorded"
 
 
 def announce_hashing(located: list[tuple[Path, ModelFile]], verify: bool = False) -> None:
     """Say up front how many present files file_state is about to hash."""
-    to_hash = [
-        model_file
-        for path, model_file in located
-        if path.is_file() and (verify or not is_stamped(path, path.stat(), model_file))
-    ]
+    to_hash = []
+    for path, model_file in located:
+        if not path.is_file():
+            continue
+        reference = reference_sha256(path, model_file)
+        if reference is not None and (verify or not is_stamped(path, path.stat(), reference)):
+            to_hash.append(path.stat().st_size)
     if to_hash:
-        total = sum(model_file.size for model_file in to_hash) / 1_000_000_000
+        total = sum(to_hash) / 1_000_000_000
         print(
             f"verifying: {len(to_hash)} file(s) ({total:.1f} GB) by checksum; "
-            "later runs trust the record written beside each verified file"
+            "later runs trust the record written beside each checked file"
         )
 
 
@@ -221,8 +242,8 @@ class PendingFile:
     The state is "complete" when the whole download awaits verification,
     "partial" when a .part file can be resumed, and "absent" otherwise;
     ``received`` counts the pinned file's bytes already in staging. Only the
-    bytes beyond them need free space, and only an incomplete file needs the
-    Hub."""
+    bytes beyond them need free space (none can be claimed for a file whose
+    size is not pinned), and only an incomplete file needs the Hub."""
 
     model_file: ModelFile
     destination: Path
@@ -232,15 +253,21 @@ class PendingFile:
 
     @property
     def remaining(self) -> int:
-        return max(self.model_file.size - self.received, 0)
+        return max(self.model_file.size - self.received, 0) if self.model_file.size is not None else 0
 
 
 def pending_file(model_file: ModelFile, destination: Path) -> PendingFile:
+    """The staged file is complete by construction (download renames it only
+    once every byte is on disk), so a file without a pinned size is complete
+    when anything is staged."""
     staging = staging_directory(model_file, destination)
     staged, part = staged_paths(model_file, staging)
-    if staged_size(staged) == model_file.size:
-        return PendingFile(model_file, destination, staging, "complete", model_file.size)
-    received = staged_size(part)
+    complete = staged_size(staged)
+    if complete and model_file.size in (None, complete):
+        return PendingFile(model_file, destination, staging, "complete", complete)
+    # Without a pinned size nothing tells a resumed transfer from a changed
+    # file spliced onto stale bytes, so an unpinned .part is started over.
+    received = staged_size(part) if model_file.size is not None else 0
     return PendingFile(model_file, destination, staging, "partial" if received else "absent", received)
 
 

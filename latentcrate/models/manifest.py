@@ -35,8 +35,9 @@ class ModelFile:
     revision: str
     source: str
     destination: str
-    size: int
-    sha256: str
+    # None when a private set leaves the pin out; see read_file.
+    size: int | None
+    sha256: str | None
 
 
 @dataclass(frozen=True)
@@ -46,6 +47,7 @@ class ModelSet:
     workflow_urls: tuple[str, ...]
     licenses: tuple[License, ...]
     files: tuple[ModelFile, ...]
+    private: bool = False
 
 
 def require_keys(table: dict, allowed: set[str], context: str) -> None:
@@ -54,7 +56,8 @@ def require_keys(table: dict, allowed: set[str], context: str) -> None:
         raise LatentCrateError(f"unknown field(s) in {context}: {', '.join(sorted(unknown))}")
 
 
-def read_manifest(path: Path) -> ModelSet:
+def read_manifest(path: Path, *, private: bool = False) -> ModelSet:
+    """The set a manifest declares; ``private`` marks a set under local/model-sets, whose files may lack pins."""
     name = path.stem
     if not SET_NAME_RE.fullmatch(name):
         raise LatentCrateError(f"unsafe model-set filename: {path.name}")
@@ -82,12 +85,12 @@ def read_manifest(path: Path) -> ModelSet:
     files: list[ModelFile] = []
     destinations: set[str] = set()
     for index, raw in enumerate(raw_files, start=1):
-        model_file = read_file(raw, index, name)
+        model_file = read_file(raw, index, name, private)
         if model_file.destination in destinations:
             raise LatentCrateError(f"{name}: duplicate destination: {model_file.destination}")
         destinations.add(model_file.destination)
         files.append(model_file)
-    return ModelSet(name, description, tuple(workflow_urls), tuple(licenses), tuple(files))
+    return ModelSet(name, description, tuple(workflow_urls), tuple(licenses), tuple(files), private)
 
 
 def read_license(raw: object, index: int, name: str) -> License:
@@ -104,8 +107,12 @@ def read_license(raw: object, index: int, name: str) -> License:
     return License(license_name.strip(), url)
 
 
-def read_file(raw: object, index: int, name: str) -> ModelFile:
-    """One [[file]] entry: a pinned Hugging Face file and its path below the models directory."""
+def read_file(raw: object, index: int, name: str, private: bool) -> ModelFile:
+    """One [[file]] entry: a pinned Hugging Face file and its path below the models directory.
+
+    A private set may leave ``size`` and ``sha256`` out: its author is the
+    only user and would compute both from the same download, so the first
+    download is trusted and recorded instead (library.file_state)."""
     if not isinstance(raw, dict):
         raise LatentCrateError(f"{name}: file {index} must be a table")
     context = f"{name} file {index}"
@@ -120,16 +127,26 @@ def read_file(raw: object, index: int, name: str) -> ModelFile:
         raise LatentCrateError(f"{name}: file {index} has an invalid repository")
     if not isinstance(revision, str) or not COMMIT_RE.fullmatch(revision):
         raise LatentCrateError(f"{name}: file {index} revision must be a full lowercase commit")
-    if not isinstance(size, int) or isinstance(size, bool) or size <= 0:
+    if not (private and size is None) and (not isinstance(size, int) or isinstance(size, bool) or size <= 0):
         raise LatentCrateError(f"{name}: file {index} size must be a positive integer")
-    if not isinstance(digest, str) or not SHA256_RE.fullmatch(digest):
+    if not (private and digest is None) and (not isinstance(digest, str) or not SHA256_RE.fullmatch(digest)):
         raise LatentCrateError(f"{name}: file {index} sha256 must be lowercase hexadecimal")
     return ModelFile(repository, revision, source, destination, size, digest)
 
 
-def catalog(config_dir: Path) -> dict[str, ModelSet]:
-    """Every model set under config_dir/model-sets, by name."""
-    return load_catalog(config_dir / "model-sets", read_manifest, "model set")
+def catalog(config_dir: Path, local_dir: Path | None = None) -> dict[str, ModelSet]:
+    """Every shipped model set under config_dir/model-sets, then the private
+    sets under local_dir (absent or empty is fine), by name; a name in both
+    is refused."""
+    sets = load_catalog(config_dir / "model-sets", read_manifest, "model set")
+    private = sorted(local_dir.glob("*.toml"), key=lambda item: item.stem) if local_dir is not None else []
+    for path in private:
+        model_set = read_manifest(path, private=True)
+        if model_set.name in sets:
+            shipped = config_dir / "model-sets" / path.name
+            raise LatentCrateError(f"model set {model_set.name} is declared twice: {shipped} and {path}")
+        sets[model_set.name] = model_set
+    return sets
 
 
 def merged_files(selected: list[ModelSet]) -> list[ModelFile]:

@@ -17,7 +17,7 @@ first directory must be one that
 to a ComfyUI model category, for example `diffusion_models/`,
 `text_encoders/`, `vae/`, or `loras/`; a file placed elsewhere downloads
 but no loader lists it. `bash bin/latentcrate models list` prints the
-shipped sets with their descriptions and is the source for what exists.
+sets with their descriptions and is the source for what exists.
 A file two selected sets both name downloads once; two sets that pin
 different content at one destination are refused together.
 
@@ -66,6 +66,21 @@ compares each pinned file's size (and checksum, for LFS files) with the
 Hugging Face record at the pinned revision and requests every workflow
 and license link.
 
+## Private sets
+
+A manifest under `local/model-sets/` (git-ignored; `init` creates the
+directory) is a private set with the same keys and rules, listed after
+the shipped sets and marked `(local)` by `models list`; a name a shipped
+set holds is refused. Its `[[file]]` entries may leave `size` and
+`sha256` out. Such a file downloads to the length the server reports
+(an interrupted download starts over, and the free-space check counts
+no bytes for it), is published without an integrity check, and its
+stamp records the checksum and size of that first copy; `status` prints
+it as `unverified` while no readable stamp exists, `recorded` while it
+matches the stamp, and `changed since recorded` when `--verify`, or a
+size or modification time the stamp does not hold, finds a different
+checksum. `check --remote` compares only the pins a file carries.
+
 ## Manifest keys
 
 The manifest is TOML; `latentcrate/models/manifest.py` reads it and
@@ -84,8 +99,8 @@ refuses any other key.
 | `file.revision` | yes | Full lowercase commit of the repository |
 | `file.source` | yes | Path of the file in the repository at that commit |
 | `file.destination` | yes | Path below `/models`; unique within the set |
-| `file.size` | yes | Byte size, a positive integer |
-| `file.sha256` | yes | Lowercase hexadecimal SHA-256 of the file |
+| `file.size` | shipped sets | Byte size, a positive integer |
+| `file.sha256` | shipped sets | Lowercase hexadecimal SHA-256 of the file |
 
 ## Add a set
 

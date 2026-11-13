@@ -523,6 +523,7 @@ class GatherTests(unittest.TestCase):
                 ("COMFY_MODELS_DIR", True, True, True),
                 ("COMFY_CACHE_DIR", True, True, True),
                 ("COMFY_LOCAL_NODES_DIR", True, True, True),
+                ("", False, False, False),
             ],
         )
         self.assertEqual(facts.models_gid, (self.scratch.storage / "models").stat().st_gid)

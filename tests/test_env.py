@@ -265,10 +265,12 @@ class SettingsTests(unittest.TestCase):
                 ("the models directory", "COMFY_MODELS_DIR", True, True, True),
                 ("the cache directory", "COMFY_CACHE_DIR", True, True, True),
                 ("the local custom-node directory", "COMFY_LOCAL_NODES_DIR", True, False, True),
+                ("the private model-set directory", "", False, False, True),
             ],
         )
         by_label = {place.label: place for place in settings.storage}
         self.assertEqual(by_label["the LatentCrate checkout"].path, self.tmp.resolve())
+        self.assertEqual(by_label["the private model-set directory"].path, self.tmp / "local" / "model-sets")
         self.assertEqual(
             by_label["the managed custom-node directory"].path, self.tmp / "data" / "comfy" / "custom_nodes"
         )

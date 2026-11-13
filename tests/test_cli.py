@@ -189,6 +189,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("LatentCrate host directories are ready. Review .env before building.\n", output)
         for name in ("data", "data/custom_nodes", "models", "cache", "local-nodes"):
             self.assertTrue((fresh / name).is_dir(), name)
+        self.assertTrue((self.scratch.root / "local" / "model-sets").is_dir())
         self.assertEqual(oct(env_file.stat().st_mode & 0o777), "0o600")
         lines = env_file.read_text().splitlines()
         self.assertTrue(lines and all(line.startswith("#") for line in lines), lines)
@@ -223,6 +224,24 @@ class CliTests(unittest.TestCase):
             **settings,
         )
         self.assertFalse((fresh / "models").exists())
+
+    def test_models_list_marks_a_private_set_and_refuses_a_name_a_shipped_set_holds(self) -> None:
+        shipped = self.scratch.root / "config" / "model-sets" / "minimax-h3-i2v.toml"
+        private = self.scratch.root / "local" / "model-sets"
+        private.mkdir(parents=True)
+        body = shipped.read_text().replace('description = "', 'description = "Private ', 1)
+        (private / "mine.toml").write_text(body)
+        listing = self.succeed("models", "list", **NO_ENGINE)
+        self.assertRegex(listing, r"\nminimax-h3-i2v - [^(\n]+\n")
+        self.assertRegex(listing, r"\nmine - Private .+ \(local\)\n$")
+
+        (private / "minimax-h3-i2v.toml").write_text(body)
+        self.expect_failure(
+            f"model set minimax-h3-i2v is declared twice: {shipped} and {private / 'minimax-h3-i2v.toml'}",
+            "models",
+            "list",
+            **NO_ENGINE,
+        )
 
     def test_doctor_runs_on_the_fake_engine_and_needs_a_gpu_unless_told_otherwise(self) -> None:
         allowed = self.doctor("--allow-no-gpu")

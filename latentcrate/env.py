@@ -365,6 +365,10 @@ class Settings:
         return self.root / "config"
 
     @property
+    def local_model_sets_dir(self) -> Path:
+        return self.root / "local" / "model-sets"
+
+    @property
     def storage(self) -> tuple[HostPath, ...]:
         """Every host path the wrapper owns or mounts, with its rules: the
         one list that `load`, `init`, and `doctor` iterate. The storage
@@ -379,6 +383,7 @@ class Settings:
             HostPath("the models directory", self.models_dir, "COMFY_MODELS_DIR", writable=True, **mounted),
             HostPath("the cache directory", self.cache_dir, "COMFY_CACHE_DIR", writable=True, **mounted),
             HostPath("the local custom-node directory", self.local_nodes_dir, "COMFY_LOCAL_NODES_DIR", **mounted),
+            HostPath("the private model-set directory", self.local_model_sets_dir, created_by_init=True),
         )
 
     def subprocess_env(self, **extra: str) -> dict[str, str]:
