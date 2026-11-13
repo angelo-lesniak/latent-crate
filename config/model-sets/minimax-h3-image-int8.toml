@@ -1,0 +1,46 @@
+schema = 1
+description = "MiniMax H3-Image text-to-image and image-edit models (INT8 ConvRot) with the Qwen3.5-9B prompt expander for the official ComfyUI workflows"
+workflow_urls = [
+  "https://github.com/Comfy-Org/workflow_templates/blob/c8e48bdcfc7241d7af588d20d4f924caf9d9d953/templates/image_minimax_h3_image_t2i.json",
+  "https://github.com/Comfy-Org/workflow_templates/blob/c8e48bdcfc7241d7af588d20d4f924caf9d9d953/templates/image_minimax_h3_image_edit.json",
+]
+
+[[license]]
+name = "MiniMax-H3-Image Community License Agreement"
+url = "https://huggingface.co/MiniMaxAI/MiniMax-H3-Image/blob/5f90473023975e6271b0ed1dd84c4e88e4bbc6d3/LICENSE"
+
+[[license]]
+name = "Apache License 2.0 (Qwen3.5-9B prompt expander)"
+url = "https://huggingface.co/Qwen/Qwen3.5-9B/blob/c202236235762e1c871ad0ccb60c8ee5ba337b9a/LICENSE"
+
+[[file]]
+repository = "Comfy-Org/MiniMax-H3-Image"
+revision = "0bb149f51e3156ed4b90dd45d5620346bfe1df8f"
+source = "diffusion_models/minimax_h3_image_pruned_int8_convrot.safetensors"
+destination = "diffusion_models/minimax_h3_image_pruned_int8_convrot.safetensors"
+size = 20979314802
+sha256 = "83eb140f1ff95c068f8a6886e6d3f3d0d4ab2e07bb2fe6d2ef992a51146ee622"
+
+[[file]]
+repository = "Comfy-Org/MiniMax-H3-Image"
+revision = "0bb149f51e3156ed4b90dd45d5620346bfe1df8f"
+source = "text_encoders/qwen3vl_32b_minimax_h3_int8_convrot.safetensors"
+destination = "text_encoders/qwen3vl_32b_minimax_h3_int8_convrot.safetensors"
+size = 27141342152
+sha256 = "bc2ced0fbea64757fa9acddccfc0b3f4819d1dcf1da6c124d690d368be283923"
+
+[[file]]
+repository = "Comfy-Org/MiniMax-H3-Image"
+revision = "0bb149f51e3156ed4b90dd45d5620346bfe1df8f"
+source = "vae/minimax_h3_image_vae_fp16.safetensors"
+destination = "vae/minimax_h3_image_vae_fp16.safetensors"
+size = 1168505312
+sha256 = "d80e9c2e5cfc9844869961ff5a58c9a9e52182df6bfb30b26018dd7f348721af"
+
+[[file]]
+repository = "Comfy-Org/Qwen3.5"
+revision = "a3f61d217d07c6936174625ce5d06e6079e9393e"
+source = "text_encoders/qwen3.5_9b_w4a8_gptq.safetensors"
+destination = "text_encoders/qwen3.5_9b_w4a8_gptq.safetensors"
+size = 7343591088
+sha256 = "4cc6a1543ad2061806da46f35f90cadb4801dcba246c44782cf42ec0feb6407c"
