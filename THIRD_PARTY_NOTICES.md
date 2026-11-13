@@ -12,10 +12,9 @@ notices, providing corresponding source where a license requires it, and
 reviewing the licenses of the custom-node requirements the image build
 installs.
 
-Trusted Git frontend builds execute the selected checkout's Node dependency and
-build scripts in an intermediate stage. Only compiled frontend assets enter the
-runtime, but their GPL and bundled-dependency obligations still apply to anyone
-redistributing the resulting image.
+Release and Git modes run the checkout's build scripts in a build stage. Only
+compiled frontend assets enter the runtime, but their GPL and bundled-dependency
+obligations still apply to anyone redistributing the resulting image.
 
 A source-mode frontend build runs the checkout's dependency install and build
 scripts in the pinned Node image and publishes only its compiled assets.
@@ -29,7 +28,7 @@ under LatentCrate's MIT license. Users must review and accept each model license
 Authoritative upstream projects include:
 
 - <https://github.com/Comfy-Org/ComfyUI>
-- <https://github.com/Comfy-Org/ComfyUI_frontend> (GPL-3.0, built into every runtime image)
+- <https://github.com/Comfy-Org/ComfyUI_frontend> (GPL-3.0, built into the `runtime` and `runtime-sage` images)
 - <https://github.com/nodejs/node> (runs the frontend build)
 - <https://github.com/pytorch/pytorch>
 - <https://github.com/FFmpeg/FFmpeg>

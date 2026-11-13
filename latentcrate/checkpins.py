@@ -235,7 +235,11 @@ def resolve_torchcodec(values: dict[str, str]) -> Resolution:
     if current_is_latest(parsed, latest_key, "PyPI torchcodec"):
         return Resolution(key, current, current)
     family = TORCHCODEC_VERSION_RE.fullmatch(current).group("family")
-    notes = ("  Release history: https://github.com/meta-pytorch/torchcodec/releases",)
+    # PyPI lists the CPU wheel only; the CUDA wheel of a release may lag.
+    notes = (
+        "  Release history: https://github.com/meta-pytorch/torchcodec/releases",
+        f"  Verify on https://download.pytorch.org/whl/{family}/torchcodec/",
+    )
     return Resolution(key, current, f"{latest}+{family}", notes)
 
 

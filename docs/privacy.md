@@ -12,12 +12,14 @@ third-party code trustworthy.
 | model downloads, checks, and drafts (`models ...`) | in the package on the host |
 | node-set installs (`nodes install`, `nodes sync`) | as `git` on the host, against allowlisted public HTTPS hosts |
 | source-mode frontend builds | in the pinned Node image through `engine run`: one phase with network for the package store, one with `--network none` for the build |
+| `templates list`, `templates create-model-set` | in a one-off `engine run` of the built image: no network, read-only root, no `/models`, `/data`, or `/cache` mount; `create-model-set` mounts `build/model-set-drafts` only |
 | `pins check` | in the package on the host, reading public registries over HTTPS |
 | the image build | in the engine's builder |
 
-`HF_TOKEN` is read from the shell or `.env`
-by the model commands only and removed from the environment of every
-subprocess; it reaches no container, Compose file, or image. The package
+`HF_TOKEN` is read from the shell or `.env` by every command that loads
+settings, used by the model commands only, and removed from the
+environment of every subprocess; it reaches no container, Compose file,
+or image. The package
 sends it as an `Authorization` header to `huggingface.co` only and drops
 it on a redirect to another host. See
 [Models](models.md#fetch-a-set) for the token setup and the licenses the

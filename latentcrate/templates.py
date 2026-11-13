@@ -1,9 +1,9 @@
 """`templates list` and `templates create-model-set`: the in-image
-`latentcrate-manage-templates.py` run as a one-off `compose run` of the
-ComfyUI service, so the template package read is the one installed in the
-built image and the run inherits the service's hardening, mounts, and
-network. The image is never built here: a missing one is refused and
-`build` named."""
+`latentcrate-manage-templates.py` run with `engine run` of the built image,
+so the template package read is the one installed there. The script reads
+nothing but that package, so the container has no network and no mount
+except the drafts directory `create-model-set` writes. The image is never
+built here: a missing one is refused and `build` named."""
 
 from __future__ import annotations
 
@@ -11,10 +11,10 @@ import dataclasses
 import subprocess
 
 from . import LatentCrateError
-from .engine import SERVICE, Engine
+from .engine import Engine
 from .env import Settings
 from .names import SET_NAME_RE
-from .variants import Variant, select
+from .variants import Variant, host_user, select
 
 SCRIPT = "/usr/local/bin/latentcrate-manage-templates.py"
 DRAFTS_DIR = "model-set-drafts"
@@ -34,26 +34,45 @@ def require_image(engine: Engine, image: str) -> None:
         raise LatentCrateError(f"the image {image} is not built; run: bash bin/latentcrate build")
 
 
-def run_script(engine: Engine, variant: Variant, pinned: dict[str, str], *arguments: str) -> int:
-    """The script in a one-off container of the service, without the GPU
-    overlay (no CDI needed) and with stdin closed; the script's status."""
-    require_image(engine, variant.image(pinned))
-    result = engine.compose(
+def run_script(
+    engine: Engine, variant: Variant, pinned: dict[str, str], *arguments: str, mounts: tuple[str, ...] = ()
+) -> int:
+    """The script in a hardened, networkless container of the image (no
+    GPU, so no CDI needed) with stdin closed and `mounts` as its only
+    volumes; the script's status."""
+    image = variant.image(pinned)
+    require_image(engine, image)
+    result = engine.command(
         "run",
         "--rm",
-        "--no-deps",
-        "-T",
+        "--network",
+        "none",
+        "--read-only",
+        "--cap-drop",
+        "ALL",
+        "--security-opt",
+        "no-new-privileges",
+        "--pids-limit",
+        "128",
+        "--tmpfs",
+        "/tmp",
+        *host_user(engine),
+        *mounts,
+        # The image's entrypoint prepares the service's mounts, which this
+        # container has not; the venv python on PATH holds the package.
+        "--entrypoint",
+        "python",
+        image,
+        SCRIPT,
         *arguments,
-        gpu=False,
         stdin=subprocess.DEVNULL,
         check=False,
-        **variant.compose_env(pinned),
     )
     return result.returncode
 
 
 def list_templates(engine: Engine, variant: Variant, pinned: dict[str, str]) -> int:
-    return run_script(engine, variant, pinned, "--entrypoint", "python", SERVICE, SCRIPT, "list")
+    return run_script(engine, variant, pinned, "list")
 
 
 def create_model_set(
@@ -71,14 +90,9 @@ def create_model_set(
         engine,
         variant,
         pinned,
-        "--volume",
-        f"{drafts}:/output",
-        "--entrypoint",
-        "python",
-        SERVICE,
-        SCRIPT,
         "create-model-set",
         template,
         "--name",
         name,
+        mounts=("--volume", f"{drafts}:/output"),
     )

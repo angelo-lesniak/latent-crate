@@ -159,7 +159,9 @@ def fetch(selected: list[ModelSet], models_root: Path, roots: tuple[Path, ...], 
             print(f"downloading: {model_file.destination} ({model_file.size / 1_000_000_000:.1f} GB)")
         downloaded = download(item, token)
         # A complete download that is not the pinned file is discarded. A
-        # verified one is moved into place; when that fails, it stays in
+        # verified one is published as a hard link, which the kernel refuses
+        # when any entry holds the destination, so nothing that appeared
+        # meanwhile is overwritten; when publishing fails, the file stays in
         # staging and the next run publishes it without downloading again.
         if downloaded.stat().st_size != model_file.size:
             remove_staging_directory(staging, staging_root)
@@ -167,13 +169,14 @@ def fetch(selected: list[ModelSet], models_root: Path, roots: tuple[Path, ...], 
         if sha256_file(downloaded) != model_file.sha256:
             remove_staging_directory(staging, staging_root)
             raise LatentCrateError(f"downloaded checksum does not match the manifest: {model_file.destination}")
-        if os.path.lexists(destination):
+        try:
+            os.link(downloaded, destination)
+        except FileExistsError:
             if file_state(destination, model_file) != "ready":
                 raise LatentCrateError(
                     f"{model_file.destination} appeared while downloading and was not overwritten; review it and retry"
-                )
+                ) from None
         else:
-            os.replace(downloaded, destination)
             write_stamp(destination, model_file.sha256)
         remove_staging_directory(staging, staging_root)
         print(f"installed: {model_file.destination}")

@@ -5,16 +5,19 @@
 # the host.
 set -eu
 
-root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+root=$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd)
 python=python3
 command -v "$python" >/dev/null 2>&1 || python=python
 if ! command -v "$python" >/dev/null 2>&1; then
   printf 'LatentCrate: python3 was not found; install Python 3.11 or newer.\n' >&2
   exit 1
 fi
-if ! "$python" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' 2>/dev/null; then
-  printf 'LatentCrate: %s is too old; Python 3.11 or newer is required.\n' \
-    "$("$python" --version 2>&1)" >&2
-  exit 1
-fi
+probe=$("$python" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 3)' 2>&1) \
+  && status=0 || status=$?
+case $status in
+  0) ;;
+  3) printf 'LatentCrate: %s is too old; Python 3.11 or newer is required.\n' \
+       "$("$python" --version 2>&1)" >&2; exit 1 ;;
+  *) printf 'LatentCrate: %s failed to start:\n%s\n' "$python" "$probe" >&2; exit 1 ;;
+esac
 PYTHONPATH="$root${PYTHONPATH:+:$PYTHONPATH}" exec "$python" -P -m latentcrate "$@"

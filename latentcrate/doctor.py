@@ -99,6 +99,7 @@ class HostFacts:
     gpu_error: str = ""
     gpu_device: str = "nvidia.com/gpu=all"
     cuda_arch_list: str = ""
+    cuda_arch_list_refusal: str = ""
     # Whether a CDI spec for nvidia.com/gpu exists where the engine reads them.
     cdi_spec_present: bool = False
     # Free space on the engine's storage root; None when it could not be measured.
@@ -223,6 +224,7 @@ def gather(settings: Settings) -> HostFacts:
     bind_address, bind_refusal = _setting(lambda: settings.bind_address)
     port, port_refusal = _setting(lambda: settings.port)
     host_model_gid, host_model_gid_refusal = _setting(lambda: settings.host_model_gid)
+    cuda_arch_list, cuda_arch_list_refusal = _setting(lambda: settings.cuda_arch_list)
     facts = HostFacts(
         sysname=uname.sysname,
         machine=uname.machine,
@@ -235,7 +237,8 @@ def gather(settings: Settings) -> HostFacts:
         gpus=parse_gpu_query(gpu_output or ""),
         gpu_error=gpu_error,
         gpu_device=settings.gpu_device,
-        cuda_arch_list=settings.cuda_arch_list,
+        cuda_arch_list=cuda_arch_list,
+        cuda_arch_list_refusal=cuda_arch_list_refusal,
         storage=_storage_facts(settings),
         host_model_gid=host_model_gid,
         host_model_gid_refusal=host_model_gid_refusal,
@@ -344,9 +347,9 @@ def _major(version: str) -> int | None:
 
 
 def arch_list_covers(arch_list: str, capability: str) -> bool:
-    """Whether COMFY_CUDA_ARCH_LIST (`;` or whitespace separated, `+PTX`
-    allowed) names the compute capability exactly."""
-    return capability in {entry.removesuffix("+PTX") for entry in arch_list.replace(";", " ").split()}
+    """Whether COMFY_CUDA_ARCH_LIST (`;`-separated, `+PTX` allowed) names
+    the compute capability exactly."""
+    return capability in {entry.removesuffix("+PTX") for entry in arch_list.split(";")}
 
 
 def selected_gpus(gpus: list[GpuFacts], device: str) -> list[GpuFacts]:
@@ -387,6 +390,9 @@ def _gpu_findings(facts: HostFacts, min_driver_major: int, allow_no_gpu: bool) -
             )
         )
         selected = facts.gpus
+    if facts.cuda_arch_list_refusal:
+        findings.append(Finding("fail", facts.cuda_arch_list_refusal))
+        return findings
     for gpu in selected:
         if arch_list_covers(facts.cuda_arch_list, gpu.compute_cap):
             findings.append(Finding("ok", f"COMFY_CUDA_ARCH_LIST covers compute capability {gpu.compute_cap}"))

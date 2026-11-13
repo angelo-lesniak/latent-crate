@@ -4,6 +4,7 @@ and the port check, against the fake engine."""
 from __future__ import annotations
 
 import dataclasses
+import fcntl
 import json
 import os
 import re
@@ -64,6 +65,14 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(engine.detect(self.settings(CONTAINER_ENGINE="", FAKE_PODMAN_RUNTIME="runc")).name, "docker")
         with self.assertRaisesRegex(LatentCrateError, "requires a rootless engine; run: bash bin/latentcrate doctor"):
             engine.detect(self.settings(CONTAINER_ENGINE="podman", FAKE_PODMAN_ROOTLESS="false"))
+        with self.assertRaises(LatentCrateError) as refused:
+            engine.detect(self.settings(CONTAINER_ENGINE="podman", FAKE_PODMAN_RUNTIME="runc"))
+        self.assertEqual(
+            str(refused.exception),
+            "rootless Podman with keep-groups requires crun (detected: runc); "
+            'set runtime = "crun" under [engine] in ~/.config/containers/containers.conf; '
+            "run: bash bin/latentcrate doctor",
+        )
 
     def test_detect_refuses_an_unusable_engine_with_the_sentence_doctor_prints(self) -> None:
         settings = self.settings()
@@ -179,6 +188,21 @@ class EngineTests(unittest.TestCase):
         with docker.lock():
             self.assertEqual(docker.lock_file.read_text(), f"{os.getpid()}\n")
 
+    def test_a_lock_file_with_binary_content_still_names_a_waiting_message(self) -> None:
+        docker = engine.Engine("docker", self.settings())
+        docker.lock_file.parent.mkdir(parents=True)
+        docker.lock_file.write_bytes(b"\xff\xfe\x00 up")
+        # A second open file description of the same file conflicts under flock.
+        holder = os.open(docker.lock_file, os.O_RDWR)
+        fcntl.flock(holder, fcntl.LOCK_EX)
+        release = threading.Timer(0.3, os.close, [holder])
+        with patch.object(engine, "warn") as warn:
+            release.start()
+            with docker.lock("build"):
+                self.assertEqual(docker.lock_file.read_text(), f"{os.getpid()} build\n")
+        warn.assert_called_once()
+        self.assertRegex(warn.call_args.args[0], r"^waiting for `up` \(pid .*\) to finish$")
+
     def test_the_stack_record_decides_the_engine_and_refuses_a_disagreeing_setting(self) -> None:
         # Podman is usable, so detection would pick it; a stack recorded on
         # Docker keeps `down` and `status` on Docker until it is forgotten.
@@ -215,9 +239,16 @@ class EngineTests(unittest.TestCase):
         engine.Engine("docker", self.settings()).forget_stack()
         self.assertEqual(engine.detect(self.settings(CONTAINER_ENGINE="")).name, "podman")
         engine.Engine("docker", self.settings()).forget_stack()
-        (self.scratch.root / "build" / "stack.json").write_text("{")
+        record = self.scratch.root / "build" / "stack.json"
+        record.write_text("{")
         with self.assertRaisesRegex(LatentCrateError, "cannot read the stack record .*stack.json: .*; remove it"):
             engine.detect(self.settings(CONTAINER_ENGINE=""))
+        record.write_text(json.dumps({"engine": "lxc", "project": "latentcrate"}))
+        refusal = f"the stack record {record} names an unknown engine lxc; remove it if no stack is running"
+        for settings in (self.settings(CONTAINER_ENGINE=""), self.settings(CONTAINER_ENGINE="docker")):
+            with self.assertRaisesRegex(LatentCrateError, re.escape(refusal)):
+                engine.detect(settings)
+        self.assertEqual(engine.recorded_engine(self.settings(COMPOSE_PROJECT_NAME="other")), "")
 
     def test_a_free_port_passes_and_a_listener_refuses_with_its_cause(self) -> None:
         docker = engine.Engine("docker", self.settings())

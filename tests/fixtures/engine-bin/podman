@@ -10,15 +10,19 @@ other than the exact ones the wrapper sends. Controls (environment variables):
   FAKE_PODMAN_COMPOSE_DOCKER_PLUGIN=true   `podman compose version` names the Docker plugin
   FAKE_ENGINE_STORAGE_ROOT=<dir>    what `info --format` reports as the storage root (default /)
   FAKE_DOCKER_CDI_DIRS=<a>:<b>      the CDI spec directories `docker info` lists (default none)
-  FAKE_ENGINE_COMFY_RUNNING=true    `ps` lists one running comfy container
-  FAKE_ENGINE_COMFY_EXITED=true     `ps --all` lists the comfy container as well
+  FAKE_ENGINE_COMFY_STATE=<status>  one comfy container exists in this .State.Status; `ps` lists it
+                                    only when running, `ps --all` in every state
+  FAKE_ENGINE_COMFY_RUNNING=true    shorthand for FAKE_ENGINE_COMFY_STATE=running
+  FAKE_ENGINE_COMFY_EXITED=true     shorthand for FAKE_ENGINE_COMFY_STATE=exited
   FAKE_ENGINE_PROJECT=<name>        the Compose project the container belongs to (default
                                     COMPOSE_PROJECT_NAME, then latentcrate); `ps` honours the
                                     project-label filter
   FAKE_ENGINE_NO_LABELS=true        `inspect` reports Config.Labels as null
   FAKE_ENGINE_COMFY_HOST=<ip>       the HostIp `inspect` reports for the published port (default 127.0.0.1)
   FAKE_ENGINE_COMFY_PORT=<port>     the HostPort it reports (default COMFY_PORT, then 4207)
-  FAKE_ENGINE_STATE=<status>        `inspect` reports this .State.Status (default running)
+  FAKE_ENGINE_POD=<name>            the Pod `inspect` reports the container in (default none)
+  FAKE_ENGINE_STATE=<status>        `inspect` reports this .State.Status for any container id
+                                    (default: the comfy state, then running)
   FAKE_ENGINE_IMAGE_MISSING=true    `image inspect` exits 1 with "no such image"
   FAKE_ENGINE_OTHER_IMAGE=true      `inspect --format {{.Image}}` names an image other than the
                                     one `image inspect` reports
@@ -36,6 +40,13 @@ import sys
 name = os.environ.get("FAKE_ENGINE_NAME") or os.path.basename(sys.argv[0])
 arguments = sys.argv[1:]
 project = os.environ.get("FAKE_ENGINE_PROJECT") or os.environ.get("COMPOSE_PROJECT_NAME", "latentcrate")
+comfy_state = os.environ.get("FAKE_ENGINE_COMFY_STATE") or (
+    "running"
+    if os.environ.get("FAKE_ENGINE_COMFY_RUNNING") == "true"
+    else "exited"
+    if os.environ.get("FAKE_ENGINE_COMFY_EXITED") == "true"
+    else ""
+)
 CDI_DIRS_TEMPLATE = '{{range .CDISpecDirs}}{{.}}{{"\\n"}}{{end}}'
 IMAGE_ID = "sha256:" + "f" * 64
 if "HF_TOKEN" in os.environ:
@@ -108,9 +119,7 @@ elif first == "compose" and arguments[1:2] == ["version"]:
 elif first == "compose":
     trace("compose")
 elif first == "ps":
-    listed = os.environ.get("FAKE_ENGINE_COMFY_RUNNING") == "true" or (
-        "--all" in arguments and os.environ.get("FAKE_ENGINE_COMFY_EXITED") == "true"
-    )
+    listed = comfy_state == "running" or ("--all" in arguments and comfy_state)
     if (
         listed
         and label_filter("com.docker.compose.project") in ("", project)
@@ -126,6 +135,7 @@ elif first == "inspect":
                 {
                     "Id": cid,
                     "Name": f"/{cid}",
+                    "Pod": os.environ.get("FAKE_ENGINE_POD", ""),
                     "Config": {
                         "Labels": None
                         if os.environ.get("FAKE_ENGINE_NO_LABELS") == "true"
@@ -142,7 +152,7 @@ elif first == "inspect":
             )
         )
     elif arguments[2] == "{{.State.Status}}":
-        print(os.environ.get("FAKE_ENGINE_STATE", "running"))
+        print(os.environ.get("FAKE_ENGINE_STATE") or comfy_state or "running")
     elif arguments[2] == "{{.Image}}":
         print("sha256:" + "e" * 64 if os.environ.get("FAKE_ENGINE_OTHER_IMAGE") == "true" else IMAGE_ID)
     else:

@@ -401,6 +401,67 @@ class ModelSetTests(unittest.TestCase):
                 self.fetch(model_set, models_root, None)
             self.assertEqual(destination.read_bytes(), b"user file created while downloading")
 
+    def test_a_file_created_between_verification_and_publication_is_not_overwritten(self):
+        content = b"small pinned model"
+        model_set, model_file = self.fixture_set(content)
+        self.use_hub(self.serve(lambda handler: serve_bytes(handler, content)))
+        with tempfile.TemporaryDirectory() as directory:
+            models_root = Path(directory)
+            destination = models_root / model_file.destination
+            real_link = os.link
+
+            def link_after_a_rival_wrote(source, target):
+                Path(target).write_bytes(b"user file")
+                real_link(source, target)
+
+            with mock.patch("os.link", side_effect=link_after_a_rival_wrote):
+                with self.assertRaisesRegex(LatentCrateError, "appeared while downloading and was not overwritten"):
+                    self.fetch(model_set, models_root, None)
+            self.assertEqual(destination.read_bytes(), b"user file")
+            staged, _ = library.staged_paths(model_file, library.staging_directory(model_file, destination))
+            self.assertEqual(staged.read_bytes(), content)
+
+    def test_a_body_whose_length_is_not_the_pinned_size_is_refused_before_a_byte_lands(self):
+        content = b"small pinned model"
+        model_set, model_file = self.fixture_set(content, size=len(content) + 1)
+        self.use_hub(self.serve(lambda handler: serve_bytes(handler, content)))
+        with tempfile.TemporaryDirectory() as directory:
+            models_root = Path(directory)
+            refusal = f"the server reports {len(content)} bytes but the manifest pins {len(content) + 1}"
+            with self.assertRaisesRegex(LatentCrateError, refusal):
+                self.fetch(model_set, models_root, None)
+            self.assertEqual(list(models_root.rglob("*.part")), [])
+            self.assertFalse((models_root / model_file.destination).exists())
+
+    def test_a_resume_answered_from_another_offset_is_refused_and_the_part_file_kept(self):
+        content = bytes(range(256)) * 64
+        half = len(content) // 2
+        model_set, model_file = self.fixture_set(content)
+
+        def respond(handler):
+            if handler.headers.get("Range") == "bytes=0-0":
+                serve_bytes(handler, content)
+                return
+            handler.send_response(206)
+            handler.send_header("Content-Range", f"bytes 0-{len(content) - 1}/{len(content)}")
+            handler.send_header("Content-Length", str(len(content)))
+            handler.end_headers()
+            handler.wfile.write(content)
+
+        self.use_hub(self.serve(respond))
+        with tempfile.TemporaryDirectory() as directory:
+            models_root = Path(directory)
+            destination = models_root / model_file.destination
+            destination.parent.mkdir(parents=True)
+            staging = library.staging_directory(model_file, destination)
+            staging.mkdir(parents=True)
+            _, part = library.staged_paths(model_file, staging)
+            part.write_bytes(content[:half])
+            with self.assertRaisesRegex(LatentCrateError, r"resumed at an unexpected offset \(bytes 0-"):
+                self.fetch(model_set, models_root, None)
+            self.assertEqual(part.read_bytes(), content[:half])
+            self.assertFalse(destination.exists())
+
     def test_integrity_failure_discards_completed_staging(self):
         model_set, model_file = self.fixture_set(b"small pinned model")
         self.use_hub(self.serve(lambda handler: serve_bytes(handler, b"wrong pinned model")))
@@ -424,14 +485,11 @@ class ModelSetTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             models_root = Path(directory)
             destination = models_root / model_file.destination
-            real_replace = os.replace
 
-            def replace_except_publication(source, target):
-                if Path(target) == destination:
-                    raise PermissionError("read-only")
-                real_replace(source, target)
+            def refuse_publication(source, target):
+                raise PermissionError("read-only")
 
-            with mock.patch("os.replace", side_effect=replace_except_publication), self.assertRaises(PermissionError):
+            with mock.patch("os.link", side_effect=refuse_publication), self.assertRaises(PermissionError):
                 self.fetch(model_set, models_root, None)
             self.assertFalse(destination.exists())
             self.assertEqual([path.read_bytes() for path in models_root.rglob("model.bin")], [content])
@@ -732,6 +790,16 @@ class ModelSetTests(unittest.TestCase):
             with self.assertRaisesRegex(LatentCrateError, "escapes the allowed model storage"):
                 self.fetch(nested_set, models_root, None)
             self.assertFalse((Path(outside) / "new").exists())
+
+    def test_a_dangling_directory_symlink_on_the_way_to_a_destination_is_refused(self):
+        model_set, model_file = self.fixture_set()
+        with tempfile.TemporaryDirectory() as directory:
+            models_root = Path(directory)
+            os.symlink(models_root / "absent", models_root / "diffusion_models", target_is_directory=True)
+            refusal = f"^destination uses a dangling directory symlink: {model_file.destination}$"
+            with self.assertRaisesRegex(LatentCrateError, refusal):
+                self.fetch(model_set, models_root, None)
+            self.assertFalse((models_root / "absent").exists())
 
     def test_extra_write_roots_admit_a_listed_symlink_target_only(self):
         content = b"small pinned model"

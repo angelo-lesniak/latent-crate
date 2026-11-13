@@ -113,8 +113,10 @@ def copy_requirements(settings: Settings) -> None:
     destination and swapped in by two renames: `os.replace` refuses a
     non-empty directory, and the image build that reads the tree runs
     under the same lock as this copy, so the gap between the renames has
-    no reader. Called under the project lock; the managed root is created
-    when `up` runs before `init`."""
+    no reader. Called under the project lock, so a staging tree an
+    interrupted copy left behind, whatever its pid, is nobody's and is
+    removed first; the managed root is created when `up` runs before
+    `init`."""
     settings.managed_nodes_dir.mkdir(parents=True, exist_ok=True)
     if not settings.local_nodes_dir.is_dir():
         raise LatentCrateError(
@@ -123,7 +125,7 @@ def copy_requirements(settings: Settings) -> None:
     destination = settings.build_dir / REQUIREMENTS_DIR
     staging = settings.build_dir / f".{REQUIREMENTS_DIR}.staging-{os.getpid()}"
     previous = settings.build_dir / f".{REQUIREMENTS_DIR}.backup"
-    for leftover in (staging, previous):
+    for leftover in (*settings.build_dir.glob(f".{REQUIREMENTS_DIR}.staging-*"), previous):
         if leftover.exists():
             shutil.rmtree(leftover)
     staging.mkdir(parents=True)
@@ -149,11 +151,21 @@ def copy_requirements(settings: Settings) -> None:
 
 
 def build(settings: Settings, engine: Engine, variant: Variant, pinned: dict[str, str]) -> None:
-    """The requirement-file copy and the image build, under the caller's lock."""
+    """The requirement-file copy and the image build, under the caller's
+    lock. The arch list is a build argument, exported through its
+    validating read so a bad list is refused before the engine is called."""
+    arch_list = settings.cuda_arch_list
     copy_requirements(settings)
     print("== Building the ComfyUI image ==")
     print("The first build can take a long time (possibly hours).")
-    engine.compose("build", SERVICE, gpu=True, frontend_dist=variant.dist_overlay, **variant.compose_env(pinned))
+    engine.compose(
+        "build",
+        SERVICE,
+        gpu=True,
+        frontend_dist=variant.dist_overlay,
+        COMFY_CUDA_ARCH_LIST=arch_list,
+        **variant.compose_env(pinned),
+    )
 
 
 def build_image(settings: Settings, engine: Engine, variant: Variant, pinned: dict[str, str]) -> None:

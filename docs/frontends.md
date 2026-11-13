@@ -62,8 +62,10 @@ frontends; use up for --frontend-source or --frontend-dist`.
 
 A prebuilt `dist/` tree from the host is bound read-only at the
 entrypoint's frontend root and served as is; nothing is rebuilt. The
-tree must contain `index.html` and no symbolic links. `smoke-gpu` reads
-the
+tree must contain `index.html` and no symbolic links. In dist and
+source mode a Sage image (`--sage`) is built with the pinned release
+frontend, because the Sage target builds on the runtime image; the
+overlay still serves your tree. `smoke-gpu` reads the
 settings and `--sage` only, so testing a dist stack needs
 `COMFY_FRONTEND_MODE=dist` and `COMFY_FRONTEND_DIST_DIR` in `.env` or
 the shell. A source stack needs `COMFY_FRONTEND_MODE=source` and

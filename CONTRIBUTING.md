@@ -6,7 +6,7 @@ file `pins.env`, and the [privacy defaults](docs/privacy.md).
 
 ## Tools
 
-Install Python 3.11 or newer, Git, and ShellCheck. Install the Python
+Install Python 3.11 or newer, Git, ShellCheck, and ripgrep. Install the Python
 test dependencies in a virtual environment and activate it before
 running the tests, because `tests/static.sh` runs the `python3` on
 `PATH`; the pinned `podman-compose` from `requirements-dev.txt` renders
@@ -157,6 +157,10 @@ against its reason.
   The host side has one language, one test runner, and one error style;
   `bin/latentcrate` only finds an interpreter. Reconsider if a host step
   needs what Python 3.11 cannot do.
+- **`init` takes no node set; run `nodes install <set>` after `init`.**
+  `init` writes `.env` and the directories and reaches no network; the
+  clone is `install`'s idempotent job ([Node
+  sets](docs/nodes.md#node-sets)).
 - **One `pins.env`; experiments are branches.** A second pin file would
   be a second source of truth for the same build. Reconsider if two pin
   sets must be built from one checkout at once.

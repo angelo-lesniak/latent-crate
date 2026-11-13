@@ -8,7 +8,7 @@ the documented interface, so a change here changes the page."""
 from __future__ import annotations
 
 import contextlib
-import io
+import os
 import re
 import signal
 import sys
@@ -636,8 +636,18 @@ def install_signal_handlers() -> None:
             signal.signal(signum, raise_exit)
 
 
+def discard_stdout() -> None:
+    """Replace a standard output a write failed on, so interpreter shutdown
+    does not flush the failed buffer again ("Exception ignored", status 120)."""
+    with contextlib.suppress(OSError):
+        sys.stdout = open(os.devnull, "w", encoding="utf-8")
+
+
 def main(argv: list[str]) -> int:
     install_signal_handlers()
+    if sys.stdout is None:
+        warn("standard output is closed; redirect it to a file or a terminal")
+        return 1
     try:
         if not argv or argv[0] in ("help", "--help", "-h"):
             sys.stdout.write(USAGE)
@@ -645,8 +655,7 @@ def main(argv: list[str]) -> int:
         else:
             status = dispatch(argv)
         # A listing fits the pipe buffer, so a reader that is gone is first
-        # seen here; left to interpreter shutdown it is an "Exception
-        # ignored" line and exit status 120.
+        # seen here.
         sys.stdout.flush()
         return status
     except LatentCrateError as error:
@@ -655,11 +664,11 @@ def main(argv: list[str]) -> int:
     except BrokenPipeError:
         # Before the OSError clause, of which this is a subclass: a reader
         # that closed the pipe (`| head`) is not a filesystem failure.
-        with contextlib.suppress(OSError):
-            sys.stdout = io.TextIOWrapper(open(1, "wb", closefd=False))
+        discard_stdout()
         return 1
     except OSError as error:
         warn(f"filesystem operation failed: {error}")
+        discard_stdout()
         return 1
     except KeyboardInterrupt:
         return 130

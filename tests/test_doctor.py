@@ -207,11 +207,16 @@ class EvaluateTests(unittest.TestCase):
             failures(lines),
             [
                 "[fail] the supported Podman path requires a rootless engine",
-                "[fail] rootless Podman with keep-groups requires crun (detected: runc)",
+                "[fail] rootless Podman with keep-groups requires crun (detected: runc); "
+                'set runtime = "crun" under [engine] in ~/.config/containers/containers.conf',
             ],
         )
         lines = evaluate(healthy_facts(engine=podman_facts(runtime="")))
-        self.assertIn("[fail] rootless Podman with keep-groups requires crun (detected: unknown)", lines)
+        self.assertIn(
+            "[fail] rootless Podman with keep-groups requires crun (detected: unknown); "
+            'set runtime = "crun" under [engine] in ~/.config/containers/containers.conf',
+            lines,
+        )
 
     def test_the_docker_compose_plugin_under_podman_is_a_gpu_problem(self) -> None:
         facts = healthy_facts(engine=podman_facts(provider="Docker Compose version v2.0.0-fake", keeps_cdi=False))
@@ -291,13 +296,19 @@ class EvaluateTests(unittest.TestCase):
         self.assertEqual(failures(lines), [])
         self.assertEqual(len(warnings(lines)), 1)
 
-    def test_the_arch_list_accepts_semicolons_spaces_and_ptx_suffixes(self) -> None:
-        for arch_list in ("12.0;8.6+PTX", "8.6 12.0", " 8.6+PTX ; 12.0 "):
+    def test_the_arch_list_accepts_semicolons_and_ptx_suffixes(self) -> None:
+        for arch_list in ("12.0;8.6+PTX", "8.6;12.0"):
             lines = evaluate(healthy_facts(gpus=[RTX_5090, RTX_3090], cuda_arch_list=arch_list))
             self.assertEqual(failures(lines), [], arch_list)
             self.assertIn("[ok] COMFY_CUDA_ARCH_LIST covers compute capability 8.6", lines)
         self.assertFalse(doctor.arch_list_covers("12.0", "12"))
         self.assertFalse(doctor.arch_list_covers("", "12.0"))
+
+    def test_a_refused_arch_list_is_one_failure_in_place_of_the_coverage_lines(self) -> None:
+        refusal = "COMFY_CUDA_ARCH_LIST='abc' is not a ;-separated list of CUDA architectures such as 12.0 or 8.6+PTX"
+        lines = evaluate(healthy_facts(cuda_arch_list="", cuda_arch_list_refusal=refusal))
+        self.assertEqual(failures(lines), [f"[fail] {refusal}"])
+        self.assertFalse(any("covers compute capability" in line for line in lines))
 
     def test_gpu_device_selects_the_gpu_by_index_or_uuid(self) -> None:
         both = healthy_facts(gpus=[RTX_5090, RTX_3090])
@@ -497,6 +508,11 @@ class GatherTests(unittest.TestCase):
         self.assertEqual(facts.gpus, [RTX_5090])
         self.assertEqual(facts.gpu_error, "")
         self.assertEqual((facts.gpu_device, facts.cuda_arch_list), ("nvidia.com/gpu=0", "12.0;8.6"))
+        self.assertEqual(facts.cuda_arch_list_refusal, "")
+        # A bad list is a report line, not a refusal of the report.
+        gathered = doctor.gather(self.settings(COMFY_CUDA_ARCH_LIST="abc"))
+        self.assertEqual(gathered.cuda_arch_list, "")
+        self.assertRegex(gathered.cuda_arch_list_refusal, r"^COMFY_CUDA_ARCH_LIST='abc' is not a ;-separated list")
         self.assertTrue(facts.cdi_spec_present)
         self.assertIsInstance(facts.storage_free_kb, int)
         self.assertEqual(

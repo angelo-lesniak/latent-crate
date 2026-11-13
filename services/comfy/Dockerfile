@@ -41,7 +41,6 @@ ARG FRONTEND_GIT_REQUESTED_REF
 # finished media files and build records without copying the compiler toolchain.
 # The base image tag and its manifest digest are required build arguments
 # (pins.env); the digest is what the build pulls.
-# hadolint ignore=DL3006
 FROM docker.io/pytorch/pytorch:${PYTORCH_DEVEL_TAG}@sha256:${PYTORCH_DEVEL_DIGEST} AS media-builder
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
@@ -146,7 +145,6 @@ RUN git init /tmp/ffmpeg \
 # small set of CUDA NPP libraries used by TorchCodec.
 # The base image tag and its manifest digest are required build arguments
 # (pins.env); the digest is what the build pulls.
-# hadolint ignore=DL3006
 FROM docker.io/pytorch/pytorch:${PYTORCH_DEVEL_TAG}@sha256:${PYTORCH_DEVEL_DIGEST} AS torchcodec-runtime-libs
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
@@ -184,7 +182,6 @@ RUN family=${TORCHCODEC_VERSION##*+} \
 # the exact package state used by runtime and third-party node dependency stages.
 # The base image tag and its manifest digest are required build arguments
 # (pins.env); the digest is what the build pulls.
-# hadolint ignore=DL3006
 FROM docker.io/pytorch/pytorch:${PYTORCH_RUNTIME_TAG}@sha256:${PYTORCH_RUNTIME_DIGEST} AS comfy-python-base
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
@@ -370,7 +367,6 @@ ENTRYPOINT ["/usr/local/bin/latentcrate-entrypoint"]
 # CUDA and Python package versions used by ComfyUI.
 # The base image tag and its manifest digest are required build arguments
 # (pins.env); the digest is what the build pulls.
-# hadolint ignore=DL3006
 FROM docker.io/pytorch/pytorch:${PYTORCH_DEVEL_TAG}@sha256:${PYTORCH_DEVEL_DIGEST} AS node-deps-builder
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
@@ -504,7 +500,6 @@ ENV PYTHONPATH=/opt/latentcrate-node-site:/opt/comfyui
 # web files with the pinned Node and pnpm versions.
 # The base image tag and its manifest digest are required build arguments
 # (pins.env); the digest is what the build pulls.
-# hadolint ignore=DL3006
 FROM docker.io/library/node:${FRONTEND_NODE_TAG}@sha256:${FRONTEND_NODE_DIGEST} AS frontend-git-builder
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
@@ -529,19 +524,22 @@ RUN --mount=type=cache,id=latentcrate-apt-debian-cache,target=/var/cache/apt,sha
 
 WORKDIR /frontend
 
-# The Git config/env hardening below is a Bash copy of GIT_OPTIONS and
-# git_environment in latentcrate/variants.py; keep the two aligned. The digest
-# subshell requires cd, hence the DL3003 ignore.
-# hadolint ignore=DL3003
+# The exported variables and the `git` function are a Bash copy of
+# git_environment and GIT_OPTIONS in latentcrate/variants.py; keep the two
+# aligned (test_project_contracts checks). HOME stays /root: the pnpm store
+# mount lives under it, and GIT_CONFIG_GLOBAL already hides ~/.gitconfig.
 RUN --mount=type=cache,id=latentcrate-frontend-pnpm,target=/root/.local/share/pnpm/store \
     printf '%s' "${FRONTEND_GIT_URL}" | grep -Eq '^https://[^/@[:space:]]+/[^?#[:space:]]+$' \
     && printf '%s' "${FRONTEND_GIT_REF}" | grep -Eq '^[0-9a-fA-F]{40}$' \
+    && export GIT_ASKPASS=/bin/false GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null \
+       GIT_OPTIONAL_LOCKS=0 GIT_TERMINAL_PROMPT=0 \
+    && git() { command git -c credential.helper= -c core.askPass=/bin/false \
+         -c http.followRedirects=false -c core.fsmonitor=false \
+         -c core.hooksPath=/dev/null -c core.untrackedCache=false \
+         -c protocol.allow=never -c protocol.https.allow=always "$@"; } \
     && git init \
-    && git -c credential.helper= -c core.askPass=/bin/false remote add origin "${FRONTEND_GIT_URL}" \
-    && GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/bin/false GIT_CONFIG_NOSYSTEM=1 \
-       GIT_CONFIG_GLOBAL=/dev/null git -c credential.helper= \
-       -c core.askPass=/bin/false -c http.followRedirects=false \
-       fetch --depth=1 origin "${FRONTEND_GIT_REF}" \
+    && git remote add origin "${FRONTEND_GIT_URL}" \
+    && git fetch --depth=1 origin "${FRONTEND_GIT_REF}" \
     && git checkout --detach FETCH_HEAD \
     && test "$(git rev-parse HEAD)" = "${FRONTEND_GIT_REF}" \
     && pnpm install --frozen-lockfile \
@@ -584,7 +582,6 @@ ENV LATENTCRATE_FRONTEND_IMAGE_MODE=git
 # architecture. Final targets install it from a temporary read-only mount.
 # The base image tag and its manifest digest are required build arguments
 # (pins.env); the digest is what the build pulls.
-# hadolint ignore=DL3006
 FROM docker.io/pytorch/pytorch:${PYTORCH_DEVEL_TAG}@sha256:${PYTORCH_DEVEL_DIGEST} AS sage-builder
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]

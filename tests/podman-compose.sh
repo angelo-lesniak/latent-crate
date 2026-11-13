@@ -54,7 +54,8 @@ fail() {
 # The variants (variants.Variant.compose_env): the release and Git
 # frontends run the `runtime` target as container mode git, dist mode the
 # frontend-less `comfy-runtime` with the dist overlay, and a Sage mode the
-# `runtime-sage` target. Each runs the command that follows.
+# `runtime-sage` target, with the dist overlay on top when both are set.
+# Each runs the command that follows.
 release() {
   LATENTCRATE_IMAGE=latentcrate/comfy:release-fixture COMFY_BUILD_TARGET=runtime COMFY_FRONTEND_MODE=git "$@"
 }
@@ -65,6 +66,10 @@ sage() {
 dist() {
   LATENTCRATE_IMAGE=latentcrate/comfy:dist-fixture COMFY_BUILD_TARGET=comfy-runtime COMFY_FRONTEND_MODE=dist \
     COMFY_FRONTEND_DIST_DIR="$dist_dir" "$@"
+}
+dist_sage() {
+  LATENTCRATE_IMAGE=latentcrate/comfy:dist-sage-fixture COMFY_BUILD_TARGET=runtime-sage COMFY_FRONTEND_MODE=dist \
+    COMFY_FRONTEND_DIST_DIR="$dist_dir" LATENTCRATE_SAGE=available "$@"
 }
 # The file combinations engine.Engine.compose passes: the service with the
 # Podman overlay, the GPU device request unless the command runs without a
@@ -84,6 +89,7 @@ render() {
 render release gpu
 render sage gpu
 render dist gpu --file compose.frontend-dist.yaml
+render dist_sage gpu --file compose.frontend-dist.yaml
 render release base
 
 # The arguments a start produces, from the one `run` the fake engine logs;
@@ -126,6 +132,11 @@ fi
 run_logged dist gpu --file compose.frontend-dist.yaml
 logged "-v $dist_dir:/opt/latentcrate-frontend-dist:ro" || fail 'the dist overlay does not bind the frontend read-only'
 logged '-e COMFY_FRONTEND_MODE=dist' || fail 'the dist overlay does not select dist mode in the container'
+
+# Dist mode with Sage: the overlay and the Sage mode reach the same container.
+run_logged dist_sage gpu --file compose.frontend-dist.yaml
+logged "-v $dist_dir:/opt/latentcrate-frontend-dist:ro" || fail 'the dist overlay does not bind the frontend with Sage'
+logged '-e LATENTCRATE_SAGE_MODE=available' || fail 'the Sage mode does not reach the dist container'
 
 # The commands the package issues through Compose (runtime.py, templates.py).
 dry_run() {

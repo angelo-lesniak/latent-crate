@@ -219,7 +219,14 @@ class PackageRegistryTests(NoNetworkTests):
             result = resolve("TORCHCODEC_VERSION", PINS)
         self.assertEqual(request.call_args.args[0], "https://pypi.org/pypi/torchcodec/json")
         self.assertEqual((result.key, result.latest), ("TORCHCODEC_VERSION", "0.17.0+cu130"))
-        self.assertEqual(result.notes, ("  Release history: https://github.com/meta-pytorch/torchcodec/releases",))
+        # The CUDA wheel is not what PyPI listed, so the candidate is unverified.
+        self.assertEqual(
+            result.notes,
+            (
+                "  Release history: https://github.com/meta-pytorch/torchcodec/releases",
+                "  Verify on https://download.pytorch.org/whl/cu130/torchcodec/",
+            ),
+        )
         with mock.patch.object(checkpins, "request_json", return_value={"info": {"version": "0.16.0"}}):
             self.assertEqual(resolve("TORCHCODEC_VERSION", PINS), current("TORCHCODEC_VERSION", "0.16.0+cu130"))
 

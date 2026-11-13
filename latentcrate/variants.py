@@ -50,17 +50,23 @@ GIT_OPTIONS = (
     "core.hooksPath=/dev/null",
     "-c",
     "core.untrackedCache=false",
+    # The URL check admits HTTPS only; Git itself refuses every other
+    # transport a redirect or submodule could name.
+    "-c",
+    "protocol.allow=never",
+    "-c",
+    "protocol.https.allow=always",
 )
 
 
 def git_environment(environ: dict[str, str]) -> dict[str, str]:
-    """`environ` with Git kept from prompting, reading the caller's
-    configuration, or running hooks."""
-    return environ | {
+    """`environ` without its `GIT_*` variables (GIT_CONFIG_PARAMETERS,
+    GIT_SSH_COMMAND, ... would reach Git past the options), with Git kept
+    from prompting, reading the caller's configuration, or running hooks."""
+    return {key: value for key, value in environ.items() if not key.startswith("GIT_")} | {
         "GIT_ASKPASS": "/bin/false",
         "GIT_CONFIG_NOSYSTEM": "1",
         "GIT_CONFIG_GLOBAL": "/dev/null",
-        "GIT_CONFIG_COUNT": "0",
         "GIT_OPTIONAL_LOCKS": "0",
         "GIT_TERMINAL_PROMPT": "0",
         "HOME": tempfile.gettempdir(),
@@ -216,6 +222,10 @@ def select(
         variant.dist_dir = source_dist(settings, variant.source_dir)
     else:
         raise LatentCrateError(f"unsupported COMFY_FRONTEND_MODE={variant.frontend}")
+    if variant.dist_overlay and variant.sage != "off":
+        # runtime-sage builds on runtime, whose frontend stage needs a
+        # reference; the overlay still serves the host tree.
+        variant.git_url, variant.requested_ref = git_reference(RELEASE_URL, pinned["COMFYUI_FRONTEND_REF"])
     return variant
 
 
@@ -270,6 +280,13 @@ def copy_source(source: Path, work: Path) -> None:
     shutil.copytree(source, work, symlinks=True, ignore=excluded)
 
 
+def host_user(engine: Engine) -> list[str]:
+    """The `engine run` options that keep bind mounts the calling user's:
+    Docker runs the container as that user; rootless Podman maps container
+    root to the host user already."""
+    return ["--user", f"{os.getuid()}:{os.getgid()}"] if engine.name == "docker" else []
+
+
 def build_source(settings: Settings, engine: Engine, pinned: dict[str, str], source_dir: Path) -> Path:
     """Build a frontend checkout into its dist tree under the cache
     directory and return that tree. Phase 1 (network) installs pnpm into a
@@ -291,18 +308,17 @@ def build_source(settings: Settings, engine: Engine, pinned: dict[str, str], sou
         directory.mkdir(parents=True, exist_ok=True)
     copy_source(source_dir, work / "source")
     image = f"{NODE_IMAGE}:{pinned['FRONTEND_NODE_TAG']}@sha256:{pinned['FRONTEND_NODE_DIGEST']}"
-    # Docker runs the container as the calling user so the mounts stay the
-    # user's; rootless Podman maps container root to the host user already.
-    user = ["--user", f"{os.getuid()}:{os.getgid()}"] if engine.name == "docker" else []
     options = [
         "run",
         "--rm",
-        *user,
+        *host_user(engine),
         "--read-only",
         "--cap-drop",
         "ALL",
         "--security-opt",
         "no-new-privileges",
+        "--pids-limit",
+        "512",
         "--tmpfs",
         "/tmp",
         "--env",
@@ -339,7 +355,7 @@ def build_source(settings: Settings, engine: Engine, pinned: dict[str, str], sou
         image,
         "sh",
         "-c",
-        f"{path} && pnpm install --offline --frozen-lockfile --store-dir /pnpm/store && pnpm build",
+        f"{path} && pnpm install --offline --frozen-lockfile --trust-lockfile --store-dir /pnpm/store && pnpm build",
     )
     built = work / "source" / "dist"
     if not (built / "index.html").is_file():

@@ -116,6 +116,27 @@ class VariantTests(unittest.TestCase):
             )
             self.assertEqual(values["COMFY_FRONTEND_MODE"], "dist")
 
+    def test_a_sage_image_in_dist_or_source_mode_builds_the_release_frontend(self) -> None:
+        tag = self.pinned["COMFYUI_FRONTEND_REF"]
+        for flag in ({"frontend_dist": str(self.dist)}, {"frontend_source": str(self.source)}):
+            with self.subTest(flag=flag):
+                plain = variants.select(self.settings(), self.pinned, sage=None, **flag).compose_env(self.pinned)
+                self.assertEqual((plain["FRONTEND_GIT_URL"], plain["FRONTEND_GIT_REF"]), ("", ""))
+                sage = variants.select(self.settings(), self.pinned, sage="available", **flag)
+                self.assertEqual((sage.target, sage.dist_overlay, sage.container_mode), ("runtime-sage", True, "dist"))
+                exported = sage.compose_env(self.pinned)
+                self.assertEqual(exported["COMFY_FRONTEND_MODE"], "dist")
+                self.assertEqual(exported["FRONTEND_GIT_URL"], variants.RELEASE_URL)
+                self.assertEqual((exported["FRONTEND_GIT_REF"], exported["FRONTEND_GIT_REQUESTED_REF"]), (tag, tag))
+                self.assertIn("COMFY_FRONTEND_DIST_DIR", exported)
+                # The pinned tag resolves through Git exactly as release mode does.
+                resolved = variants.resolve(sage, self.resolver_env("annotated-tag"))
+                self.assertEqual(resolved.compose_env(self.pinned)["FRONTEND_GIT_REF"], "3" * 40)
+                recorded = (self.scratch.tmp / "git-record").read_text().splitlines()
+                self.assertEqual(
+                    recorded[1 + len(variants.GIT_OPTIONS) :][:3], ["ls-remote", variants.RELEASE_URL, tag]
+                )
+
     def test_select_refusals(self) -> None:
         link = self.dist / "assets"
         cases = (
@@ -228,9 +249,27 @@ class VariantTests(unittest.TestCase):
         self.assertEqual(variants.resolve(dist, self.resolver_env("fail", git_present=False)).commit, "")
 
     def test_the_git_environment_is_hardened(self) -> None:
-        hardened = variants.git_environment({"PATH": "/bin", "HOME": str(self.scratch.home)})
+        shell = {
+            "PATH": "/bin",
+            "HOME": str(self.scratch.home),
+            "GIT_CONFIG_PARAMETERS": "'core.hooksPath=/tmp/hooks'",
+            "GIT_SSH_COMMAND": "ssh -o ProxyCommand=evil",
+            "GIT_CONFIG_COUNT": "1",
+        }
+        hardened = variants.git_environment(shell)
         self.assertEqual(hardened["GIT_CONFIG_GLOBAL"], "/dev/null")
         self.assertNotEqual(hardened["HOME"], str(self.scratch.home))
+        self.assertEqual(
+            sorted(key for key in hardened if key.startswith("GIT_")),
+            ["GIT_ASKPASS", "GIT_CONFIG_GLOBAL", "GIT_CONFIG_NOSYSTEM", "GIT_OPTIONAL_LOCKS", "GIT_TERMINAL_PROMPT"],
+        )
+        self.assertEqual(variants.GIT_OPTIONS[-4:], ("-c", "protocol.allow=never", "-c", "protocol.https.allow=always"))
+        # What the shell set travels no further than the resolver.
+        with patch.object(variants.subprocess, "run") as run:
+            variants.run_git("ls-remote", URL, env=shell)
+        self.assertEqual(run.call_args.args[0][:1], ["git"])
+        self.assertEqual(run.call_args.args[0][1 : 1 + len(variants.GIT_OPTIONS)], list(variants.GIT_OPTIONS))
+        self.assertEqual(run.call_args.kwargs["env"], hardened)
 
     def source_traces(self, name: str, **overrides: str) -> tuple[list[str], Path, env.Settings]:
         settings = self.settings(CONTAINER_ENGINE=name, **overrides)
@@ -267,6 +306,7 @@ class VariantTests(unittest.TestCase):
             self.assertIn(f"--volume {cache}/frontend-pnpm:/pnpm/store", trace)
             self.assertIn(f"--volume {cache}/frontend-tools/{self.pinned['FRONTEND_PNPM_VERSION']}:/tools", trace)
             self.assertIn("--env HOME=/work/home", trace)
+            self.assertIn("--pids-limit 512", trace)
             self.assertIn(f"{image} sh -c", trace)
             self.assertNotIn(TOKEN, trace)
         self.assertIn(
@@ -276,8 +316,8 @@ class VariantTests(unittest.TestCase):
             traces[0],
         )
         self.assertIn(
-            "sh -c 'export PATH=/tools/bin:$PATH && pnpm install --offline --frozen-lockfile --store-dir /pnpm/store "
-            "&& pnpm build'",
+            "sh -c 'export PATH=/tools/bin:$PATH && pnpm install --offline --frozen-lockfile --trust-lockfile "
+            "--store-dir /pnpm/store && pnpm build'",
             traces[1],
         )
         # A second build replaces the published tree; Podman passes no --user.
@@ -311,11 +351,22 @@ class VariantTests(unittest.TestCase):
         listings: list[set[str]] = []
 
         def read() -> None:
+            # A listing counts when the directory read is still the published
+            # one: not unlinked (a tree moved aside and being emptied is not),
+            # and the inode `dist` names.
             while not stop.is_set():
                 try:
-                    listings.append(set(os.listdir(dist)))
+                    fd = os.open(dist, os.O_RDONLY)
                 except FileNotFoundError:
                     continue
+                try:
+                    listing = set(os.listdir(fd))
+                    if os.fstat(fd).st_nlink > 0 and os.fstat(fd).st_ino == os.stat(dist).st_ino:
+                        listings.append(listing)
+                except FileNotFoundError:
+                    continue
+                finally:
+                    os.close(fd)
 
         reader = threading.Thread(target=read)
         reader.start()

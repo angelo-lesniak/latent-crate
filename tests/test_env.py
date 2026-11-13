@@ -310,6 +310,13 @@ class SettingsTests(unittest.TestCase):
             self.write_env(f"COMFY_MODELS_DIR={value}\n")
             with self.assertRaisesRegex(LatentCrateError, "used literally"):
                 env.load(self.tmp, {})
+        # Quoting keeps the value literal, and nothing expands a literal ~.
+        self.write_env('COMFY_MODELS_DIR="~/models"\n')
+        with self.assertRaisesRegex(LatentCrateError, "^COMFY_MODELS_DIR must not start with ~; write the full path$"):
+            env.load(self.tmp, {})
+        self.write_env("")
+        with self.assertRaisesRegex(LatentCrateError, "^COMFY_CACHE_DIR must not start with ~; write the full path$"):
+            env.load(self.tmp, {"COMFY_CACHE_DIR": "~user/cache"})
         self.write_env('COMFYUI_EXTRA_ARGS="--a # b"\n')
         self.assertEqual(env.load(self.tmp, {}).subprocess_env()["COMFYUI_EXTRA_ARGS"], "--a # b")
 
@@ -322,6 +329,27 @@ class SettingsTests(unittest.TestCase):
             env.load(self.tmp, {})
         (self.tmp / ".env").write_bytes(b"\xef\xbb\xbfCOMFY_PORT=4212\n")
         self.assertEqual(env.load(self.tmp, {}).port, "4212")
+
+    def test_an_env_file_that_is_not_utf8_text_is_refused_in_one_sentence(self) -> None:
+        self.write_env("")
+        (self.tmp / ".env").write_bytes(b"\xff")
+        with self.assertRaisesRegex(LatentCrateError, f"^{self.tmp / '.env'} is not UTF-8 text$"):
+            env.load(self.tmp, {})
+
+    def test_an_env_entry_that_is_not_a_regular_file_is_refused(self) -> None:
+        (self.tmp / ".env").mkdir()
+        with self.assertRaisesRegex(LatentCrateError, f"^{self.tmp / '.env'} is not a file$"):
+            env.load(self.tmp, {})
+
+    def test_the_cuda_architecture_list_is_semicolon_separated_as_the_build_embeds_it(self) -> None:
+        for value in ("12.0", "8.6+PTX", "8.6;8.9+PTX;12.0"):
+            self.assertEqual(env.load(self.tmp, {"COMFY_CUDA_ARCH_LIST": value}).cuda_arch_list, value)
+        for value in ("12.0, 8.6", "12.0 8.6", "12.0;", "sm_120", "12", ""):
+            with self.subTest(value=value):
+                settings = env.load(self.tmp, {"COMFY_CUDA_ARCH_LIST": value})
+                refusal = f"^COMFY_CUDA_ARCH_LIST={value!r} is not a ;-separated list of CUDA architectures such as "
+                with self.assertRaisesRegex(LatentCrateError, refusal):
+                    str(settings.cuda_arch_list)
 
     def test_documented_keys_cover_the_commented_settings(self) -> None:
         documented = env.documented_keys(self.tmp / ".env.example")
@@ -462,6 +490,9 @@ class PinsTests(unittest.TestCase):
         self.assertEqual(env.pin_keys(self.path), ("FRONTEND_NODE_TAG",))
         with self.assertRaisesRegex(LatentCrateError, "expected KEY=VALUE"):
             env.load_pins(self.path)
+        self.path.write_bytes(b"\xff")
+        with self.assertRaisesRegex(LatentCrateError, f"^{self.path} is not UTF-8 text$"):
+            env.pin_keys(self.path)
         self.path.unlink()
         self.assertEqual(env.pin_keys(self.path), ())
         with self.assertRaisesRegex(LatentCrateError, f"^pins file is missing: {self.path}$"):

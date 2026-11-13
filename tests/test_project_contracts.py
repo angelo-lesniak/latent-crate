@@ -25,7 +25,7 @@ except ImportError:
         "(a silent skip would hollow out the gate, so the dependency is mandatory)"
     ) from None
 
-from latentcrate import PROJECT_ROOT, cli, engine, env, models, nodes, templates
+from latentcrate import PROJECT_ROOT, cli, engine, env, models, nodes, templates, variants
 
 DOCKERFILE = "services/comfy/Dockerfile"
 ENTRYPOINT = "services/comfy/entrypoint.sh"
@@ -128,6 +128,12 @@ SHA_PINNED_ACTION_RE = re.compile(r"^[\w.-]+/[\w.-]+@[0-9a-f]{40}$")
 
 def read_text(relative: str) -> str:
     return (PROJECT_ROOT / relative).read_text(encoding="utf-8")
+
+
+def code(relative: str) -> str:
+    """The file without its comment lines, so a contract matches what runs,
+    not what a comment says."""
+    return "".join(line for line in read_text(relative).splitlines(keepends=True) if not line.lstrip().startswith("#"))
 
 
 def load_yaml(relative: str) -> dict:
@@ -238,7 +244,7 @@ class ProjectContractTests(unittest.TestCase):
         # as a required argument, and nowhere with a fallback.
         pins = env.load_pins(PROJECT_ROOT / "pins.env")
         build_pins = set(pins) - {"CUDA_MIN_DRIVER_MAJOR"}
-        dockerfile = read_text(DOCKERFILE)
+        dockerfile = code(DOCKERFILE)
         for match in re.finditer(r"^ARG ([A-Z0-9_]+)=", dockerfile, re.MULTILINE):
             self.fail(f"{DOCKERFILE} ARG {match.group(1)} has a default; build inputs come from pins.env and .env only")
         top_level = dockerfile.split("\nFROM ", 1)[0]
@@ -328,7 +334,7 @@ class ProjectContractTests(unittest.TestCase):
         self.assertEqual(docker["group_add"], ["${HOST_MODEL_GID:?exported by bin/latentcrate}"])
         dist = self.comfy("compose.frontend-dist.yaml")
         self.assertEqual(set(dist), {"environment", "volumes"})
-        root = re.search(r"^readonly DIST_FRONTEND_ROOT=(\S+)$", read_text(ENTRYPOINT), re.MULTILINE)
+        root = re.search(r"^readonly DIST_FRONTEND_ROOT=(\S+)$", code(ENTRYPOINT), re.MULTILINE)
         self.assertIsNotNone(root, f"{ENTRYPOINT} names the dist frontend root")
         self.assertEqual(dist["environment"], {"COMFY_FRONTEND_MODE": "dist", "COMFY_FRONTEND_ROOT": root.group(1)})
         self.assertEqual(
@@ -375,11 +381,11 @@ class ProjectContractTests(unittest.TestCase):
         # switch becomes its ComfyUI flag; the frontend root is explicit;
         # the container port is the one compose.yaml publishes and the
         # health check probes.
-        entrypoint = read_text(ENTRYPOINT)
+        entrypoint = code(ENTRYPOINT)
         read = set(SHELL_VARIABLE_RE.findall(entrypoint)) - IMAGE_VARIABLES
         passed = set(self.comfy()["environment"]) - RUNTIME_VARIABLES
         self.assertEqual(read, passed, "the entrypoint reads exactly the variables the comfy service passes")
-        dockerfile = read_text(DOCKERFILE)
+        dockerfile = code(DOCKERFILE)
         for variable in IMAGE_VARIABLES - {"COMFY_FRONTEND_ROOT"}:
             self.assertTrue(re.search(rf"^ENV {variable}=", dockerfile, re.MULTILINE), f"the image sets {variable}")
         for variable, flag in ENTRYPOINT_SWITCHES.items():
@@ -402,7 +408,7 @@ class ProjectContractTests(unittest.TestCase):
         self.assertIn('--front-end-root "$frontend_root"', entrypoint, "ComfyUI serves the selected frontend root")
         port = engine.CONTAINER_PORT.split("/")[0]
         self.assertIn(f"--port {port}", entrypoint)
-        self.assertIn(f"http://127.0.0.1:{port}/", read_text("services/comfy/healthcheck.py"))
+        self.assertIn(f"http://127.0.0.1:{port}/", code("services/comfy/healthcheck.py"))
         self.assertIn(templates.SCRIPT, dockerfile, f"the image installs the templates script at {templates.SCRIPT}")
 
     def test_the_settings_reference_describes_every_key_and_defaults_to_loopback(self) -> None:
@@ -451,7 +457,7 @@ class ProjectContractTests(unittest.TestCase):
         # layers reference no frontend or Sage input, so changing those pins
         # cannot invalidate the common cache; the runtime base redeclares
         # every argument its RUN lines and labels consume.
-        dockerfile = read_text(DOCKERFILE)
+        dockerfile = code(DOCKERFILE)
         for edge in (
             "FROM comfy-runtime-base AS comfy-runtime",
             "FROM comfy-runtime AS runtime",
@@ -490,7 +496,7 @@ class ProjectContractTests(unittest.TestCase):
         # CUDA development image; the runtime installs the resulting lock
         # with networking disabled, as an unprivileged user, and keeps the
         # compiler and the wheelhouse out of the final image.
-        dockerfile = read_text(DOCKERFILE)
+        dockerfile = code(DOCKERFILE)
         builder = stage(dockerfile, "node-deps-builder")
         self.assertTrue(
             re.search(
@@ -518,7 +524,7 @@ class ProjectContractTests(unittest.TestCase):
         self.assertIn(
             "test ! -d /opt/latentcrate-node-wheelhouse", dockerfile, "the runtime asserts the wheelhouse stayed behind"
         )
-        installer = read_text("services/comfy/install-node-deps.sh")
+        installer = code("services/comfy/install-node-deps.sh")
         for contract in (
             "install-requirements.txt",
             "--no-deps",
@@ -535,7 +541,7 @@ class ProjectContractTests(unittest.TestCase):
         self.assertEqual(len(final_install), 2, "the final node package install runs with networking disabled")
         self.assertIn("latentcrate-install-node-deps", final_install[1])
         self.assertIn("USER 65534:65534", dockerfile, "node packages install as an unprivileged user")
-        wheel_builder = read_text("services/comfy/build-node-deps.sh")
+        wheel_builder = code("services/comfy/build-node-deps.sh")
         self.assertIn("python -m pip wheel", wheel_builder, "the wheel builder builds wheels")
         self.assertIn("symbolic links in the wheel directory", wheel_builder, "the wheel output rejects symbolic links")
 
@@ -544,7 +550,7 @@ class ProjectContractTests(unittest.TestCase):
         # constraints, system protections stay intact, the user site stays
         # off the image PATH, one OpenCV provider is selected, FFmpeg and
         # TorchCodec come from the pins, and the image states what it is.
-        dockerfile = read_text(DOCKERFILE)
+        dockerfile = code(DOCKERFILE)
         self.assertNotIn("PIP_NO_BUILD_ISOLATION", dockerfile, "build isolation stays on")
         self.assertNotIn("/data/home/.local/bin", dockerfile, "the durable user site stays off the image PATH")
         self.assertNotIn("--break-system-packages", dockerfile, "the runtime respects externally-managed Python")
@@ -589,11 +595,23 @@ class ProjectContractTests(unittest.TestCase):
             self.assertNotIn(excluded, dockerfile.lower(), f"excluded default feature is present: {excluded}")
         self.assertIsNone(re.search(r"^\s*sox(?:\s|\\|$)", dockerfile, re.MULTILINE | re.IGNORECASE), "no SoX")
 
+    def test_the_frontend_git_builder_hardens_git_as_the_package_does(self) -> None:
+        # The stage carries a Bash copy of GIT_OPTIONS and git_environment:
+        # every option and every GIT_* variable of the package reaches its
+        # one RUN. HOME is the host's temporary directory there; the build
+        # container keeps its own, with the global config already hidden.
+        run = " ".join(stage(code(DOCKERFILE), "frontend-git-builder").split())
+        for option in variants.GIT_OPTIONS[1::2]:
+            self.assertIn(f"-c {option}", run, f"the frontend Git build lacks the package's Git option {option}")
+        for key in variants.git_environment({}):
+            if key.startswith("GIT_"):
+                self.assertIn(f"{key}=", run, f"the frontend Git build lacks the package's Git variable {key}")
+
     def test_sage_installs_quarantined_from_the_node_site(self) -> None:
         # The Sage wheel installs as root through a temporary read-only
         # mount, with the custom-node site off PYTHONPATH until afterwards;
         # the GPU smoke test proves Sage absent from the default image.
-        dockerfile = read_text(DOCKERFILE)
+        dockerfile = code(DOCKERFILE)
         self.assertIn(
             "PYTHONPATH=/opt/latentcrate-node-site:/opt/comfyui", dockerfile, "runtime stages expose the node site"
         )
@@ -606,7 +624,7 @@ class ProjectContractTests(unittest.TestCase):
         self.assertIn(
             "PYTHONPATH=/opt/latentcrate-node-site:/opt/comfyui", after, "the Sage stage restores the node site"
         )
-        self.assertIn('find_spec("sageattention") is not None', read_text("services/comfy/gpu-smoke.sh"))
+        self.assertIn('find_spec("sageattention") is not None', code("services/comfy/gpu-smoke.sh"))
 
     def test_ci_runs_the_strict_gate_on_the_python_floor(self) -> None:
         # One workflow: the strict gate on the floor bin/latentcrate

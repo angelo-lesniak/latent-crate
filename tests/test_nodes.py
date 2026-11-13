@@ -29,7 +29,6 @@ HARDENING = {
     "GIT_ASKPASS": "/bin/false",
     "GIT_CONFIG_NOSYSTEM": "1",
     "GIT_CONFIG_GLOBAL": "/dev/null",
-    "GIT_CONFIG_COUNT": "0",
     "GIT_OPTIONAL_LOCKS": "0",
     "GIT_TERMINAL_PROMPT": "0",
     "HOME": tempfile.gettempdir(),
@@ -41,7 +40,9 @@ WRAPPER = textwrap.dedent(
     with open({log!r}, "a", encoding="utf-8") as log:
         log.write(" ".join(f"{{key}}={{os.environ.get(key, '<unset>')}}" for key in {keys!r}) + "\\n")
     # Only a fetch reaches the network; `remote add` must store the public URL.
-    redirect = ["-c", "url.file://{bare}/.insteadOf=https://github.com/"] if "fetch" in sys.argv else []
+    # The stand-in is a file transport, which the module's options forbid.
+    redirect = ["-c", "url.file://{bare}/.insteadOf=https://github.com/", "-c", "protocol.file.allow=always"]
+    redirect = redirect if "fetch" in sys.argv else []
     os.execv({git!r}, ["git", *redirect, *sys.argv[1:]])
     """
 ).lstrip()
@@ -258,6 +259,26 @@ class NodeTests(unittest.TestCase):
             self.install(node_set, FAKE_ENGINE_COMFY_RUNNING="true")
         self.assertEqual([path.name for path in self.managed.iterdir()], [leftover.name])
 
+    def test_install_refuses_without_git_before_anything_changes(self) -> None:
+        node_set, _, _ = self.two_nodes()
+        settings = env.load(self.scratch.root, self.scratch.environment(PATH=str(ENGINE_BIN)))
+        with self.assertRaisesRegex(LatentCrateError, "^git is required to install a custom-node set; install git$"):
+            nodes.install(settings, engine.Engine("docker", settings), node_set, replace_clean=False)
+        self.assertEqual(list(self.managed.iterdir()), [])
+
+    def test_a_clone_that_resolves_to_another_commit_is_refused(self) -> None:
+        alpha = self.repository("example", "Alpha")
+        node = nodes.Node("Alpha", "https://github.com/example/Alpha", alpha[1])
+        real_node_git = nodes.node_git
+
+        def misresolving(path: Path, *arguments: str, env: dict[str, str]) -> str:
+            output = real_node_git(path, *arguments, env=env)
+            return alpha[0] if arguments[0] == "rev-parse" else output
+
+        with patch.object(nodes, "node_git", side_effect=misresolving):
+            with self.assertRaisesRegex(LatentCrateError, f"^node Alpha resolved to {alpha[0]}, expected {alpha[1]}$"):
+                nodes.clone(node, self.managed / "Alpha", self.settings().subprocess_env())
+
     def test_install_refuses_a_missing_or_linked_managed_directory(self) -> None:
         node_set, _, _ = self.two_nodes()
         self.managed.rmdir()
@@ -405,6 +426,15 @@ class NodeTests(unittest.TestCase):
         record.write_text("../x\n")
         with self.assertRaisesRegex(LatentCrateError, f"{record} does not name a custom-node set"):
             nodes.require_selected_set(settings)
+        record.write_bytes(b"\xff")
+        with self.assertRaisesRegex(LatentCrateError, f"^{record} is not UTF-8 text$"):
+            nodes.require_selected_set(settings)
+
+    def test_an_allowlist_that_is_not_utf8_text_is_refused_in_one_sentence(self) -> None:
+        path = self.scratch.root / "config" / "custom-nodes" / "allowed-git-hosts.txt"
+        path.write_bytes(b"\xff")
+        with self.assertRaisesRegex(LatentCrateError, f"^{path} is not UTF-8 text$"):
+            nodes.load_allowed_hosts(self.scratch.root / "config")
 
     # --- export -----------------------------------------------------------
 

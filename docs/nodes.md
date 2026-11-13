@@ -67,7 +67,7 @@ each other directory.
 A manifest holds `schema = 1`, one `description` line, and `[[node]]`
 entries of `name`, `repository`, and `commit`: a credential-free HTTPS
 `owner/repository` URL on an allowed host and a full lowercase commit.
-The refusals of `install`, `sync`, and `up` are sections of
+The common refusals are sections of
 [troubleshooting](troubleshooting.md).
 
 ## Local nodes
@@ -105,8 +105,7 @@ of `off`, `available`, and `global`; `bash bin/latentcrate help` lists
 their meaning. One mode drives both the image target and the runtime
 flag, so `build`, `up`, and `smoke-gpu` resolve the same
 image. The Sage image compiles the SageAttention wheel at build time for
-`COMFY_CUDA_ARCH_LIST`, never at start; `global` on an image without
-SageAttention is refused by the entrypoint.
+`COMFY_CUDA_ARCH_LIST`, never at start.
 
 The workflow path: install the set that carries KJNodes
 (`latent-nodepack`), run with `available`, and add KJNodes' MiniMax H3

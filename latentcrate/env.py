@@ -30,6 +30,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import LatentCrateError
+from .files import read_utf8
 from .names import SHA256_RE
 
 # The model downloader's token: read into `Settings.hf_token`, never a
@@ -54,6 +55,10 @@ DOCUMENTED_KEY_RE = re.compile(r"^#?\s*([A-Za-z_][A-Za-z0-9_]*)=")
 # A port as Compose publishes it: no leading zero, so the value is used as
 # written and never normalised.
 PORT_RE = re.compile(r"^[1-9][0-9]{0,4}$")
+# CUDA architectures as the SageAttention and node builds take them and as
+# the Dockerfile's pip cache-mount id embeds them: `;`-separated, no
+# whitespace or comma.
+CUDA_ARCH_LIST_RE = re.compile(r"^\d+\.\d+(\+PTX)?(;\d+\.\d+(\+PTX)?)*$")
 # The SageAttention modes the entrypoint reads, and how a refusal lists them.
 SAGE_MODES = ("off", "available", "global")
 SAGE_WORDS = f"{', '.join(SAGE_MODES[:-1])}, or {SAGE_MODES[-1]}"
@@ -133,7 +138,7 @@ def parse_env_file(path: Path, *, plain: bool = False) -> dict[str, str]:
     pins file), keys are upper case and a value is a bare token: no quotes,
     no whitespace."""
     values: dict[str, str] = {}
-    for number, raw in enumerate(path.read_text(encoding="utf-8-sig").splitlines(), start=1):
+    for number, raw in enumerate(read_utf8(path).splitlines(), start=1):
         line = raw.strip()
         if not line or line.startswith("#"):
             continue
@@ -207,7 +212,7 @@ def pin_keys(path: Path) -> tuple[str, ...]:
     whatever else the file holds, since a recovery command (`down`,
     `status`, `logs`) runs without validating the pins."""
     try:
-        lines = path.read_text(encoding="utf-8-sig").splitlines()
+        lines = read_utf8(path).splitlines()
     except FileNotFoundError:
         return ()
     return tuple(match.group(1) for line in lines if (match := PIN_LINE_RE.match(line)))
@@ -298,7 +303,13 @@ class Settings:
 
     @property
     def cuda_arch_list(self) -> str:
-        return self.values["COMFY_CUDA_ARCH_LIST"]
+        value = self.values["COMFY_CUDA_ARCH_LIST"]
+        if not CUDA_ARCH_LIST_RE.fullmatch(value):
+            raise LatentCrateError(
+                f"COMFY_CUDA_ARCH_LIST={value!r} is not a ;-separated list of CUDA architectures "
+                "such as 12.0 or 8.6+PTX"
+            )
+        return value
 
     @property
     def sage(self) -> str:
@@ -398,7 +409,9 @@ def load(root: Path, environ: dict[str, str] | None = None) -> Settings:
     if env_file.is_symlink():
         raise LatentCrateError(f"refusing symbolic link for local settings: {env_file}")
     file_values = {}
-    if env_file.is_file():
+    if env_file.exists():
+        if not env_file.is_file():
+            raise LatentCrateError(f"{env_file} is not a file")
         # It may hold the token; `init` creates it with mode 0600.
         require_private(env_file, os.stat(env_file))
         file_values = parse_env_file(env_file)
@@ -433,6 +446,8 @@ def load(root: Path, environ: dict[str, str] | None = None) -> Settings:
         value = values[key]
         if not value:
             raise LatentCrateError(f"{key} must not be empty; omit the line to take the default ({defaults[key]})")
+        if value.startswith("~"):
+            raise LatentCrateError(f"{key} must not start with ~; write the full path")
         values[key] = os.path.realpath(value if value.startswith("/") else root / value.removeprefix("./"))
     for key in BOOLEAN_KEYS:
         is_true(values[key], key)

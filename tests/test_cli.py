@@ -142,6 +142,39 @@ class CliTests(unittest.TestCase):
                 os.close(write_end)
                 self.assertEqual((result.returncode, result.stderr), (1, ""))
 
+    def test_a_closed_or_full_standard_output_is_one_refusal_line(self) -> None:
+        closed = subprocess.run(
+            ["bash", "-c", 'exec "$1" -m latentcrate pins >&-', "_", sys.executable],
+            cwd=self.scratch.root,
+            env=self.scratch.environment(**NO_ENGINE),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(closed.returncode, 1, closed.stderr)
+        self.assertEqual(len(closed.stderr.splitlines()), 1, closed.stderr)
+        self.assertNotIn("Traceback", closed.stderr)
+        with open(os.devnull, "rb") as devnull, open("/dev/full", "wb") as full:
+            result = subprocess.run(
+                [sys.executable, "-m", "latentcrate", "pins"],
+                cwd=self.scratch.root,
+                env=self.scratch.environment(**NO_ENGINE),
+                stdin=devnull,
+                stdout=full,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False,
+            )
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertNotIn("Exception ignored", result.stderr)
+
+    def test_a_keyboard_interrupt_in_a_handler_exits_130(self) -> None:
+        with (
+            mock.patch.object(cli, "install_signal_handlers"),
+            mock.patch.object(cli, "dispatch", side_effect=KeyboardInterrupt),
+        ):
+            self.assertEqual(cli.main(["status"]), 130)
+
     def test_init_creates_the_directories_and_a_private_comment_only_env_file(self) -> None:
         fresh = self.scratch.tmp / "fresh"
         settings = {
@@ -219,6 +252,20 @@ class CliTests(unittest.TestCase):
             with self.subTest(arguments=arguments):
                 shim, direct = self.scratch.run_shim(*arguments, **NO_ENGINE), self.scratch.run(*arguments, **NO_ENGINE)
                 self.assertEqual((shim.returncode, shim.stdout, shim.stderr), (0, direct.stdout, ""))
+
+    def test_the_shim_runs_the_package_through_a_symlink_from_another_directory(self) -> None:
+        link = self.scratch.tmp / "elsewhere" / "lc"
+        link.parent.mkdir()
+        link.symlink_to(self.scratch.root / "bin" / "latentcrate")
+        result = subprocess.run(
+            [str(link), "help"],
+            cwd=link.parent,
+            env=self.scratch.environment(PYTHONPATH=None, **NO_ENGINE),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual((result.returncode, result.stdout, result.stderr), (0, cli.USAGE, ""))
 
     def test_every_command_family_reaches_its_module(self) -> None:
         # Each family once, cheaply: a listing, a quiet no-op against the

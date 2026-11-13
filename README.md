@@ -22,12 +22,14 @@ Comfy Org, NVIDIA, Docker, or Podman.
 
 The host is x86-64 Linux (native, or inside WSL2) with Python 3.11 or
 newer, Git, and one engine: Docker Engine with Compose v2, or rootless
-Podman with `crun` and `podman-compose`. The NVIDIA driver is major version
-580 or newer, and the NVIDIA Container Toolkit has generated CDI devices
-(`doctor` prints the `nvidia-ctk` command when they are missing).
+Podman with `crun` and `podman-compose`. The NVIDIA driver major version
+is at least `CUDA_MIN_DRIVER_MAJOR` in [`pins.env`](pins.env), and the
+NVIDIA Container Toolkit has generated CDI devices (`doctor` prints the
+`nvidia-ctk` command when they are missing).
 
-The first build compiles FFmpeg and the node dependencies: about half an
-hour on a fast host, hours on a slow one. `doctor` warns when the engine's
+The first build compiles FFmpeg and the node dependencies;
+[Status](docs/validation.md#status) holds the measured build time.
+`doctor` warns when the engine's
 storage has less than 75 GB free. The `minimax-h3-i2v` model set downloads
 about 44 GB into the models directory.
 
@@ -75,7 +77,7 @@ the logs stops the container, which `down` then removes. `down` removes the
 container; images and the data directories stay, and
 [Removal](docs/configuration.md#removal) lists what else it leaves and what
 is safe to delete.
-`status` lists the project's containers; `logs` follows the running
+`status` lists the project's containers; `logs` follows the
 container. `bash bin/latentcrate help` prints every command.
 
 ## Choose what to do next

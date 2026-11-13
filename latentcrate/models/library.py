@@ -104,7 +104,7 @@ def read_stamp(path: Path) -> dict | None:
 
 def write_stamp(path: Path, sha256: str) -> None:
     """Record the verified file beside it; a library that cannot be written is hashed again next time."""
-    with contextlib.suppress(OSError):
+    with contextlib.suppress(LatentCrateError):
         write_atomic(stamp_path(path), json.dumps(stamp_of(path.stat(), sha256)), mode=0o600)
 
 

@@ -203,7 +203,8 @@ def probes(facts: EngineFacts) -> list[tuple[bool, str, str]]:
             (
                 facts.runtime == "crun",
                 "Podman uses crun, which supports keep-groups",
-                f"rootless Podman with keep-groups requires crun (detected: {facts.runtime or 'unknown'})",
+                f"rootless Podman with keep-groups requires crun (detected: {facts.runtime or 'unknown'}); "
+                'set runtime = "crun" under [engine] in ~/.config/containers/containers.conf',
             ),
         ]
     return rows
@@ -248,11 +249,15 @@ class Engine:
     def env(self) -> dict[str, str]:
         return self.settings.subprocess_env()
 
-    def command(self, *args: str, capture: bool = False, check: bool = True) -> subprocess.CompletedProcess:
-        """Run an engine command (`podman ...` or `docker ...`)."""
+    def command(
+        self, *args: str, capture: bool = False, check: bool = True, stdin: int | None = None
+    ) -> subprocess.CompletedProcess:
+        """Run an engine command (`podman ...` or `docker ...`); `stdin` as
+        for `compose`."""
         result = _run(
             [self.name, *args],
             self.env,
+            stdin=stdin,
             stdout=subprocess.PIPE if capture else None,
             stderr=subprocess.PIPE if capture else None,
             text=True,
@@ -320,7 +325,11 @@ class Engine:
         none). The holder writes its PID and `command` into the lock file,
         so a second command can say whom it waits for before it blocks."""
         self.lock_file.parent.mkdir(parents=True, exist_ok=True)
-        with os.fdopen(os.open(self.lock_file, os.O_RDWR | os.O_CREAT, 0o644), "r+") as handle:
+        # The holder's line is read with replacement, so a lock file holding
+        # anything else cannot end the waiter with a decoding error.
+        with os.fdopen(
+            os.open(self.lock_file, os.O_RDWR | os.O_CREAT, 0o644), "r+", encoding="utf-8", errors="replace"
+        ) as handle:
             try:
                 fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError:
@@ -469,7 +478,12 @@ def recorded_engine(settings: Settings) -> str:
         ) from error
     if not isinstance(record, dict) or record.get("project") != settings.project_name:
         return ""
-    return str(record.get("engine") or "")
+    name = str(record.get("engine") or "")
+    if name not in ENGINES:
+        raise LatentCrateError(
+            f"the stack record {path} names an unknown engine {name}; remove it if no stack is running"
+        )
+    return name
 
 
 def requested_engine(settings: Settings) -> str:

@@ -10,6 +10,7 @@ import json
 import os
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import textwrap
@@ -174,6 +175,14 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual((tree / "manifest.txt").read_text(), before)
         self.assertEqual(list(self.scratch.root.glob("build/.custom-node-requirements*")), [])
 
+    def test_a_stale_staging_tree_of_another_process_is_removed(self) -> None:
+        stale = self.scratch.root / "build" / ".custom-node-requirements.staging-12345"
+        stale.mkdir(parents=True)
+        (stale / "manifest.txt").write_text("stale\n")
+        runtime.copy_requirements(self.settings())
+        self.assertFalse(stale.exists())
+        self.assertEqual(list(self.scratch.root.glob("build/.custom-node-requirements*")), [])
+
     def test_a_reader_never_sees_a_half_tree(self) -> None:
         shutil.copytree(FIXTURE_NODE, self.managed / "Example")
         settings = self.settings()
@@ -183,11 +192,22 @@ class RuntimeTests(unittest.TestCase):
         listings: list[set[str]] = []
 
         def read() -> None:
+            # Listed through a descriptor, recorded only while that directory
+            # is still the one at the path: the tree moved aside is emptied
+            # while a listing of it may be in flight.
             while not stop.is_set():
                 try:
-                    listings.append(set(os.listdir(tree)))
+                    fd = os.open(tree, os.O_RDONLY)
                 except FileNotFoundError:
                     continue
+                try:
+                    listing = set(os.listdir(fd))
+                    if os.fstat(fd).st_nlink > 0 and os.fstat(fd).st_ino == os.stat(tree).st_ino:
+                        listings.append(listing)
+                except FileNotFoundError:
+                    continue
+                finally:
+                    os.close(fd)
 
         reader = threading.Thread(target=read)
         reader.start()
@@ -227,6 +247,14 @@ class RuntimeTests(unittest.TestCase):
             traces[0],
         )
         self.assertTrue((self.scratch.root / "build" / "custom-node-requirements" / "manifest.txt").is_file())
+
+    def test_build_refuses_a_bad_arch_list_before_any_engine_call(self) -> None:
+        settings = self.settings(COMFY_CUDA_ARCH_LIST="abc")
+        engine = Engine("docker", settings)
+        traces = self.traced(engine)
+        with self.assertRaisesRegex(LatentCrateError, "^COMFY_CUDA_ARCH_LIST='abc' is not a ;-separated list"):
+            runtime.build_image(settings, engine, self.variant(settings), self.pinned())
+        self.assertEqual(traces, [])
 
     def test_up_builds_starts_detached_records_the_stack_and_waits_for_readiness(self) -> None:
         settings = self.settings(FAKE_ENGINE_COMFY_RUNNING="true")
@@ -278,12 +306,14 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(json.loads(engine.stack_record.read_text())["engine"], "docker")
 
     def test_ctrl_c_during_the_readiness_wait_stops_the_container(self) -> None:
-        for detach in (False, True):
-            settings = self.settings(FAKE_ENGINE_COMFY_RUNNING="true")
+        # The container is stopped in every state: one that exited during
+        # the wait is still named to `stop`, not reported as not running.
+        for detach, state in ((False, "running"), (True, "running"), (True, "exited")):
+            settings = self.settings(FAKE_ENGINE_COMFY_STATE=state)
             engine = Engine("docker", settings)
             traces = self.traced(engine)
             with (
-                self.subTest(detach=detach),
+                self.subTest(detach=detach, state=state),
                 mock.patch.object(runtime, "wait_until_ready", side_effect=KeyboardInterrupt),
                 contextlib.redirect_stdout(io.StringIO()),
             ):
@@ -303,7 +333,7 @@ class RuntimeTests(unittest.TestCase):
             self.assertEqual(runtime.follow_logs(engine), 130)
 
     def test_a_readiness_failure_names_the_logs(self) -> None:
-        settings = self.settings(FAKE_ENGINE_COMFY_EXITED="true", FAKE_ENGINE_STATE="exited")
+        settings = self.settings(FAKE_ENGINE_COMFY_STATE="exited")
         with self.assertRaisesRegex(
             LatentCrateError, "container is exited before it was ready. Check the logs: bash bin/latentcrate logs"
         ):
@@ -338,6 +368,33 @@ class RuntimeTests(unittest.TestCase):
             runtime.start_stack(settings, engine, self.variant(settings), self.pinned(), timeout=5, detach=True)
         self.assertEqual(holder.wait(5), 0)
         warn.assert_called_once_with(f"waiting for `up` (pid {holder.pid}) to finish")
+
+    def test_the_port_is_judged_again_once_the_lock_is_held(self) -> None:
+        # The port is free when `up` starts and taken while it waits for the
+        # lock holder; the build runs under the lock, then the start is refused.
+        settings = self.settings()
+        engine = Engine("docker", settings)
+        traces = self.traced(engine)
+        holder = self.holder("build")
+        listener = socket.socket()
+        self.addCleanup(listener.close)
+
+        def take_the_port(_message: str) -> None:
+            listener.bind(("127.0.0.1", int(self.scratch.port)))
+            listener.listen(1)
+            holder.stdin.close()
+
+        with (
+            mock.patch.object(engines, "warn", side_effect=take_the_port),
+            mock.patch.object(runtime, "wait_until_ready"),
+            contextlib.redirect_stdout(io.StringIO()),
+            self.assertRaisesRegex(LatentCrateError, f"cannot use host port {self.scratch.port} on 127.0.0.1"),
+        ):
+            runtime.start_stack(settings, engine, self.variant(settings), self.pinned(), timeout=5, detach=True)
+        self.assertEqual(holder.wait(5), 0)
+        self.assertEqual([line.split(" ", 1)[0] for line in traces if " args=" in line], ["compose"])
+        self.assertIn(" build comfy", traces[0])
+        self.assertFalse(engine.stack_record.exists())
 
     def test_up_refuses_a_selected_set_with_a_missing_node(self) -> None:
         sets = self.scratch.root / "config" / "custom-nodes" / "sets"
@@ -386,6 +443,17 @@ class RuntimeTests(unittest.TestCase):
         self.assertFalse(engine.stack_record.exists())
         # Switching engines under a running stack is refused by `engine.detect`
         # (tests/test_engine.py, the stack record test).
+
+    def test_down_removes_the_pod_on_podman_only(self) -> None:
+        for name, expected in (("podman", ["pod rm pod_latentcrate"]), ("docker", [])):
+            with self.subTest(engine=name):
+                engine = Engine(
+                    name, self.settings(FAKE_ENGINE_COMFY_RUNNING="true", FAKE_ENGINE_POD="pod_latentcrate")
+                )
+                traces = self.traced(engine)
+                runtime.stop_stack(engine, stop_seconds=30)
+                self.assertEqual([line.split(" args=")[1] for line in traces if line.startswith("pod rm")], expected)
+                self.assertIn("rm fake-comfy-container", "\n".join(traces))
 
     def test_status_lists_the_projects_containers(self) -> None:
         settings = self.settings(FAKE_ENGINE_COMFY_RUNNING="true")

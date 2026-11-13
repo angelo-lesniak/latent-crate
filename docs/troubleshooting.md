@@ -1,7 +1,7 @@
 # Troubleshooting
 
-One section per message the package or the container prints, with the
-cause and the remedy. `bash bin/latentcrate doctor` repeats every host
+One section per observed failure, with cause and remedy.
+`bash bin/latentcrate doctor` repeats every host
 check; `bash bin/latentcrate logs` follows the container.
 
 ## The `.env` file is not private
@@ -78,6 +78,17 @@ engine it found; fix the first failed one. See
 [GPU and engine support](configuration.md#gpu-and-engine-support) for the
 Podman and Docker requirements.
 
+## Rootless Podman with keep-groups requires crun
+
+```text
+rootless Podman with keep-groups requires crun (detected: <runtime>); set runtime = "crun" under [engine] in ~/.config/containers/containers.conf
+```
+
+`keep-groups` passes your supplementary groups into the container and
+only `crun` honours it. Set the runtime as printed, then `doctor`. See
+[GPU and engine support](configuration.md#gpu-and-engine-support) for
+the Podman requirements.
+
 ## The Podman compose provider is the Docker Compose plugin
 
 ```text
@@ -133,6 +144,18 @@ ComfyUI exited or did not answer on the published address in time. Run
 `bash bin/latentcrate logs` and fix the first error it shows. See
 [Start here](../README.md#start-here) for what `up` does and its
 `--timeout`.
+
+## A directory is not writable
+
+```text
+LatentCrate: directory is not writable: <path>
+```
+
+The container exits before it is ready: the container user cannot write
+a mounted directory, on Docker usually for lack of its group. Set
+`HOST_MODEL_GID` as `.env.example` says, then `up`. See
+[GPU and engine support](configuration.md#gpu-and-engine-support) for
+how each engine grants the group.
 
 ## The selected image does not exist locally
 

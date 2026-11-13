@@ -47,8 +47,8 @@ destination is either absent or complete. An interrupted download
 resumes from the staged bytes on the next `fetch`. A present file whose
 size or checksum differs from the manifest is never overwritten: `fetch`
 stops and names it. A lock file in the models directory lets one `fetch`
-run at a time per models directory. Each refusal and its remedy is a
-section of [troubleshooting](troubleshooting.md).
+run at a time per models directory. The common refusals are sections
+of [troubleshooting](troubleshooting.md).
 
 A verified file gets a stamp beside it, `<file>.latentcrate-verified`,
 recording its SHA-256, size, and modification time. `status` and

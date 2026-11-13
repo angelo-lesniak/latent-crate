@@ -7,24 +7,24 @@ date, and the result; a procedure without a row has no run recorded.
 
 ## Status
 
-The rows below cover the tree of this change: the package commands as
-`bin/latentcrate` runs them, with the image built from its `pins.env` and
-Dockerfile, driven by the host validation script.
+Each row names the commands run on the host as
+[Recording a run](#recording-a-run) says, with the image built from the
+checkout's `pins.env` and Dockerfile.
 
 | Date | Host | Engine | Procedure | Result |
 | --- | --- | --- | --- | --- |
-| 2026-11-12 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | `bash tests/static.sh` strict, from a `.venv` built from `requirements-dev.txt` | pass; 296 tests |
-| 2026-11-12 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | `init`, `doctor` | pass; `doctor` ends with 0 failures and 0 warnings |
-| 2026-11-12 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | `build`, then `build --sage available` | pass; release build 13 min, Sage adds 2 min on top; images 9.39 GB and 9.45 GB |
-| 2026-11-12 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | `up --detach`, release and `--sage available` | pass; healthy in about a minute each |
-| 2026-11-12 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | `smoke-gpu`, release and `--sage available` | pass; both reports end with `LatentCrate GPU verification passed.`, the Sage one holds `sageattention_result` |
-| 2026-11-12 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | `models check --remote`; `models fetch` interrupted with Ctrl+C after 8 s and run again; `models status --verify` | pass; the second fetch resumed the `.part` file and installed it, every checksum matched; a set already present was reported ready and left untouched |
-| 2026-11-12 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | `nodes install`, `nodes sync`, `nodes status` of `latent-nodepack`, then `up` | pass; 10 nodes ready |
-| 2026-11-12 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | `templates list` | pass; 172 local-compatible templates |
-| 2026-11-12 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | `up --frontend-source <checkout>` of the pinned frontend tag | pass; two runs of the Node image, the `dist` landed under `COMFY_CACHE_DIR/frontend-builds`, UI healthy |
-| 2026-11-12 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | `up --frontend-dist <dir>` with that `dist`, then `smoke-gpu` without the frontend setting | pass; UI healthy; the smoke refused as [The running container uses another image](troubleshooting.md#the-running-container-uses-another-image) describes |
-| 2026-11-12 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | `down` with no container of the project | pass; exit 0, no output |
-| 2026-11-12 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | writes into the models directory by ComfyUI, Manager, or the node pack during the scripted run | none |
+| 2026-11-13 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | `bash tests/static.sh` strict, from a `.venv` built from `requirements-dev.txt` | pass; 320 tests |
+| 2026-11-13 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | `init`, `doctor` | pass; `doctor` ends with 0 failures and 0 warnings |
+| 2026-11-13 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | `build`, then `build --sage available` | pass; release 775 s with a cold engine cache (2026-11-12), 184 s warm; Sage 98 s on top; images 9.39 GB and 9.45 GB |
+| 2026-11-13 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | `up --detach`, release and `--sage available` | pass; healthy in 65 s and 63 s |
+| 2026-11-13 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | `smoke-gpu`, release and `--sage available` | pass; both reports end with `LatentCrate GPU verification passed.`, the Sage one holds `sageattention_result` |
+| 2026-11-13 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | `models check --remote`; `models fetch` interrupted with Ctrl+C after 8 s and run again; `models status --verify` | pass; the second fetch resumed the `.part` file in 24 s and installed it, every checksum matched |
+| 2026-11-13 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | `nodes install`, `nodes sync`, `nodes status` of `latent-nodepack`, then `up` | pass; 10 nodes ready, `up` healthy in 64 s |
+| 2026-11-13 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | `templates list` through the sandboxed `engine run` | pass; 172 local-compatible templates |
+| 2026-11-13 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | `up --frontend-source <checkout>` of the pinned frontend tag | pass; two runs of the Node image, the `dist` landed under `COMFY_CACHE_DIR/frontend-builds`, healthy in 106 s |
+| 2026-11-13 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | `up --frontend-dist <dir>` with that `dist`, then `smoke-gpu` without the frontend setting | pass; healthy in 59 s; the smoke refused as [The running container uses another image](troubleshooting.md#the-running-container-uses-another-image) describes |
+| 2026-11-13 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | `down` with no container of the project | pass; exit 0, no output |
+| 2026-11-13 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | writes into the models directory by ComfyUI, Manager, or the node set during the scripted run | none |
 | 2026-11-12 | GPU host | Podman 6.1.4 rootless, crun, podman-compose 1.6.0 | image generation through the UI with the `flux2-klein-9b` edit workflow on the Sage stack; a saved workflow reopened after `down` and `up` | pass (maintainer) |
 
 ## Hosts
@@ -39,6 +39,8 @@ Dockerfile, driven by the host validation script.
 - Docker Desktop's CDI path under WSL2.
 - WSL2 as a whole: the expected platform, no run recorded.
 - `build --frontend-git` with a reference other than the pinned tag.
+- Dist or source mode combined with `--sage`: built in the gate's renders,
+  not run on the host.
 - A smoke on a card without the full encoder set: the smoke's NVENC step
   encodes one second with `h264_nvenc`, so it fails on a compute-only card
   even when CUDA passes.

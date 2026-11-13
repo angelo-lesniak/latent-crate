@@ -25,7 +25,7 @@ from urllib.parse import urlsplit
 from . import LatentCrateError, warn
 from .engine import SERVICE, Engine
 from .env import Settings
-from .files import write_atomic
+from .files import read_utf8, write_atomic
 from .names import COMMIT_RE, SET_NAME_RE, load_catalog, read_toml
 from .names import description as read_description
 from .variants import git_environment, run_git
@@ -74,7 +74,7 @@ class NodeSet:
 def load_allowed_hosts(config_dir: Path) -> set[str]:
     path = config_dir / "custom-nodes" / "allowed-git-hosts.txt"
     try:
-        lines = path.read_text(encoding="utf-8").splitlines()
+        lines = read_utf8(path).splitlines()
     except OSError as error:
         raise LatentCrateError(f"could not read allowed Git hosts: {error}") from error
     hosts = {line.strip().lower() for line in lines if line.strip() and not line.lstrip().startswith("#")}
@@ -164,7 +164,7 @@ def selected_set(managed_dir: Path) -> str:
     """The set name the record file holds, or an empty string without one."""
     record = managed_dir / RECORD_NAME
     try:
-        name = record.read_text(encoding="utf-8").strip()
+        name = read_utf8(record).strip()
     except FileNotFoundError:
         return ""
     if not SET_NAME_RE.fullmatch(name):
@@ -300,6 +300,8 @@ def install(settings: Settings, engine: Engine, node_set: NodeSet, *, replace_cl
     stopped, since the image is built from these sources."""
     managed = settings.managed_nodes_dir
     env = engine.env
+    if shutil.which("git", path=env.get("PATH")) is None:
+        raise LatentCrateError("git is required to install a custom-node set; install git")
     with engine.lock("nodes sync" if replace_clean else "nodes install"):
         if engine.container_ids(SERVICE):
             raise LatentCrateError(

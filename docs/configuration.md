@@ -65,8 +65,8 @@ refuses an older driver.
 
 `COMFY_CUDA_ARCH_LIST` is the list of CUDA architectures the SageAttention
 and custom-node builds compile for. `doctor` prints the compute capability
-of each GPU and refuses a card the list does not cover. Without the
-wrapper, `nvidia-smi --query-gpu=compute_cap --format=csv,noheader`
+of each GPU and refuses a card the list does not cover. Outside
+LatentCrate, `nvidia-smi --query-gpu=compute_cap --format=csv,noheader`
 prints it. The list is a build setting: change it, then `build`.
 
 Podman runs rootless with `crun`; `keep-groups`, which passes the calling
@@ -121,14 +121,12 @@ eligible version of each pin and prints it next to the pinned one; it
 writes nothing.
 
 `PYTORCH_DEVEL_TAG`, `PYTORCH_RUNTIME_TAG`, `TORCHCODEC_VERSION`, and
-`CUDA_NPP_VERSION` move together: they must name one PyTorch release and
-CUDA family, and the loader refuses the file otherwise. Every `_TAG` pin
-has its `_DIGEST` beside it, because the build pulls the digest.
+`CUDA_NPP_VERSION` change together; [Add a pin](../CONTRIBUTING.md#add-a-pin)
+holds the pin grammar and the family rule.
 
-One Sage mode, `LATENTCRATE_SAGE` or `--sage` for one command, selects
-both the image target and the runtime flag, so `build`, `up`, and
-`smoke-gpu` resolve the same image when they are given the same mode. See
-[Nodes](nodes.md#sageattention) for what each mode does.
+`LATENTCRATE_SAGE`, or `--sage` for one command, selects the image target
+and the runtime flag together; [SageAttention](nodes.md#sageattention)
+holds the modes.
 
 `COMPOSE_PROJECT_NAME` prefixes the container and network names only; the
 image tag carries no project name. Two independent setups need separate
