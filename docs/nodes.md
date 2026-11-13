@@ -122,7 +122,9 @@ template (124 frames at 1344×768, one seed; the A/B row of
 [Status](validation.md#status)): SDPA 150 s, `--use-ck-attention` 93 s,
 the core Model Sparse Attention node 83 s, the KJNodes patch under
 `available` 77 s, `global` with the patch 76 s, `global` alone 71 s.
-`global` is the fastest path. Every run peaked at 31.1–31.3 GiB of the 31.8 GiB of GPU
+`global` is the fastest path and looked the same as SDPA, as did every
+clip but the block-sparse one, which looked noticeably worse, so Model
+Sparse Attention is not recommended for H3. Every run peaked at 31.1–31.3 GiB of the 31.8 GiB of GPU
 memory, so the patch's lower peak did not show on this card, where the
 model fills the memory.
 

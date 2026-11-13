@@ -1,5 +1,5 @@
 schema = 1
-description = "pDMD 2-step LoRA add-on for the MiniMax H3-Image text-to-image workflow; fewer steps at slightly lower quality"
+description = "pDMD 2-step LoRA add-on for the MiniMax H3-Image text-to-image workflow"
 workflow_urls = ["https://github.com/Comfy-Org/workflow_templates/blob/c8e48bdcfc7241d7af588d20d4f924caf9d9d953/templates/image_minimax_h3_image_t2i.json"]
 
 [[license]]
