@@ -82,7 +82,7 @@ elsewhere:
   change takes effect, pins and upgrading, updating the checkout,
   removal; `.env.example` is the settings reference, `pins.env` the pin
   reference.
-- `docs/models.md`: model sets, Hugging Face access and the token,
+- `docs/models.md`: model sets, Hugging Face and Civitai access and the tokens,
   licenses, stamps, manifest keys, the templates tools and drafts.
 - `docs/nodes.md`: Manager installs, node sets, local nodes, captured
   dependencies and the policy files, SageAttention.
@@ -253,6 +253,13 @@ against its reason.
   set nobody else fetches, while the shipped loader stays strict
   ([Private sets](docs/models.md#private-sets)). Reconsider if a private
   set is ever shared or a record-only file is found swapped.
+- **Civitai is a source beside Hugging Face, pinned by version id, size,
+  and SHA-256, with `CIVITAI_TOKEN` sent to Civitai's own hosts only.** Many
+  LoRAs and fine-tunes exist nowhere else; the pins catch a re-upload,
+  and the per-hop host check keeps the token off the signed CDN redirect
+  ([Civitai sources](docs/models.md#civitai-sources)). Reconsider if
+  deleted or re-uploaded versions break shipped sets often, or if the
+  token leaves `civitai.com` and `civitai.red` on any path.
 - **`smoke-gpu` proves function, not provenance.** Provenance is proven
   at build time by the pinned digests and commits; the smoke test
   checks that the running image works

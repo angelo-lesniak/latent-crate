@@ -216,7 +216,10 @@ def staging_directory(model_file: ModelFile, destination: Path) -> Path:
     Staging next to the final path lets verified publication be one atomic
     rename; the key names the pinned file, so a manifest change never resumes
     a stale partial download."""
-    pinned = f"{model_file.repository}\0{model_file.revision}\0{model_file.source}"
+    if model_file.civitai_version is not None:
+        pinned = f"civitai\0{model_file.civitai_version}"
+    else:
+        pinned = f"{model_file.repository}\0{model_file.revision}\0{model_file.source}"
     return destination.parent / STAGING_NAME / hashlib.sha256(pinned.encode()).hexdigest()[:24]
 
 
@@ -243,7 +246,7 @@ class PendingFile:
     "partial" when a .part file can be resumed, and "absent" otherwise;
     ``received`` counts the pinned file's bytes already in staging. Only the
     bytes beyond them need free space (none can be claimed for a file whose
-    size is not pinned), and only an incomplete file needs the Hub."""
+    size is not pinned), and only an incomplete file needs its host."""
 
     model_file: ModelFile
     destination: Path

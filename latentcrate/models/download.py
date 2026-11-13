@@ -8,7 +8,7 @@ import urllib.error
 from pathlib import Path
 
 from .. import LatentCrateError
-from .hub import check_access, file_url, open_url
+from .hub import Tokens, check_access, file_url, open_url
 from .library import (
     PendingFile,
     announce_hashing,
@@ -49,7 +49,7 @@ def print_notices(selected: list[ModelSet]) -> None:
                 seen_workflows.add(workflow_url)
 
 
-def download(pending: PendingFile, token: str | None) -> Path:
+def download(pending: PendingFile, tokens: Tokens) -> Path:
     """Stream the file into staging, resuming a partial download, and return the staged path.
 
     The stream goes to <name>.part; a previous .part file is resumed with a
@@ -58,7 +58,8 @@ def download(pending: PendingFile, token: str | None) -> Path:
     .part file is renamed only once every byte the manifest promises (or,
     without a pinned size, the server announces) is on disk, so anything
     else in the staging directory is a complete download awaiting
-    verification, which is returned without a request."""
+    verification, which is returned without a request. The staged name is
+    the manifest's destination; a name the server offers is never read."""
     model_file = pending.model_file
     staged, part = staged_paths(model_file, pending.staging)
     if pending.state == "complete":
@@ -67,7 +68,7 @@ def download(pending: PendingFile, token: str | None) -> Path:
     headers = {"Range": f"bytes={received}-"} if received else {}
     size = model_file.size
     try:
-        with open_url(file_url(model_file), headers, token) as response:
+        with open_url(file_url(model_file, tokens), headers, tokens) as response:
             if response.status == 206:
                 content_range = response.headers.get("Content-Range", "")
                 if not content_range.startswith(f"bytes {received}-"):
@@ -121,7 +122,7 @@ def download(pending: PendingFile, token: str | None) -> Path:
     return staged
 
 
-def fetch(selected: list[ModelSet], models_root: Path, roots: tuple[Path, ...], token: str | None) -> None:
+def fetch(selected: list[ModelSet], models_root: Path, roots: tuple[Path, ...], tokens: Tokens) -> None:
     files = merged_files(selected)
     print_notices(selected)
 
@@ -154,9 +155,9 @@ def fetch(selected: list[ModelSet], models_root: Path, roots: tuple[Path, ...], 
     require_free_space(models_root, pending)
     incomplete = [item for item in pending if item.state != "complete"]
     if incomplete:
-        print("Checking access to every selected Hugging Face file before downloading ...")
+        print("Checking access to every selected file before downloading ...")
         for item in incomplete:
-            check_access(item.model_file, token)
+            check_access(item.model_file, tokens)
 
     for item in pending:
         model_file, destination, staging = item.model_file, item.destination, item.staging
@@ -173,7 +174,7 @@ def fetch(selected: list[ModelSet], models_root: Path, roots: tuple[Path, ...], 
             print(f"downloading: {model_file.destination} (size not pinned)")
         else:
             print(f"downloading: {model_file.destination} ({model_file.size / 1_000_000_000:.1f} GB)")
-        downloaded = download(item, token)
+        downloaded = download(item, tokens)
         # A complete download that is not the pinned file is discarded. A
         # verified one is published as a hard link, which the kernel refuses
         # when any entry holds the destination, so nothing that appeared

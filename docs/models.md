@@ -1,7 +1,7 @@
 # Model sets
 
-A model set is the pinned list of Hugging Face files one ComfyUI
-workflow needs. `models fetch` downloads them into the models directory
+A model set is the pinned list of Hugging Face or Civitai files one
+ComfyUI workflow needs. `models fetch` downloads them into the models directory
 (`COMFY_MODELS_DIR`, mounted at `/models`) and verifies each against the
 manifest. [Configuration](configuration.md#storage-layout) owns where the
 directory lives and the bind a symbolic link below it needs.
@@ -9,8 +9,9 @@ directory lives and the bind a symbolic link below it needs.
 ## How a set works
 
 A manifest under `config/model-sets/` lists the files of one set: for
-each, the Hugging Face repository, a commit, the path in that repository,
-the `destination` below `/models`, and the byte size and SHA-256 the
+each, the Hugging Face repository, a commit, and the path in that
+repository (or a [Civitai](#civitai-sources) model version), the
+`destination` below `/models`, and the byte size and SHA-256 the
 download must match. `destination` is relative to `/models`, and its
 first directory must be one that
 [`extra_model_paths.yaml`](../config/comfy/extra_model_paths.yaml) maps
@@ -28,7 +29,7 @@ bin/latentcrate models list
 bin/latentcrate models fetch <set> [<set> ...] | all
 bin/latentcrate models status [--verify] <set> [<set> ...] | all
 bin/latentcrate models check [--remote] <set> [<set> ...] | all
-bin/latentcrate models draft hf:<owner>/<repo>:<file>
+bin/latentcrate models draft hf:<owner>/<repo>:<file> | civitai:<version>
 ```
 
 `fetch` prints every license and pinned workflow link of the selected
@@ -63,8 +64,8 @@ check after a file was swapped in place.
 
 `check` validates the selected manifests offline. `check --remote`
 compares each pinned file's size (and checksum, for LFS files) with the
-Hugging Face record at the pinned revision and requests every workflow
-and license link.
+Hugging Face record at the pinned revision, or a Civitai file's with the
+record of its version, and requests every workflow and license link.
 
 ## Private sets
 
@@ -81,6 +82,34 @@ matches the stamp, and `changed since recorded` when `--verify`, or a
 size or modification time the stamp does not hold, finds a different
 checksum. `check --remote` compares only the pins a file carries.
 
+## Civitai sources
+
+A `[[file]]` entry may name `civitai_version`, the number in
+`https://civitai.com/api/download/models/<version>`, in place of
+`repository`, `revision`, and `source`. The package builds that URL and
+saves the version's primary file at `destination`; the file name Civitai
+offers is ignored. Version ids and accounts are shared with
+`civitai.red` and `civitai.com` serves
+the API for both. `models draft civitai:<version>` prints the entry with
+the size and checksum from Civitai's record, and refuses a version
+without a single primary file, naming its files. A file the creator
+limits to signed-in accounts needs `CIVITAI_TOKEN` in `.env`.
+
+Before adding a Civitai file, weigh its risks:
+
+- `CIVITAI_TOKEN` is a second credential on disk, and it acts as your
+  whole Civitai account.
+- The uploader can delete or re-upload a version, so a pinned `sha256`
+  can stop resolving; `fetch` then refuses instead of taking other bytes.
+- The content and license are the uploader's, and nobody reviews them. A
+  model page is edited in place, so only a private set may name
+  `https://civitai.com/models/<id>` (or `civitai.red`) as its license; keep any file whose
+  license is not clear in a [private set](#private-sets).
+- Civitai redirects the download to a CDN host, which receives the
+  request without the token.
+
+[Privacy](privacy.md#what-runs-where) owns where each token goes.
+
 ## Manifest keys
 
 The manifest is TOML; `latentcrate/models/manifest.py` reads it and
@@ -93,11 +122,12 @@ refuses any other key.
 | `workflow_urls` | yes | Unique commit-pinned `Comfy-Org/workflow_templates` blob URLs |
 | `[[license]]` | one or more | A model license the user accepts before downloading |
 | `license.name` | yes | Shown by `fetch` |
-| `license.url` | yes | An HTTPS URL pinned to a 40-character commit on `huggingface.co`, `github.com`, or `cdn.jsdelivr.net` |
-| `[[file]]` | one or more | One pinned Hugging Face file |
-| `file.repository` | yes | `<owner>/<repository>` |
-| `file.revision` | yes | Full lowercase commit of the repository |
-| `file.source` | yes | Path of the file in the repository at that commit |
+| `license.url` | yes | An HTTPS URL pinned to a 40-character commit on `huggingface.co`, `github.com`, or `cdn.jsdelivr.net`; a private set may also name `https://civitai.com/models/<id>` or its `civitai.red` form |
+| `[[file]]` | one or more | One pinned Hugging Face file or Civitai model version |
+| `file.repository` | Hugging Face files | `<owner>/<repository>` |
+| `file.revision` | Hugging Face files | Full lowercase commit of the repository |
+| `file.source` | Hugging Face files | Path of the file in the repository at that commit |
+| `file.civitai_version` | Civitai files | Civitai model-version id, a positive integer; excludes the three keys above |
 | `file.destination` | yes | Path below `/models`; unique within the set |
 | `file.size` | shipped sets | Byte size, a positive integer |
 | `file.sha256` | shipped sets | Lowercase hexadecimal SHA-256 of the file |

@@ -366,14 +366,15 @@ class ProjectContractTests(unittest.TestCase):
         self.assertEqual({key for key, operators in references.items() if "?" in operators}, EMPTY_ALLOWED)
         self.assertLessEqual(set(references) - settings - pins, DERIVED, "a Compose variable nothing exports")
         self.assertLessEqual(pins - set(references), {"CUDA_MIN_DRIVER_MAJOR"}, "a pin no Compose file passes")
-        self.assertIn(env.TOKEN_KEY, settings, ".env.example documents the token")
-        self.assertNotIn(env.TOKEN_KEY, references, "the token never reaches Compose")
+        for key in env.TOKEN_KEYS:
+            self.assertIn(key, settings, f".env.example documents {key}")
+            self.assertNotIn(key, references, f"{key} never reaches Compose")
 
-    def test_the_token_never_reaches_compose_or_the_image(self) -> None:
+    def test_the_tokens_never_reach_compose_or_the_image(self) -> None:
+        self.assertEqual(env.TOKEN_KEYS, ("HF_TOKEN", "CIVITAI_TOKEN"))
         for relative in (*COMPOSE_FILES, DOCKERFILE, ENTRYPOINT):
-            self.assertNotIn(
-                env.TOKEN_KEY, read_text(relative), f"{env.TOKEN_KEY} must stay in the package, not in {relative}"
-            )
+            for key in env.TOKEN_KEYS:
+                self.assertNotIn(key, read_text(relative), f"{key} must stay in the package, not in {relative}")
 
     def test_the_entrypoint_reads_what_compose_passes_and_wires_the_switches(self) -> None:
         # Every variable the entrypoint reads is passed by the comfy
@@ -436,7 +437,8 @@ class ProjectContractTests(unittest.TestCase):
         self.assertIn(defaults["COMFY_BIND_ADDRESS"], env.LOOPBACK, "the UI binds loopback by default")
         for key, value in PRIVACY_DEFAULTS.items():
             self.assertEqual(defaults.get(key), value, f"privacy or containment default changed: {key}={value}")
-        self.assertNotIn(env.TOKEN_KEY, defaults, "the token has no default value")
+        for key in env.TOKEN_KEYS:
+            self.assertNotIn(key, defaults, f"{key} has no default value")
         sources = "".join(path.read_text(encoding="utf-8") for path in tracked("latentcrate/*.py"))
         sources += "".join(read_text(relative) for relative in COMPOSE_FILES)
         for key in sorted(env.documented_keys(PROJECT_ROOT / ".env.example")):

@@ -16,14 +16,19 @@ third-party code trustworthy.
 | `pins check` | in the package on the host, reading public registries over HTTPS |
 | the image build | in the engine's builder |
 
-`HF_TOKEN` is read from the shell or `.env` by every command that loads
-settings, used by the model commands only, and removed from the
-environment of every subprocess; it reaches no container, Compose file,
-or image. The package
-sends it as an `Authorization` header to `huggingface.co` only and drops
-it on a redirect to another host. See
+`HF_TOKEN` and `CIVITAI_TOKEN` are read from the shell or `.env` by
+every command that loads settings, used by the model commands only, and
+removed from the environment of every subprocess; neither reaches a
+container, Compose file, or image. The package sends each as an
+`Authorization` header to its own hosts only, `huggingface.co`, or
+`civitai.com` and `civitai.red`, and drops it on a redirect to any other
+host. `models
+fetch`, `check --remote`, and `draft` contact `civitai.com` only for a
+Civitai file; Civitai redirects each download to a CDN host, which
+receives the request without the token. See
 [Models](models.md#fetch-a-set) for the token setup and the licenses the
-downloader prints.
+downloader prints, and [Civitai sources](models.md#civitai-sources) for
+the risks of that source.
 
 ## Defaults and their limits
 

@@ -276,27 +276,34 @@ class SettingsTests(unittest.TestCase):
         )
         self.assertEqual({place.key for place in settings.storage if place.key}, set(STORAGE))
 
-    def test_the_token_is_captured_and_never_reaches_a_subprocess_environment(self) -> None:
-        # Read from the file or the shell into `hf_token`, and out of
-        # everything exported; the shell wins, and an empty shell value
-        # means "no token".
-        self.write_env("HF_TOKEN=file-token\n")
+    def test_the_tokens_are_captured_and_never_reach_a_subprocess_environment(self) -> None:
+        # Read from the file or the shell into `hf_token` and
+        # `civitai_token`, and out of everything exported; the shell wins,
+        # and an empty shell value means "no token".
+        self.write_env("HF_TOKEN=file-token\nCIVITAI_TOKEN=file-civitai\n")
         from_file = env.load(self.tmp, {})
-        self.assertEqual(from_file.hf_token, "file-token")
-        from_shell = env.load(self.tmp, {"HF_TOKEN": "shell-token"})
-        self.assertEqual(from_shell.hf_token, "shell-token")
+        self.assertEqual((from_file.hf_token, from_file.civitai_token), ("file-token", "file-civitai"))
+        from_shell = env.load(self.tmp, {"HF_TOKEN": "shell-token", "CIVITAI_TOKEN": "shell-civitai"})
+        self.assertEqual((from_shell.hf_token, from_shell.civitai_token), ("shell-token", "shell-civitai"))
         for settings in (from_file, from_shell):
             for view in (settings.subprocess_env(), settings.values, settings.environ, settings.file_values):
-                self.assertNotIn("HF_TOKEN", view)
-        self.assertIsNone(env.load(self.tmp, {"HF_TOKEN": ""}).hf_token)
+                for key in env.TOKEN_KEYS:
+                    self.assertNotIn(key, view)
+            tokens = {settings.hf_token, settings.civitai_token}
+            self.assertFalse(tokens & set(settings.subprocess_env().values()))
+            self.assertFalse([token for token in tokens if token in repr(settings)])
+        emptied = env.load(self.tmp, {"HF_TOKEN": "", "CIVITAI_TOKEN": ""})
+        self.assertEqual((emptied.hf_token, emptied.civitai_token), (None, None))
 
-    def test_the_token_leaves_this_process_so_no_subprocess_inherits_it(self) -> None:
+    def test_the_tokens_leave_this_process_so_no_subprocess_inherits_them(self) -> None:
         self.write_env("COMFY_PORT=4208\n")
-        os.environ["HF_TOKEN"] = "shell-token"
-        self.addCleanup(os.environ.pop, "HF_TOKEN", None)
+        for key in env.TOKEN_KEYS:
+            os.environ[key] = f"shell-{key}"
+            self.addCleanup(os.environ.pop, key, None)
         settings = env.load(self.tmp)
-        self.assertEqual(settings.hf_token, "shell-token")
-        self.assertNotIn("HF_TOKEN", os.environ)
+        self.assertEqual((settings.hf_token, settings.civitai_token), ("shell-HF_TOKEN", "shell-CIVITAI_TOKEN"))
+        for key in env.TOKEN_KEYS:
+            self.assertNotIn(key, os.environ)
 
     def test_env_file_values_reach_subprocesses_and_quotes_are_stripped(self) -> None:
         self.write_env("COMFYUI_EXTRA_ARGS=\"--verbose DEBUG\"\nexport COMFY_TMPFS_SIZE='3g'\n# comment\n\n")
@@ -357,6 +364,7 @@ class SettingsTests(unittest.TestCase):
         documented = env.documented_keys(self.tmp / ".env.example")
         for key in (
             "HF_TOKEN",
+            "CIVITAI_TOKEN",
             "CONTAINER_ENGINE",
             "LATENTCRATE_IMAGE",
             "MODEL_SET_EXTRA_WRITE_ROOTS",

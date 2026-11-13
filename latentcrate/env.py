@@ -9,10 +9,10 @@ with its effective value, so Compose never applies a fallback of its own; a
 `.env` key the example does not list is refused. The
 pins in `pins.env` cannot be overridden: every pin key is removed from the
 environment handed to a subprocess, because the shell wins over
-`--env-file` and Compose must read the file's value. The Hugging Face token
-is moved out of the settings, this process's environment and the
-environment of every subprocess into `Settings.hf_token`, which the model
-downloader reads. The container identity (`HOST_UID`, `HOST_GID`) is the
+`--env-file` and Compose must read the file's value. The Hugging Face and
+Civitai tokens are moved out of the settings, this process's environment
+and the environment of every subprocess into `Settings.hf_token` and
+`Settings.civitai_token`, which the model downloader reads. The container identity (`HOST_UID`, `HOST_GID`) is the
 calling user, never a setting. `.env` is the one file that may hold a
 credential; `require_private` is the check that it is the calling user's
 and readable by that user alone, and `Settings.storage` the one list of
@@ -26,16 +26,16 @@ from __future__ import annotations
 import os
 import re
 import stat
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import LatentCrateError
 from .files import read_utf8
 from .names import COMMIT_RE, SHA256_RE
 
-# The model downloader's token: read into `Settings.hf_token`, never a
-# setting, never exported.
-TOKEN_KEY = "HF_TOKEN"
+# The model downloader's tokens: read into `Settings.hf_token` and
+# `Settings.civitai_token`, never a setting, never exported.
+TOKEN_KEYS = ("HF_TOKEN", "CIVITAI_TOKEN")
 # Host paths, resolved from the repository root when relative and to their
 # real path always, so the mounts and the overlap rule see one spelling of
 # a directory.
@@ -276,8 +276,9 @@ class Settings:
     # The `.env` keys the example file lists; an unlisted key is refused.
     file_values: dict[str, str]
     environ: dict[str, str]
-    # The token found in the shell environment or `.env`, if any.
-    hf_token: str | None
+    # The tokens found in the shell environment or `.env`, if any.
+    hf_token: str | None = field(repr=False)
+    civitai_token: str | None = field(repr=False)
 
     def get(self, key: str, default: str = "") -> str:
         return self.values.get(key, default)
@@ -392,8 +393,8 @@ class Settings:
         reads pins.env through --env-file, and the shell would win over
         it), every key the wrapper defaults with its effective value, and
         the calling user as the container identity (and, unset, as
-        HOST_MODEL_GID). The token is in none
-        of those (`load` moved it into `hf_token`). Exporting the effective
+        HOST_MODEL_GID). The tokens are in none
+        of those (`load` moved them into `hf_token` and `civitai_token`). Exporting the effective
         values keeps Compose from applying a default of its own."""
         env = dict(self.file_values)
         env.update(self.environ)
@@ -415,8 +416,9 @@ def load(root: Path, environ: dict[str, str] | None = None) -> Settings:
     if environ is None:
         environ = dict(os.environ)
         # Every subprocess inherits this process's environment, so the
-        # token leaves it here; the downloader gets it as an argument.
-        os.environ.pop(TOKEN_KEY, None)
+        # tokens leave it here; the downloader gets them as an argument.
+        for key in TOKEN_KEYS:
+            os.environ.pop(key, None)
     else:
         environ = dict(environ)
     example = root / ".env.example"
@@ -430,7 +432,7 @@ def load(root: Path, environ: dict[str, str] | None = None) -> Settings:
     if env_file.exists():
         if not env_file.is_file():
             raise LatentCrateError(f"{env_file} is not a file")
-        # It may hold the token; `init` creates it with mode 0600.
+        # It may hold the tokens; `init` creates it with mode 0600.
         require_private(env_file, os.stat(env_file))
         file_values = parse_env_file(env_file)
     documented = documented_keys(example)
@@ -443,8 +445,10 @@ def load(root: Path, environ: dict[str, str] | None = None) -> Settings:
         )
     # The shell wins over the file, as for every setting; an empty shell
     # value means "no token" and suppresses the file's.
-    defaults.pop(TOKEN_KEY, None)
-    hf_token = environ.pop(TOKEN_KEY, file_values.pop(TOKEN_KEY, None)) or None
+    tokens = {}
+    for key in TOKEN_KEYS:
+        defaults.pop(key, None)
+        tokens[key] = environ.pop(key, file_values.pop(key, None)) or None
 
     values = dict(defaults)
     values.update(file_values)
@@ -469,7 +473,7 @@ def load(root: Path, environ: dict[str, str] | None = None) -> Settings:
         values[key] = os.path.realpath(value if value.startswith("/") else root / value.removeprefix("./"))
     for key in BOOLEAN_KEYS:
         is_true(values[key], key)
-    settings = Settings(root, values, defaults, file_values, environ, hf_token)
+    settings = Settings(root, values, defaults, file_values, environ, tokens["HF_TOKEN"], tokens["CIVITAI_TOKEN"])
     # The checkout (with .env) is what the next start trusts; a storage
     # directory that is or contains it would be mounted into the container.
     checkout = Path(os.path.realpath(root))

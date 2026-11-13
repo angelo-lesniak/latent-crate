@@ -12,7 +12,7 @@ cd "$PROJECT_ROOT"
 command -v podman-compose >/dev/null 2>&1 \
   || { printf 'podman-compose compatibility: podman-compose is required\n' >&2; exit 1; }
 
-unset FAKE_PODMAN_LOG HF_TOKEN
+unset FAKE_PODMAN_LOG HF_TOKEN CIVITAI_TOKEN
 # The Compose files require every setting and the values the package
 # derives on each call (compose.yaml, the interpolation note). The settings
 # come from the reference at their documented defaults; the storage paths
@@ -104,10 +104,12 @@ logged() {
 
 # A token in the environment reaches no Compose call (test_project_contracts
 # pins the files; this pins the rendered arguments).
-HF_TOKEN=hf-fixture-not-a-token run_logged release gpu
-if logged 'hf-fixture-not-a-token' || logged HF_TOKEN; then
-  fail 'the token reached the podman command line'
-fi
+HF_TOKEN=hf-fixture-not-a-token CIVITAI_TOKEN=civitai-fixture-not-a-token run_logged release gpu
+for leaked in hf-fixture-not-a-token HF_TOKEN civitai-fixture-not-a-token CIVITAI_TOKEN; do
+  if logged "$leaked"; then
+    fail 'a token reached the podman command line'
+  fi
+done
 logged "--device $GPU_DEVICE" || fail 'comfy has no GPU device with the gpu overlay'
 logged "-p $COMFY_BIND_ADDRESS:$COMFY_PORT:8188" || fail 'comfy does not publish the UI port on the bind address'
 logged '--network=latentcrate_default:alias=comfy' || fail 'comfy does not use the default network'

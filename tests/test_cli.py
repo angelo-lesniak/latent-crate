@@ -32,7 +32,7 @@ USAGE_LINES = (
     "models fetch <set> [<set> ...] | all",
     "models status [--verify] <set> [<set> ...] | all",
     "models check [--remote] <set> [<set> ...] | all",
-    "models draft hf:<owner>/<repo>:<file>",
+    "models draft hf:<owner>/<repo>:<file> | civitai:<version>",
     "nodes list",
     "nodes install <set>",
     "nodes sync <set>",
@@ -259,12 +259,13 @@ class CliTests(unittest.TestCase):
         self.expect_failure("--sage requires a mode: off, available, or global", "doctor", "--sage", "fast")
         self.expect_failure("--sage requires a mode: off, available, or global", "doctor", "--sage")
 
-    def test_the_token_in_the_shell_never_reaches_the_engine(self) -> None:
-        # The fake engine exits 1 when it sees HF_TOKEN; the probes must still succeed.
-        result = self.doctor("--allow-no-gpu", HF_TOKEN="hf_secret")
+    def test_the_tokens_in_the_shell_never_reach_the_engine(self) -> None:
+        # The fake engine exits 1 when it sees a token; the probes must still succeed.
+        result = self.doctor("--allow-no-gpu", HF_TOKEN="hf_secret", CIVITAI_TOKEN="civitai_secret")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("[ok] docker engine is reachable\n", result.stdout)
         self.assertNotIn("hf_secret", result.stdout + result.stderr)
+        self.assertNotIn("civitai_secret", result.stdout + result.stderr)
 
     def test_the_shim_runs_the_package(self) -> None:
         for arguments in (("help",), ("pins",)):

@@ -41,7 +41,7 @@ POSITIVE_INTEGER_RE = re.compile(r"^[1-9][0-9]*$")
 ENV_HEADER = (
     "# LatentCrate local settings. Every setting and its default is in .env.example;\n"
     "# a line here overrides it.\n"
-    "# Keep this file private: it may hold HF_TOKEN.\n"
+    "# Keep this file private: it may hold HF_TOKEN and CIVITAI_TOKEN.\n"
 )
 
 
@@ -258,7 +258,11 @@ def require_models_dir(settings: env.Settings) -> None:
 def fetch_models(settings: env.Settings, selected: list[models.ModelSet]) -> None:
     roots = models.allowed_roots(settings.models_dir, settings.get("MODEL_SET_EXTRA_WRITE_ROOTS"))
     with models.model_download_lock(settings.models_dir):
-        models.fetch(selected, settings.models_dir, roots, settings.hf_token)
+        models.fetch(selected, settings.models_dir, roots, model_tokens(settings))
+
+
+def model_tokens(settings: env.Settings) -> models.Tokens:
+    return models.Tokens(settings.hf_token, settings.civitai_token)
 
 
 def model_catalog(settings: env.Settings) -> dict[str, models.ModelSet]:
@@ -381,11 +385,12 @@ def cmd_models_status(context: Context, options: Options, names: list[str]) -> i
 
 
 def cmd_models_check(context: Context, options: Options, names: list[str]) -> int:
-    return models.check(selected_model_sets(context, names), context.settings.hf_token, remote="--remote" in options)
+    selected = selected_model_sets(context, names)
+    return models.check(selected, model_tokens(context.settings), remote="--remote" in options)
 
 
 def cmd_models_draft(context: Context, _options: Options, names: list[str]) -> None:
-    print(models.draft(names[0], context.settings.hf_token), end="")
+    print(models.draft(names[0], model_tokens(context.settings)), end="")
 
 
 def cmd_nodes_list(context: Context, _options: Options, _names: list[str]) -> None:
@@ -502,7 +507,7 @@ COMMANDS = (
     Command(
         "models fetch",
         SETS,
-        "Download and verify one or more model sets from Hugging Face.",
+        "Download and verify one or more model sets from Hugging Face and Civitai.",
         {},
         cmd_models_fetch,
         arguments=(1, None),
@@ -518,15 +523,15 @@ COMMANDS = (
     Command(
         "models check",
         f"[--remote] {SETS}",
-        "Validate the selected manifests; --remote compares their sizes with Hugging Face.",
+        "Validate the selected manifests; --remote compares their sizes with Hugging Face and Civitai.",
         {"--remote": SWITCH},
         cmd_models_check,
         arguments=(1, None),
     ),
     Command(
         "models draft",
-        "hf:<owner>/<repo>:<file>",
-        "Print a manifest entry for one Hugging Face file, with its size and checksum.",
+        "hf:<owner>/<repo>:<file> | civitai:<version>",
+        "Print a manifest entry for one Hugging Face file or Civitai model version, with its size and checksum.",
         {},
         cmd_models_draft,
         arguments=(1, 1),

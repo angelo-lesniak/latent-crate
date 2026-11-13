@@ -21,6 +21,9 @@ LICENSE_URL_RE = re.compile(
     r"|https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/blob/[0-9a-f]{40}/[^\s]+"
     r")$"
 )
+# A model page is edited in place by its uploader and has no pinned form,
+# so only a private set may name one as its license.
+CIVITAI_MODEL_URL_RE = re.compile(r"^https://civitai\.(?:com|red)/models/[1-9][0-9]*$")
 
 
 @dataclass(frozen=True)
@@ -31,13 +34,22 @@ class License:
 
 @dataclass(frozen=True)
 class ModelFile:
-    repository: str
-    revision: str
-    source: str
+    # A Hugging Face file names repository, revision, and source; a Civitai
+    # file names civitai_version and leaves the three None.
+    repository: str | None
+    revision: str | None
+    source: str | None
     destination: str
     # None when a private set leaves the pin out; see read_file.
     size: int | None
     sha256: str | None
+    civitai_version: int | None = None
+
+    @property
+    def origin(self) -> str:
+        if self.civitai_version is not None:
+            return f"Civitai model version {self.civitai_version}"
+        return f"{self.repository}/{self.source} at {self.revision}"
 
 
 @dataclass(frozen=True)
@@ -77,7 +89,7 @@ def read_manifest(path: Path, *, private: bool = False) -> ModelSet:
     raw_licenses = document.get("license")
     if not isinstance(raw_licenses, list) or not raw_licenses:
         raise LatentCrateError(f"{name}: at least one [[license]] entry is required")
-    licenses = [read_license(raw, index, name) for index, raw in enumerate(raw_licenses, start=1)]
+    licenses = [read_license(raw, index, name, private) for index, raw in enumerate(raw_licenses, start=1)]
 
     raw_files = document.get("file")
     if not isinstance(raw_files, list) or not raw_files:
@@ -93,8 +105,9 @@ def read_manifest(path: Path, *, private: bool = False) -> ModelSet:
     return ModelSet(name, description, tuple(workflow_urls), tuple(licenses), tuple(files), private)
 
 
-def read_license(raw: object, index: int, name: str) -> License:
-    """One [[license]] entry: a name and an immutable approved HTTPS URL."""
+def read_license(raw: object, index: int, name: str, private: bool) -> License:
+    """One [[license]] entry: a name and an immutable approved HTTPS URL, or
+    for a private set also a Civitai model page."""
     if not isinstance(raw, dict):
         raise LatentCrateError(f"{name}: license {index} must be a table")
     require_keys(raw, {"name", "url"}, f"{name} license {index}")
@@ -102,13 +115,16 @@ def read_license(raw: object, index: int, name: str) -> License:
     url = raw.get("url")
     if not isinstance(license_name, str) or not license_name.strip():
         raise LatentCrateError(f"{name}: license {index} needs a name")
-    if not isinstance(url, str) or LICENSE_URL_RE.fullmatch(url) is None:
+    if not isinstance(url, str) or not (
+        LICENSE_URL_RE.fullmatch(url) or (private and CIVITAI_MODEL_URL_RE.fullmatch(url))
+    ):
         raise LatentCrateError(f"{name}: license {index} needs an immutable approved HTTPS URL")
     return License(license_name.strip(), url)
 
 
 def read_file(raw: object, index: int, name: str, private: bool) -> ModelFile:
-    """One [[file]] entry: a pinned Hugging Face file and its path below the models directory.
+    """One [[file]] entry: a Hugging Face file pinned to a commit, or a
+    Civitai model version, and its path below the models directory.
 
     A private set may leave ``size`` and ``sha256`` out: its author is the
     only user and would compute both from the same download, so the first
@@ -116,22 +132,31 @@ def read_file(raw: object, index: int, name: str, private: bool) -> ModelFile:
     if not isinstance(raw, dict):
         raise LatentCrateError(f"{name}: file {index} must be a table")
     context = f"{name} file {index}"
-    require_keys(raw, {"repository", "revision", "source", "destination", "size", "sha256"}, context)
-    repository = raw.get("repository")
-    revision = raw.get("revision")
-    source = relative_path(raw.get("source"), "source", context)
+    hub_keys = {"repository", "revision", "source"}
+    require_keys(raw, {*hub_keys, "civitai_version", "destination", "size", "sha256"}, context)
     destination = relative_path(raw.get("destination"), "destination", context)
     size = raw.get("size")
     digest = raw.get("sha256")
-    if not isinstance(repository, str) or not REPOSITORY_RE.fullmatch(repository):
-        raise LatentCrateError(f"{name}: file {index} has an invalid repository")
-    if not isinstance(revision, str) or not COMMIT_RE.fullmatch(revision):
-        raise LatentCrateError(f"{name}: file {index} revision must be a full lowercase commit")
+    version = raw.get("civitai_version")
+    repository = revision = source = None
+    if "civitai_version" in raw:
+        if hub_keys & set(raw):
+            raise LatentCrateError(f"{name}: file {index} names civitai_version beside repository, revision, or source")
+        if not isinstance(version, int) or isinstance(version, bool) or version <= 0:
+            raise LatentCrateError(f"{name}: file {index} civitai_version must be a positive integer")
+    else:
+        repository = raw.get("repository")
+        revision = raw.get("revision")
+        source = relative_path(raw.get("source"), "source", context)
+        if not isinstance(repository, str) or not REPOSITORY_RE.fullmatch(repository):
+            raise LatentCrateError(f"{name}: file {index} has an invalid repository")
+        if not isinstance(revision, str) or not COMMIT_RE.fullmatch(revision):
+            raise LatentCrateError(f"{name}: file {index} revision must be a full lowercase commit")
     if not (private and size is None) and (not isinstance(size, int) or isinstance(size, bool) or size <= 0):
         raise LatentCrateError(f"{name}: file {index} size must be a positive integer")
     if not (private and digest is None) and (not isinstance(digest, str) or not SHA256_RE.fullmatch(digest)):
         raise LatentCrateError(f"{name}: file {index} sha256 must be lowercase hexadecimal")
-    return ModelFile(repository, revision, source, destination, size, digest)
+    return ModelFile(repository, revision, source, destination, size, digest, version)
 
 
 def catalog(config_dir: Path, local_dir: Path | None = None) -> dict[str, ModelSet]:

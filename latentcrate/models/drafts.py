@@ -1,4 +1,4 @@
-"""Serve manifest authors: draft a [[file]] entry from Hub metadata and check pinned manifests against the Hub."""
+"""Serve manifest authors: draft a [[file]] entry from a host's metadata and check manifests against the hosts."""
 
 from __future__ import annotations
 
@@ -8,8 +8,9 @@ import urllib.error
 from pathlib import PurePosixPath
 
 from .. import LatentCrateError
-from ..names import COMMIT_RE, relative_path
-from .hub import hub_json, open_url, revision_url
+from ..names import COMMIT_RE, RELATIVE_PATH_RE, SHA256_RE, relative_path
+from . import hub
+from .hub import Tokens, hub_json, open_url, primary_file, revision_url, version_url
 from .manifest import REPOSITORY_RE, ModelFile, ModelSet
 
 GITHUB_BLOB_RE = re.compile(r"^https://github\.com/([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)/blob/([0-9a-f]{40})/(.+)$")
@@ -27,13 +28,45 @@ def siblings_of(payload: dict) -> dict[str, dict]:
     }
 
 
-def draft(spec: str, token: str | None) -> str:
+def civitai_record(item: dict) -> tuple[int | None, str | None]:
+    """The byte size and lowercase SHA-256 Civitai records for a file, where
+    it records them; sizeKB is the byte count over 1024."""
+    size_kb = item.get("sizeKB")
+    size = size_kb * 1024 if isinstance(size_kb, (int, float)) and not isinstance(size_kb, bool) else None
+    digest = (item.get("hashes") or {}).get("SHA256")
+    digest = digest.lower() if isinstance(digest, str) and SHA256_RE.fullmatch(digest.lower()) else None
+    return (int(size) if size is not None and size > 0 and size == int(size) else None), digest
+
+
+def draft_civitai(version: int, tokens: Tokens) -> str:
+    payload = hub_json(version_url(version), tokens)
+    item = primary_file(version, payload)
+    name = item.get("name")
+    size, digest = civitai_record(item)
+    model = payload.get("modelId")
+    safe_name = isinstance(name, str) and RELATIVE_PATH_RE.fullmatch(name) and "/" not in name
+    lines = [
+        "[[file]]",
+        f"civitai_version = {version}",
+        *([f"# Model page and license: {hub.CIVITAI_URL}/models/{model}"] if isinstance(model, int) else []),
+        "# TODO: prefix the ComfyUI model folder (diffusion_models/, text_encoders/, vae/, loras/)",
+        f"destination = {toml_string(name)}" if safe_name else 'destination = "TODO"',
+        f"size = {size}" if size is not None else 'size = "TODO"',
+        f"sha256 = {toml_string(digest)}" if digest is not None else 'sha256 = "TODO"',
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def draft(spec: str, tokens: Tokens) -> str:
+    civitai = re.fullmatch(r"civitai:(?P<version>[1-9][0-9]{0,17})", spec)
+    if civitai:
+        return draft_civitai(int(civitai.group("version")), tokens)
     match = re.fullmatch(r"hf:(?P<repository>[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+):(?P<file>\S+)", spec)
     if match is None or not REPOSITORY_RE.fullmatch(match.group("repository")):
-        raise LatentCrateError("draft needs hf:<owner>/<repository>:<file>")
+        raise LatentCrateError("draft needs hf:<owner>/<repository>:<file> or civitai:<model version id>")
     repository = match.group("repository")
     wanted = relative_path(match.group("file"), "file", "draft")
-    payload = hub_json(revision_url(repository, "main"), token)
+    payload = hub_json(revision_url(repository, "main"), tokens)
     revision = payload.get("sha")
     if not isinstance(revision, str) or not COMMIT_RE.fullmatch(revision):
         raise LatentCrateError("Hugging Face did not report a commit for the main branch")
@@ -74,14 +107,24 @@ def remote_mismatch(model_file: ModelFile, siblings: dict[str, dict]) -> str | N
     return None
 
 
-def link_failure(url: str, token: str | None) -> str | None:
+def civitai_mismatch(model_file: ModelFile, payload: dict) -> str | None:
+    """How Civitai's record of a pinned version's primary file disagrees with the manifest, or None."""
+    size, digest = civitai_record(primary_file(model_file.civitai_version, payload))
+    if model_file.size is not None and size != model_file.size:
+        return f"remote size {size}, manifest {model_file.size}"
+    if None not in (digest, model_file.sha256) and digest != model_file.sha256:
+        return f"remote sha256 {digest}, manifest {model_file.sha256}"
+    return None
+
+
+def link_failure(url: str, tokens: Tokens) -> str | None:
     """Why a HEAD of a pinned link did not answer 200, or None. A GitHub blob
     page is fetched as its raw file, which answers HEAD without rendering."""
     blob = GITHUB_BLOB_RE.fullmatch(url)
     if blob:
         url = f"https://raw.githubusercontent.com/{blob.group(1)}/{blob.group(2)}/{blob.group(3)}"
     try:
-        with open_url(url, {}, token, method="HEAD") as response:
+        with open_url(url, {}, tokens, method="HEAD") as response:
             return None if response.status == 200 else f"HTTP {response.status}"
     except urllib.error.HTTPError as error:
         return f"HTTP {error.code}"
@@ -89,9 +132,9 @@ def link_failure(url: str, token: str | None) -> str | None:
         raise LatentCrateError(f"could not reach {url}: {error}") from error
 
 
-def check(selected: list[ModelSet], token: str | None, *, remote: bool) -> int:
+def check(selected: list[ModelSet], tokens: Tokens, *, remote: bool) -> int:
     """Report the loaded manifests; with ``remote``, compare every pinned file
-    with the Hub's size and checksum and HEAD every workflow and license link.
+    with its host's size and checksum and HEAD every workflow and license link.
     Returns 1 when anything disagrees or a link fails."""
     for model_set in selected:
         print(f"{model_set.name}: {len(model_set.files)} file(s), {len(model_set.licenses)} license(s)")
@@ -99,19 +142,29 @@ def check(selected: list[ModelSet], token: str | None, *, remote: bool) -> int:
         return 0
     result = 0
     pinned: dict[tuple[str, str], list[ModelFile]] = {}
+    versions: dict[int, list[ModelFile]] = {}
     links: list[str] = []
     for model_set in selected:
         for model_file in model_set.files:
-            pinned.setdefault((model_file.repository, model_file.revision), []).append(model_file)
+            if model_file.civitai_version is not None:
+                versions.setdefault(model_file.civitai_version, []).append(model_file)
+            else:
+                pinned.setdefault((model_file.repository, model_file.revision), []).append(model_file)
         links.extend((*model_set.workflow_urls, *(entry.url for entry in model_set.licenses)))
     for (repository, revision), model_files in pinned.items():
-        siblings = siblings_of(hub_json(revision_url(repository, revision), token))
+        siblings = siblings_of(hub_json(revision_url(repository, revision), tokens))
         for model_file in model_files:
             mismatch = remote_mismatch(model_file, siblings)
             print(f"{repository}/{model_file.source}: {mismatch or 'ok'}")
             result |= mismatch is not None
+    for version, model_files in versions.items():
+        payload = hub_json(version_url(version), tokens)
+        for model_file in model_files:
+            mismatch = civitai_mismatch(model_file, payload)
+            print(f"civitai:{version} {model_file.destination}: {mismatch or 'ok'}")
+            result |= mismatch is not None
     for url in dict.fromkeys(links):
-        failure = link_failure(url, token)
+        failure = link_failure(url, tokens)
         print(f"{url}: {failure or 'ok'}")
         result |= failure is not None
     return int(result)
