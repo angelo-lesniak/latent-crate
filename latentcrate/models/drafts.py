@@ -8,9 +8,9 @@ import urllib.error
 from pathlib import PurePosixPath
 
 from .. import LatentCrateError
-from ..names import COMMIT_RE, RELATIVE_PATH_RE, SHA256_RE, relative_path
+from ..names import COMMIT_RE, RELATIVE_PATH_RE, relative_path
 from . import hub
-from .hub import Tokens, civitai_files, hub_json, open_url, revision_url, version_file, version_url
+from .hub import Tokens, civitai_files, civitai_record, hub_json, open_url, revision_url, version_file, version_url
 from .manifest import REPOSITORY_RE, ModelFile, ModelSet
 
 GITHUB_BLOB_RE = re.compile(r"^https://github\.com/([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)/blob/([0-9a-f]{40})/(.+)$")
@@ -26,16 +26,6 @@ def siblings_of(payload: dict) -> dict[str, dict]:
         for item in payload.get("siblings", [])
         if isinstance(item, dict) and isinstance(item.get("rfilename"), str)
     }
-
-
-def civitai_record(item: dict) -> tuple[int | None, str | None]:
-    """The byte size and lowercase SHA-256 Civitai records for a file, where
-    it records them; sizeKB is the byte count over 1024."""
-    size_kb = item.get("sizeKB")
-    size = size_kb * 1024 if isinstance(size_kb, (int, float)) and not isinstance(size_kb, bool) else None
-    digest = (item.get("hashes") or {}).get("SHA256")
-    digest = digest.lower() if isinstance(digest, str) and SHA256_RE.fullmatch(digest.lower()) else None
-    return (int(size) if size is not None and size > 0 and size == int(size) else None), digest
 
 
 def draft_civitai(version: int, tokens: Tokens) -> str:

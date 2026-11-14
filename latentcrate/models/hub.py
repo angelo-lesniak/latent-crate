@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import http.client
 import json
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
 
 from .. import LatentCrateError
+from ..names import SHA256_RE
 from .manifest import ModelFile
 
 USER_AGENT = "LatentCrate-model-set-tool/1"
@@ -18,6 +20,10 @@ CIVITAI_URL = "https://civitai.com"
 # The same API, account, and version ids behind Civitai's mature-content
 # domain; requests go to CIVITAI_URL, and the token may follow a redirect here.
 CIVITAI_RED_URL = "https://civitai.red"
+# What a redirect target may hold: printable ASCII without spaces. Anything
+# else urllib or http.client would refuse with the whole URL, signed query
+# included, in its message, or fail to encode.
+URL_CHARACTERS_RE = re.compile(r"[\x21-\x7e]+")
 REDIRECT_CODES = (301, 302, 303, 307, 308)
 MAX_REDIRECTS = 10
 
@@ -60,8 +66,13 @@ class Tokens:
     def for_url(self, url: str) -> str | None:
         """The token of the provider whose origin url is, or None: compared
         per request, so a redirect to any other host (a provider's CDN) gets none."""
-        providers = ((HUB_URL, self.huggingface), (CIVITAI_URL, self.civitai), (CIVITAI_RED_URL, self.civitai))
-        return next((token for home, token in providers if origin(url) == origin(home)), None)
+        return {"huggingface": self.huggingface, "civitai": self.civitai}.get(provider_of(url))
+
+
+def provider_of(url: str) -> str | None:
+    """The provider whose origin url is, or None."""
+    homes = (("huggingface", HUB_URL), ("civitai", CIVITAI_URL), ("civitai", CIVITAI_RED_URL))
+    return next((name for name, home in homes if origin(url) == origin(home)), None)
 
 
 def open_url(url: str, headers: dict[str, str], tokens: Tokens, *, method: str = "GET"):
@@ -69,12 +80,14 @@ def open_url(url: str, headers: dict[str, str], tokens: Tokens, *, method: str =
 
     Redirects are followed here so each hop is judged anew: the
     Authorization header is dropped when the target is another origin (the
-    Hugging Face or Civitai CDN), and a redirect off the requested URL's
-    scheme (https) is refused before anything is sent to it."""
+    Hugging Face or Civitai CDN) or another provider's than the requested
+    URL's, and a redirect off the requested URL's scheme (https) is refused
+    before anything is sent to it."""
     scheme = urllib.parse.urlsplit(url).scheme
+    requested = provider_of(url)
     for _ in range(MAX_REDIRECTS + 1):
         request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, **headers}, method=method)
-        token = tokens.for_url(url)
+        token = tokens.for_url(url) if provider_of(url) == requested else None
         if token:
             request.add_header("Authorization", f"Bearer {token}")
         try:
@@ -91,21 +104,27 @@ def open_url(url: str, headers: dict[str, str], tokens: Tokens, *, method: str =
 
 def redirect_target(url: str, location: str) -> str:
     """The absolute URL a redirect names. One urllib would not connect to as
-    parsed (whitespace, control characters, user info, a backslash, a bad
-    port) is refused here, so neither the token nor a signed query reaches
-    an error message."""
+    parsed (whitespace, control or non-ASCII characters, user info, a
+    backslash, a bad port) is refused here, so neither the token nor a
+    signed query reaches an error message."""
     try:
         target = urllib.parse.urljoin(url, location)
         origin(target)  # raises ValueError for a malformed host or port
     except ValueError:
         raise LatentCrateError(f"refusing a malformed redirect from {shown(url)}") from None
-    if (
-        any(char.isspace() or not char.isprintable() for char in target)
-        or "@" in urllib.parse.urlsplit(target).netloc
-        or "\\" in target
-    ):
+    if not URL_CHARACTERS_RE.fullmatch(target) or "@" in urllib.parse.urlsplit(target).netloc or "\\" in target:
         raise LatentCrateError(f"refusing a malformed redirect from {shown(url)}")
     return target
+
+
+def civitai_record(item: dict) -> tuple[int | None, str | None]:
+    """The byte size and lowercase SHA-256 Civitai records for a file, where
+    it records them; sizeKB is the byte count over 1024."""
+    size_kb = item.get("sizeKB")
+    size = size_kb * 1024 if isinstance(size_kb, (int, float)) and not isinstance(size_kb, bool) else None
+    digest = (item.get("hashes") or {}).get("SHA256")
+    digest = digest.lower() if isinstance(digest, str) and SHA256_RE.fullmatch(digest.lower()) else None
+    return (int(size) if size is not None and size > 0 and size == int(size) else None), digest
 
 
 def civitai_files(payload: dict) -> list[dict]:
@@ -114,8 +133,9 @@ def civitai_files(payload: dict) -> list[dict]:
 
 def version_file(version: int, payload: dict, file_id: int | None = None) -> dict:
     """The file of a Civitai version record with id file_id, or without one
-    the file it marks primary, or its only file. Names come from the
-    uploader, so they are shown quoted."""
+    the file it marks primary, or its only file. Without either, the
+    refusal lists every file for the author to choose one as civitai_file;
+    names come from the uploader, so they are shown quoted."""
     files = civitai_files(payload)
     if file_id is not None:
         chosen = [item for item in files if item.get("id") == file_id]
@@ -124,8 +144,12 @@ def version_file(version: int, payload: dict, file_id: int | None = None) -> dic
         return chosen[0]
     primary = files if len(files) == 1 else [item for item in files if item.get("primary") is True]
     if len(primary) != 1:
-        names = ", ".join(repr(item.get("name")) for item in files) or "none"
-        raise LatentCrateError(f"Civitai model version {version} has no single primary file: {names}")
+        listed = ", ".join(
+            f"{item.get('id')!r} {item.get('name')!r} ({civitai_record(item)[0] or 'unknown'} bytes)" for item in files
+        )
+        raise LatentCrateError(
+            f"Civitai model version {version} has no single primary file; name one as civitai_file: {listed or 'none'}"
+        )
     return primary[0]
 
 
@@ -191,8 +215,10 @@ def hub_json(url: str, tokens: Tokens) -> dict:
             payload = json.load(response)
     except urllib.error.HTTPError as error:
         raise LatentCrateError(f"{provider} returned HTTP {error.code} for {shown(url)}") from error
-    except (OSError, http.client.HTTPException, ValueError) as error:
+    except (OSError, http.client.HTTPException) as error:
         raise LatentCrateError(f"could not query {provider}: {error}") from error
+    except (json.JSONDecodeError, UnicodeDecodeError) as error:
+        raise LatentCrateError(f"{provider} answered {shown(url)} with something other than JSON") from error
     if not isinstance(payload, dict):
         raise LatentCrateError(f"unexpected {provider} response for {shown(url)}")
     return payload

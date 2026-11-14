@@ -60,7 +60,9 @@ A verified file gets a stamp beside it, `<file>.latentcrate-verified`,
 recording its SHA-256, size, and modification time. `status` and
 `fetch` trust the stamp while the size and time match, so a library is
 hashed once; `status --verify` hashes every file again, which is the
-check after a file was swapped in place.
+check after a file was swapped in place; for a file without a pinned
+`sha256` the reference is its stamp, which the container can rewrite
+with the file.
 
 `check` validates the selected manifests offline. `check --remote`
 compares each pinned file's size (and checksum, for LFS files) with the
@@ -88,13 +90,14 @@ A `[[file]]` entry may name `civitai_version`, the number in
 `https://civitai.com/api/download/models/<version>`, in place of
 `repository`, `revision`, and `source`. The package builds that URL and
 saves the version's primary file, or the one `civitai_file` names, at
-`destination`; the file name Civitai offers is ignored. Version ids and accounts are shared with
-`civitai.red` and `civitai.com` serves
-the API for both. `models draft civitai:<version>` prints the entry with
-the size and checksum from Civitai's record, lists the version's other
-files with their ids as comments, and refuses a version without a single
-primary file, naming its files. A file the creator
-limits to signed-in accounts needs `CIVITAI_TOKEN` in `.env`.
+`destination`; the file name Civitai offers is ignored. `civitai.red`
+shares ids and accounts; requests go to `civitai.com`. `models draft
+civitai:<version>` prints the entry with the size and checksum from
+Civitai's record, lists the version's other files with their ids as
+comments, and refuses a version without a single primary file, naming
+its files. A file the creator limits to signed-in
+accounts needs `CIVITAI_TOKEN` in `.env`;
+[Privacy](privacy.md#what-runs-where) owns where the token goes.
 
 Before adding a Civitai file, weigh its risks:
 
@@ -106,10 +109,6 @@ Before adding a Civitai file, weigh its risks:
   model page is edited in place, so only a private set may name
   `https://civitai.com/models/<id>` as its license; keep any file whose
   license is not clear in a [private set](#private-sets).
-- Civitai redirects the download to a CDN host, which receives the
-  request without the token.
-
-[Privacy](privacy.md#what-runs-where) owns where each token goes.
 
 ## Manifest keys
 

@@ -3,17 +3,20 @@
 from __future__ import annotations
 
 import contextlib
+import email.message
 import hashlib
 import http.server
 import io
 import json
 import os
 import shutil
+import socket
 import tempfile
 import threading
 import tomllib
 import types
 import unittest
+import urllib.error
 from pathlib import Path
 from unittest import mock
 
@@ -176,6 +179,30 @@ class ModelSetTests(unittest.TestCase):
         self.addCleanup(setattr, hub, "HUB_URL", hub.HUB_URL)
         hub.HUB_URL = f"http://127.0.0.1:{port}"
 
+    def serve_links(self) -> list[tuple[str, str, str | None]]:
+        """Answer the HEAD of every workflow and license link from a local
+        server that is no provider's origin, 404 for a LICENSE; return its
+        (method, path, Authorization) requests."""
+        requests: list[tuple[str, str, str | None]] = []
+
+        def respond(handler):
+            requests.append((handler.command, handler.path, handler.headers.get("Authorization")))
+            handler.send_response(404 if handler.path.endswith("/LICENSE") else 200)
+            handler.end_headers()
+
+        port = self.serve(respond)
+        real_open_url = hub.open_url
+
+        def open_locally(url, headers, tokens, *, method):
+            """Send a link check to the local server, keeping its path."""
+            host = "/".join(url.split("/", 3)[:3])
+            return real_open_url(url.replace(host, f"http://127.0.0.1:{port}", 1), headers, tokens, method=method)
+
+        patcher = mock.patch.object(drafts, "open_url", open_locally)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        return requests
+
     def use_free_space(self, free: int) -> None:
         """Make shutil.disk_usage, which the free-space check consults, report `free` bytes."""
         self.addCleanup(setattr, shutil, "disk_usage", REAL_DISK_USAGE)
@@ -245,6 +272,20 @@ class ModelSetTests(unittest.TestCase):
         for pattern, body in refusals.items():
             with self.subTest(pattern=pattern), self.assertRaisesRegex(LatentCrateError, pattern):
                 self.read(body)
+
+    def test_a_destination_may_not_take_a_name_the_library_reserves(self):
+        for destination in (
+            ".latentcrate-model-set.lock",
+            "loras/.latentcrate-downloads/x.bin",
+            "loras/x.bin.latentcrate-verified",
+            "loras/.latentcrate-verified",
+        ):
+            with self.subTest(destination=destination), self.assertRaises(LatentCrateError) as refusal:
+                self.read(MANIFEST_HEAD + file_row("a", destination))
+            self.assertEqual(
+                str(refusal.exception),
+                f"fixture: file 1 destination uses a name LatentCrate reserves: {destination}",
+            )
 
     def test_a_private_set_may_leave_the_pins_out_and_a_shipped_set_may_not(self):
         row = file_row("weights/model.bin", "diffusion_models/model.bin")
@@ -502,66 +543,200 @@ class ModelSetTests(unittest.TestCase):
             with self.subTest(url=url):
                 self.assertEqual(tokens.for_url(url), token)
 
-    def test_a_civitai_version_downloads_with_its_token_and_the_cdn_gets_none(self):
+    def test_a_token_goes_only_to_the_provider_the_request_started_at(self):
+        seen: dict[str, list[str | None]] = {"hub": [], "civitai": [], "other": []}
+
+        def host(name):
+            def respond(handler):
+                seen[name].append(handler.headers.get("Authorization"))
+                target = {"/to-hub": hub.HUB_URL, "/to-civitai": hub.CIVITAI_URL}.get(handler.path)
+                handler.send_response(302 if target else 200)
+                if target:
+                    handler.send_header("Location", f"{target}/end")
+                handler.end_headers()
+
+            return self.serve(respond)
+
+        self.use_hub(host("hub"))
+        self.use_civitai(host("civitai"))
+        other = f"http://127.0.0.1:{host('other')}"
+        tokens = models.Tokens(TOKEN, CIVITAI_TOKEN)
+        cases = [
+            (f"{hub.HUB_URL}/to-civitai", {"hub": [f"Bearer {TOKEN}"], "civitai": [None], "other": []}),
+            (f"{hub.CIVITAI_URL}/to-hub", {"hub": [None], "civitai": [f"Bearer {CIVITAI_TOKEN}"], "other": []}),
+            (f"{other}/to-hub", {"hub": [None], "civitai": [], "other": [None]}),
+            (f"{other}/to-civitai", {"hub": [], "civitai": [None], "other": [None]}),
+        ]
+        for url, expected in cases:
+            with self.subTest(url=url):
+                for requests in seen.values():
+                    requests.clear()
+                hub.open_url(url, {}, tokens).close()
+                self.assertEqual(seen, expected)
+
+    def test_a_redirect_from_https_to_http_is_refused_before_any_request(self):
+        headers = email.message.Message()
+        headers["Location"] = "http://cdn.example/file?X-Signature=signed-secret"
+        found = urllib.error.HTTPError("https://civitai.com/x", 302, "Found", headers, None)
+        with (
+            mock.patch.object(hub.OPENER, "open", side_effect=found) as opened,
+            self.assertRaises(LatentCrateError) as refusal,
+        ):
+            hub.open_url("https://civitai.com/x", {}, models.Tokens(TOKEN, CIVITAI_TOKEN))
+        self.assertEqual(str(refusal.exception), "refusing a redirect away from https: http://cdn.example/file")
+        self.assertEqual(opened.call_count, 1)
+
+    def test_a_redirect_loop_stops_at_the_cap_without_the_signed_query(self):
+        requests: list[str] = []
+
+        def respond(handler):
+            requests.append(handler.path)
+            # Past the cap the loop ends, so a missing cap shows as a download, not a hang.
+            if len(requests) > hub.MAX_REDIRECTS + 5:
+                serve_bytes(handler, b"x")
+                return
+            handler.send_response(302)
+            handler.send_header("Location", "/loop?X-Signature=signed-secret")
+            handler.end_headers()
+
+        self.use_civitai(self.serve(respond))
+        with self.assertRaises(LatentCrateError) as refusal:
+            hub.open_url(f"{hub.CIVITAI_URL}/start", {}, models.Tokens(None, CIVITAI_TOKEN))
+        self.assertEqual(str(refusal.exception), f"too many redirects for {hub.CIVITAI_URL}/loop")
+        self.assertEqual(len(requests), hub.MAX_REDIRECTS + 1)
+
+    def test_host_failures_name_neither_the_token_nor_a_signed_query(self):
+        model_set, model_file = self.fixture_set()
+        closed = socket.socket()
+        closed.bind(("127.0.0.1", 0))
+        unreachable = f"http://127.0.0.1:{closed.getsockname()[1]}"
+        closed.close()
+        cdn = {
+            "/500": lambda handler: handler.send_response(500) or handler.end_headers(),
+            "/text": lambda handler: serve_bytes(handler, b"<html>not json</html>"),
+            "/list": lambda handler: serve_bytes(handler, b"[]"),
+        }
+        cdn_url = f"http://localhost:{self.serve(lambda handler: cdn[handler.path.partition('?')[0]](handler))}"
+        target: list[str] = []
+
+        def hub_server(handler):
+            handler.send_response(302)
+            handler.send_header("Location", f"{target[0]}?X-Signature=signed-secret")
+            handler.end_headers()
+
+        self.use_hub(self.serve(hub_server))
+        revision = hub.revision_url(model_file.repository, COMMIT)
+        where = model_file.origin
+        cases = [
+            (
+                f"{cdn_url}/500",
+                lambda: hub.check_access(model_file, models.Tokens(TOKEN)),
+                f"^Hugging Face returned HTTP 500 for {where}$",
+            ),
+            (
+                unreachable,
+                lambda: hub.check_access(model_file, models.Tokens(TOKEN)),
+                f"^could not reach Hugging Face for {where}: ",
+            ),
+            (
+                f"{cdn_url}/500",
+                lambda: hub.hub_json(revision, models.Tokens(TOKEN)),
+                f"^Hugging Face returned HTTP 500 for {hub.HUB_URL}/api/models/",
+            ),
+            (
+                f"{cdn_url}/text",
+                lambda: hub.hub_json(revision, models.Tokens(TOKEN)),
+                f"^Hugging Face answered {hub.HUB_URL}/api/models/.* with something other than JSON$",
+            ),
+            (
+                f"{cdn_url}/list",
+                lambda: hub.hub_json(revision, models.Tokens(TOKEN)),
+                f"^unexpected Hugging Face response for {hub.HUB_URL}/api/models/",
+            ),
+            (unreachable, lambda: hub.hub_json(revision, models.Tokens(TOKEN)), "^could not query Hugging Face: "),
+        ]
+        for location, call, pattern in cases:
+            with self.subTest(location=location, pattern=pattern):
+                target[:] = [location]
+                with self.assertRaisesRegex(LatentCrateError, pattern) as refusal:
+                    call()
+                self.assertNotIn("signed-secret", str(refusal.exception))
+                self.assertNotIn(TOKEN, str(refusal.exception))
+
+    def civitai_download_chain(self):
+        """Fetch a Civitai file through civitai.com, a 307 to civitai.red, and a
+        307 to a CDN that offers its own file name; return what each host saw
+        and the files left on disk."""
         content = b"small civitai model"
-        model_set, model_file = self.civitai_set(content)
-        cdn_requests: list[tuple[str, str | None]] = []
-        agents: set[str | None] = set()
+        model_set, _ = self.civitai_set(content)
+        seen = types.SimpleNamespace(civitai=[], civitai_download=[], red=[], cdn=[], hub=[])
+
+        def record(requests, handler):
+            requests.append((handler.path, handler.headers.get("Authorization"), handler.headers.get("User-Agent")))
 
         def cdn(handler):
-            cdn_requests.append((handler.path, handler.headers.get("Authorization")))
-            agents.add(handler.headers.get("User-Agent"))
+            record(seen.cdn, handler)
             serve_bytes(
                 handler, content, extra_headers={"Content-Disposition": 'attachment; filename="../../evil.bin"'}
             )
 
         cdn_url = f"http://localhost:{self.serve(cdn)}"
-        red_requests: list[tuple[str, str | None]] = []
 
         def red(handler):
-            red_requests.append((handler.path, handler.headers.get("Authorization")))
+            record(seen.red, handler)
             handler.send_response(307)
             handler.send_header("Location", f"{cdn_url}/file?X-Signature=signed")
             handler.end_headers()
 
-        # Civitai's mature-content host shares the account, so the token follows a redirect there.
         self.addCleanup(setattr, hub, "CIVITAI_RED_URL", hub.CIVITAI_RED_URL)
         hub.CIVITAI_RED_URL = f"http://127.0.0.1:{self.serve(red)}"
-        civitai_requests: list[tuple[str, str | None]] = []
 
         def civitai(handler):
-            agents.add(handler.headers.get("User-Agent"))
+            record(seen.civitai_download, handler)
             handler.send_response(307)
             handler.send_header("Location", f"{hub.CIVITAI_RED_URL}{handler.path}")
             handler.end_headers()
 
-        hub_requests: list[str] = []
-        self.use_hub(self.serve(lambda handler: hub_requests.append(handler.path)))
-        self.serve_civitai(civitai, civitai_requests)
+        self.use_hub(self.serve(lambda handler: record(seen.hub, handler)))
+        self.serve_civitai(civitai, seen.civitai)
         with tempfile.TemporaryDirectory() as directory:
             models_root = Path(directory) / "models"
             models_root.mkdir()
             self.fetch(model_set, models_root, TOKEN, civitai=CIVITAI_TOKEN)
-            self.assertEqual((models_root / model_file.destination).read_bytes(), content)
-            # The server's file name is never used.
-            self.assertEqual(
-                sorted(str(path.relative_to(directory)) for path in Path(directory).rglob("*") if path.is_file()),
-                ["models/loras/style.safetensors", "models/loras/style.safetensors.latentcrate-verified"],
+            seen.content = (models_root / "loras/style.safetensors").read_bytes()
+            seen.files = sorted(
+                str(path.relative_to(directory)) for path in Path(directory).rglob("*") if path.is_file()
             )
-        self.assertTrue(civitai_requests and cdn_requests)
-        # The primary file is asked for by id, so the account's file preferences cannot pick another.
+        return seen
+
+    def test_a_civitai_download_sends_its_token_to_civitai_and_civitai_red_only(self):
+        seen = self.civitai_download_chain()
+        self.assertEqual({token for _, token in seen.civitai}, {f"Bearer {CIVITAI_TOKEN}"})
+        # Civitai's mature-content host shares the account, so the token follows a redirect there.
+        self.assertEqual({token for _, token, _ in seen.red}, {f"Bearer {CIVITAI_TOKEN}"})
+        self.assertEqual(seen.hub, [])
+
+    def test_the_civitai_cdn_gets_no_token(self):
+        seen = self.civitai_download_chain()
+        self.assertEqual({(path, token) for path, token, _ in seen.cdn}, {("/file?X-Signature=signed", None)})
+
+    def test_a_civitai_file_is_asked_for_by_id_and_the_name_the_server_offers_is_ignored(self):
+        seen = self.civitai_download_chain()
+        # By id, so the account's file preferences cannot pick another file.
         self.assertEqual(
-            set(civitai_requests),
-            {
-                (f"/api/v1/model-versions/{VERSION}", f"Bearer {CIVITAI_TOKEN}"),
-                (f"/api/download/models/{VERSION}?fileId=9", f"Bearer {CIVITAI_TOKEN}"),
-            },
+            sorted({path for path, _ in seen.civitai}),
+            [f"/api/download/models/{VERSION}?fileId=9", f"/api/v1/model-versions/{VERSION}"],
         )
-        self.assertEqual(set(red_requests), {(f"/api/download/models/{VERSION}?fileId=9", f"Bearer {CIVITAI_TOKEN}")})
-        self.assertEqual(set(cdn_requests), {("/file?X-Signature=signed", None)})
-        self.assertEqual(hub_requests, [])
+        self.assertEqual(seen.content, b"small civitai model")
+        self.assertEqual(
+            seen.files, ["models/loras/style.safetensors", "models/loras/style.safetensors.latentcrate-verified"]
+        )
+
+    def test_every_hop_sends_the_package_user_agent(self):
+        seen = self.civitai_download_chain()
         # Cloudflare in front of Civitai refuses urllib's default agent.
-        self.assertEqual(agents, {hub.USER_AGENT})
+        self.assertTrue(seen.civitai_download and seen.red and seen.cdn)
+        self.assertEqual({agent for _, _, agent in seen.civitai_download + seen.red + seen.cdn}, {hub.USER_AGENT})
 
     def test_civitai_file_downloads_that_file_of_the_version(self):
         content = b"small civitai model"
@@ -582,6 +757,28 @@ class ModelSetTests(unittest.TestCase):
             self.assertRaisesRegex(LatentCrateError, f"^Civitai model version {VERSION} has no file 7$"),
         ):
             self.fetch(models.ModelSet(**{**model_set.__dict__, "files": (missing,)}), Path(directory), None)
+
+    def test_a_civitai_file_without_a_positive_integer_id_is_refused_before_downloading(self):
+        model_set, _ = self.civitai_set()
+        requests: list[str] = []
+
+        def respond(handler):
+            requests.append(handler.path)
+            serve_json(handler, {"files": [file]})
+
+        self.use_civitai(self.serve(respond))
+        for file in ({"primary": True}, {"id": True}, {"id": 0}, {"id": -9}, {"id": "9"}):
+            requests.clear()
+            with self.subTest(file=file), tempfile.TemporaryDirectory() as directory:
+                with self.assertRaisesRegex(
+                    LatentCrateError, f"^Civitai names no file id for the primary file of model version {VERSION}$"
+                ):
+                    self.fetch(model_set, Path(directory), None)
+                self.assertEqual(requests, [f"/api/v1/model-versions/{VERSION}"])
+        # Only `primary: true` marks the primary file.
+        self.assertEqual(
+            hub.version_file(VERSION, {"files": [{"id": 8, "primary": 1}, {"id": 9, "primary": True}]})["id"], 9
+        )
 
     def test_a_civitai_redirect_off_its_scheme_is_refused_without_the_signed_query(self):
         model_set, _ = self.civitai_set()
@@ -610,6 +807,10 @@ class ModelSetTests(unittest.TestCase):
             "http://[::1/f?X-Signature=signed-secret",
             "http://evil.example\\@127.0.0.1/f?X-Signature=signed-secret",
             "http://user@cdn.example/f?X-Signature=signed-secret",
+            "/f\\g?X-Signature=signed-secret",
+            # http.client would refuse it with the whole URL in its message.
+            "/f\x01?X-Signature=signed-secret",
+            "/f\u00e9?X-Signature=signed-secret",
         ]
 
         def civitai(handler):
@@ -1107,6 +1308,17 @@ class ModelSetTests(unittest.TestCase):
                 self.assertEqual(self.status(model_set, models_root, verify=True), 1)
         self.assertEqual((hashing.call_count, requests), (0, []))
 
+    def test_a_stopped_download_without_a_pinned_size_says_the_next_fetch_starts_over(self):
+        model_set, model_file = self.unpinned_set()
+        self.use_hub(self.serve(lambda handler: serve_bytes(handler, b"private model", send_only=3)))
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(
+                LatentCrateError,
+                f"^download of {model_file.destination} stopped after 3 of 13 bytes; "
+                "run models fetch again to start over$",
+            ):
+                self.fetch(model_set, Path(directory), None)
+
     def test_a_server_that_names_no_size_for_an_unpinned_file_is_refused_before_a_byte_lands(self):
         model_set, model_file = self.unpinned_set()
 
@@ -1305,13 +1517,16 @@ class ModelSetTests(unittest.TestCase):
                 models.draft(spec, models.Tokens())
 
     def test_a_civitai_draft_refuses_ambiguity_and_leaves_unsafe_or_missing_fields_to_fill(self):
-        self.civitai_api({"files": [{"name": "a.safetensors"}, {"name": "b\x1b[2J.safetensors"}]})
-        with self.assertRaisesRegex(
-            LatentCrateError,
-            f"^Civitai model version {VERSION} has no single primary file: "
-            r"'a.safetensors', 'b\\x1b\[2J.safetensors'$",
-        ):
+        self.civitai_api(
+            {"files": [{"id": 8, "name": "a.safetensors", "sizeKB": 1.0}, {"id": 9, "name": "b\x1b[2J.safetensors"}]}
+        )
+        with self.assertRaises(LatentCrateError) as refusal:
             models.draft(f"civitai:{VERSION}", models.Tokens())
+        self.assertEqual(
+            str(refusal.exception),
+            f"Civitai model version {VERSION} has no single primary file; name one as civitai_file: "
+            r"8 'a.safetensors' (1024 bytes), 9 'b\x1b[2J.safetensors' (unknown bytes)",
+        )
 
         self.civitai_api({"files": [{"name": 'my "lora"\n.safetensors', "sizeKB": 0.3, "hashes": {"SHA256": "X"}}]})
         text = models.draft(f"civitai:{VERSION}", models.Tokens())
@@ -1325,18 +1540,19 @@ class ModelSetTests(unittest.TestCase):
         model_set = models.ModelSet(**{**model_set.__dict__, "files": (model_file, other)})
         record = {"primary": True, "sizeKB": model_file.size / 1024, "hashes": {"SHA256": model_file.sha256.upper()}}
         requests = self.civitai_api({"files": [record]})
-        with (
-            mock.patch.object(drafts, "link_failure", return_value=None),
-            contextlib.redirect_stdout(io.StringIO()) as output,
-        ):
+        links = self.serve_links()
+        with contextlib.redirect_stdout(io.StringIO()) as output:
             self.assertEqual(models.check([model_set], models.Tokens(TOKEN, CIVITAI_TOKEN), remote=True), 1)
         self.assertEqual(
-            output.getvalue().splitlines()[1:3],
+            output.getvalue().splitlines()[1:],
             [
                 f"civitai:{VERSION} loras/style.safetensors: ok",
                 f"civitai:{VERSION} loras/copy.safetensors: remote sha256 {model_file.sha256}, manifest {'f' * 64}",
+                f"{WORKFLOW_URL}: ok",
+                f"{LICENSE_URL}: HTTP 404",
             ],
         )
+        self.assertEqual({token for _, _, token in links}, {None})
         self.assertEqual(requests, [(f"/api/v1/model-versions/{VERSION}", f"Bearer {CIVITAI_TOKEN}")])
         unpinned = models.ModelFile(**{**model_file.__dict__, "size": None, "sha256": None})
         self.assertIsNone(drafts.civitai_mismatch(unpinned, {"files": [{"sizeKB": 1.0}]}))
@@ -1363,6 +1579,10 @@ class ModelSetTests(unittest.TestCase):
             drafts.remote_mismatch(sized, siblings), f"remote size {remote['size']}, manifest {sized.size}"
         )
         self.assertEqual(drafts.remote_mismatch(unpinned, {}), "missing from the repository at the pinned revision")
+        same_size = {model_file.source: {**remote, "size": model_file.size}}
+        self.assertEqual(
+            drafts.remote_mismatch(model_file, same_size), f"remote sha256 {'f' * 64}, manifest {model_file.sha256}"
+        )
 
     def test_check_reports_offline_and_compares_with_the_hub_remotely(self):
         model_set, model_file = self.fixture_set()
@@ -1384,35 +1604,20 @@ class ModelSetTests(unittest.TestCase):
 
         def respond(handler):
             requests.append((handler.command, handler.path, handler.headers.get("Authorization")))
-            if handler.path.startswith("/api/models/"):
-                serve_json(
-                    handler,
-                    {
-                        "siblings": [
-                            {
-                                "rfilename": model_file.source,
-                                "size": model_file.size,
-                                "lfs": {"sha256": model_file.sha256},
-                            },
-                            {"rfilename": other.source, "size": other.size + 1, "lfs": {"sha256": other.sha256}},
-                            {"rfilename": plain.source, "size": plain.size},
-                        ]
-                    },
-                )
-                return
-            handler.send_response(404 if handler.path.endswith("/LICENSE") else 200)
-            handler.end_headers()
+            serve_json(
+                handler,
+                {
+                    "siblings": [
+                        {"rfilename": model_file.source, "size": model_file.size, "lfs": {"sha256": model_file.sha256}},
+                        {"rfilename": other.source, "size": other.size + 1, "lfs": {"sha256": other.sha256}},
+                        {"rfilename": plain.source, "size": plain.size},
+                    ]
+                },
+            )
 
-        port = self.serve(respond)
-        self.use_hub(port)
-        real_open_url = hub.open_url
-
-        def open_locally(url, headers, tokens, *, method):
-            """Send the link checks to the local server, keeping their path."""
-            host = "/".join(url.split("/", 3)[:3])
-            return real_open_url(url.replace(host, f"http://127.0.0.1:{port}", 1), headers, tokens, method=method)
-
-        with mock.patch.object(drafts, "open_url", open_locally), contextlib.redirect_stdout(io.StringIO()) as output:
+        self.use_hub(self.serve(respond))
+        links = self.serve_links()
+        with contextlib.redirect_stdout(io.StringIO()) as output:
             self.assertEqual(models.check([model_set], models.Tokens(TOKEN), remote=True), 1)
 
         self.assertEqual(
@@ -1427,11 +1632,14 @@ class ModelSetTests(unittest.TestCase):
             ],
         )
         self.assertEqual(
-            requests,
+            requests, [("GET", f"/api/models/example/models/revision/{COMMIT}?blobs=true", f"Bearer {TOKEN}")]
+        )
+        # A GitHub blob is checked as its raw file; neither link is a provider's origin, so neither gets a token.
+        self.assertEqual(
+            links,
             [
-                ("GET", f"/api/models/example/models/revision/{COMMIT}?blobs=true", f"Bearer {TOKEN}"),
-                ("HEAD", f"/Comfy-Org/workflow_templates/{COMMIT}/templates/fixture.json", f"Bearer {TOKEN}"),
-                ("HEAD", f"/example/model/blob/{COMMIT}/LICENSE", f"Bearer {TOKEN}"),
+                ("HEAD", f"/Comfy-Org/workflow_templates/{COMMIT}/templates/fixture.json", None),
+                ("HEAD", f"/example/model/blob/{COMMIT}/LICENSE", None),
             ],
         )
 

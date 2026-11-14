@@ -1,19 +1,17 @@
 # LatentCrate
 
-Pinned ComfyUI containers for Docker and Podman.
+ComfyUI on your NVIDIA GPU, in a container that does not break when a
+custom node updates.
 
-LatentCrate runs ComfyUI in a container on an NVIDIA GPU. Every component
-version is one line in [`pins.env`](pins.env): ComfyUI, its frontend, the
-PyTorch and CUDA images, FFmpeg, TorchCodec, SageAttention. Nothing installs
-or updates when the container starts, so the image you tested is the image
-you run; a different version is a changed pin and a rebuild. Workflows,
-models, and outputs stay in directories on your host that you choose.
+Node dependencies are built into the image, so nothing installs at start
+and what worked yesterday works today. One command fetches every model a
+shipped official workflow needs, checksum-verified; one command installs a
+pinned set of popular custom nodes. Workflows, models and outputs stay in
+folders you choose.
 
-Compared with a desktop ComfyUI installer, LatentCrate costs a long first
-build and a container engine, and gives you pinned versions, third-party
-node dependencies built into the image instead of installed at start, a
-frontend you can swap or build from a fork, and verified model downloads for
-official workflows.
+The cost: a long first build and a container engine. The return: a
+reproducible setup and a swappable frontend; [Privacy](docs/privacy.md)
+says what can still leave your machine.
 
 LatentCrate is an unofficial community project. It is not affiliated with
 Comfy Org, NVIDIA, Docker, or Podman.
@@ -106,8 +104,8 @@ have passed the validation procedures and which have not.
 
 ## Privacy
 
-The UI binds to `127.0.0.1`, and the Hugging Face token reaches only the
-Hub, from the host. ComfyUI Manager and third-party nodes run code you did
+The UI binds to `127.0.0.1`, and `HF_TOKEN` and `CIVITAI_TOKEN` reach only
+their own provider's hosts, from the host. ComfyUI Manager and third-party nodes run code you did
 not review, inside the container but with your data mounted. [Privacy](docs/privacy.md)
 says what runs where, what the defaults do not prevent, and how strict mode
 closes the frontend's internet access.

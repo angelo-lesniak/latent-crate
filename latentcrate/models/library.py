@@ -16,12 +16,7 @@ from pathlib import Path, PurePosixPath
 from .. import LatentCrateError
 from ..files import write_atomic
 from ..names import SHA256_RE
-from .manifest import ModelFile
-
-# Written beside a file once its checksum matched; see file_state.
-STAMP_SUFFIX = ".latentcrate-verified"
-LOCK_NAME = ".latentcrate-model-set.lock"
-STAGING_NAME = ".latentcrate-downloads"
+from .manifest import LOCK_NAME, STAGING_NAME, STAMP_SUFFIX, ModelFile
 
 
 def sha256_file(path: Path) -> str:

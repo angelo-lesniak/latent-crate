@@ -465,7 +465,7 @@ COMMANDS = (
         "up",
         "[--sage mode] [--detach] [--timeout seconds] [--model-set name]... "
         "[--frontend-dist dir | --frontend-source dir]",
-        "Build the image if needed, start ComfyUI, and return once it is healthy or has failed.",
+        "Build the image if needed, start ComfyUI, and follow its logs once it is healthy; --detach returns instead.",
         RUN | {"--frontend-dist": DIRECTORY, "--frontend-source": DIRECTORY},
         cmd_up,
         exclusive=(("--frontend-dist", "--frontend-source"),),

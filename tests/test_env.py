@@ -295,6 +295,27 @@ class SettingsTests(unittest.TestCase):
         emptied = env.load(self.tmp, {"HF_TOKEN": "", "CIVITAI_TOKEN": ""})
         self.assertEqual((emptied.hf_token, emptied.civitai_token), (None, None))
 
+    def test_a_token_with_a_character_no_header_takes_is_refused_by_its_key_alone(self) -> None:
+        # `CIVITAI_TOKEN="$(cat key.txt)"` from a CRLF file keeps the CR.
+        secret = "s3cret"
+        for value in (f"{secret}\r", f"{secret}\n", f"{secret} x", f"{secret}\x01", f"{secret}é"):
+            for key in env.TOKEN_KEYS:
+                with self.subTest(key=key, value=value, source="shell"):
+                    with self.assertRaises(LatentCrateError) as refusal:
+                        env.load(self.tmp, {key: value})
+                    self.assertEqual(
+                        str(refusal.exception),
+                        f"{key} holds a space, line break, or other character no token has; paste it again",
+                    )
+        for key in env.TOKEN_KEYS:
+            for line in (f'{key}="{secret} x"', f"{key}={secret}\x01"):
+                with self.subTest(line=line, source=".env"):
+                    self.write_env(line + "\n")
+                    with self.assertRaises(LatentCrateError) as refusal:
+                        env.load(self.tmp, {})
+                    self.assertNotIn(secret, str(refusal.exception))
+                    self.assertTrue(str(refusal.exception).startswith(f"{key} holds"))
+
     def test_the_tokens_leave_this_process_so_no_subprocess_inherits_them(self) -> None:
         self.write_env("COMFY_PORT=4208\n")
         for key in env.TOKEN_KEYS:

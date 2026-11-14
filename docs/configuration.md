@@ -7,15 +7,9 @@ them.
 
 ## Settings
 
-`.env.example` is the settings reference: every setting, its default, and
-the command that applies a change. Precedence is a shell variable for one
-command, then `.env`, then `.env.example`. `bash bin/latentcrate init`
-creates `.env` with mode `0600`; the file must stay owned by the calling
-user and readable by that user alone. Values are used literally: nothing
-is expanded, and a comment stays on its own line. An `.env` key that
-`.env.example` does not list is refused. See
-[Troubleshooting](troubleshooting.md#the-env-file-is-not-private) for the
-refusal texts and their remedies.
+[`.env.example`](../.env.example) is the settings reference: every
+setting, its default, the precedence, and the command that applies a
+change.
 
 ## Storage layout
 
@@ -84,7 +78,7 @@ engine and refuses a `CONTAINER_ENGINE` that names the other one, and
 
 Under WSL2 the engine client is the Linux one inside the distribution,
 not a Windows `.exe` on the interop path. See
-[Validation](validation.md#procedures) for the WSL2 differences.
+[WSL2 differences](validation.md#wsl2-differences).
 
 ## When a change takes effect
 
@@ -102,8 +96,11 @@ not a Windows `.exe` on the interop path. See
 
 ## Pins and upgrading
 
-`pins.env` is the pin reference: every pin with its meaning in the
-comments beside it.
+[`pins.env`](../pins.env) is the pin reference: every pin with its
+meaning in the comments beside it. It pins ComfyUI, its frontend, the
+PyTorch and CUDA images, FFmpeg, TorchCodec, and SageAttention; their
+other Python packages resolve from PyPI at build time, so a rebuild can
+change them, while a built image stays the one you tested.
 
 ```text
 bin/latentcrate build [--sage mode]

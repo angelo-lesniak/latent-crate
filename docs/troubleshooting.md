@@ -11,9 +11,8 @@ check; `bash bin/latentcrate logs` follows the container.
 <path> must be readable by your user only; run: chmod 600 <path>
 ```
 
-`.env` may hold `HF_TOKEN`, so another owner or a wider mode is refused.
-Run the `chmod`, or `chown` the file to yourself. See
-[Settings](configuration.md#settings) for the file's rules.
+`.env` may hold `HF_TOKEN` and `CIVITAI_TOKEN`, so another owner or a
+wider mode is refused. Run the `chmod`, or `chown` the file to yourself.
 
 ## `.env` sets a key `.env.example` does not list
 
@@ -119,7 +118,7 @@ WSL must use a Linux <engine> client inside the distribution, not <path>
 
 The Windows `.exe` on the interop path cannot run the stack. Install the
 engine inside the distribution. See
-[Validation](validation.md#procedures) for the WSL2 differences.
+[WSL2 differences](validation.md#wsl2-differences).
 
 ## Cannot use the host port
 
@@ -238,6 +237,25 @@ cannot access <repository>/<file> at <revision> (HTTP 401). For gated repositori
 The code is `401` or `403`. Accept the license on Hugging Face and set
 `HF_TOKEN` in `.env`. See [Fetch a set](models.md#fetch-a-set).
 
+## Civitai serves the file to signed-in accounts only
+
+```text
+cannot access Civitai model version <version> (HTTP 401). Civitai serves it to signed-in accounts only: set CIVITAI_TOKEN in .env.
+```
+
+The code is `401` or `403`. Set `CIVITAI_TOKEN` in `.env`. See
+[Civitai sources](models.md#civitai-sources).
+
+## A Civitai version has no single primary file
+
+```text
+Civitai model version <version> has no single primary file; name one as civitai_file: <id> '<name>' (<size> bytes), ...
+```
+
+Civitai marks none or several of the version's files primary. Set
+`civitai_file` to the id of the wanted file in the list. See
+[Manifest keys](models.md#manifest-keys).
+
 ## A file has other content
 
 ```text
@@ -252,10 +270,12 @@ never overwrites. Move it aside and fetch again. See
 
 ```text
 download of <destination> stopped after <received> of <size> bytes; run models fetch again to resume
+download of <destination> stopped after <received> of <size> bytes; run models fetch again to start over
 ```
 
 The connection ended. Run `models fetch` again; it resumes the partial
-file. See [Fetch a set](models.md#fetch-a-set).
+file, or restarts a private file without `size`. See
+[Fetch a set](models.md#fetch-a-set).
 
 ## The selected files need more free space
 
@@ -302,4 +322,4 @@ for a vulnerability, follow [SECURITY.md](../SECURITY.md) instead. Attach
 the output of `bash bin/latentcrate pins`, `doctor`, and `status`, the
 output of the failing command, the report path `smoke-gpu` printed, and
 the engine and driver versions. Remove private paths, prompts, and
-workflows, and never include `HF_TOKEN`.
+workflows, and never include `HF_TOKEN` or `CIVITAI_TOKEN`.

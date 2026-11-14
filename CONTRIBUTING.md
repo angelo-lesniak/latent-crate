@@ -30,20 +30,11 @@ copies in. `Settings.storage` in `latentcrate/env.py` is the shared list
 of host paths; `init` and `doctor` iterate it instead of naming
 directories. Each module's docstring says what it does.
 
-Third-party node requirements are installed at build time, offline, into
-an isolated tree that the runtime loads through `PYTHONPATH`, so
-wheel-provided `.pth` files are ignored (`node-deps-builder` compiles,
-`node-package-installer` installs, `services/comfy/install-node-deps.sh`
-holds the rules). Nothing installs at container start and no CUDA
-compiler enters the runtime image; a changed node means a rebuild, and
-`up` recreates the container after one.
-
-The frontend mode and the Sage mode together name the final target and
-the image tag `<repository>:<release|git|dist>[-sage]-<COMFYUI_REF>`:
-`runtime` (frontend from Git, which release mode also uses),
-`runtime-sage` (plus SageAttention), and `comfy-runtime` (no frontend;
-the dist overlay serves one). `latentcrate/variants.py` derives both;
-the Dockerfile header is the stage map.
+[Source and dependencies](docs/nodes.md#source-and-dependencies) says
+how node requirements reach the image; `services/comfy/install-node-deps.sh`
+holds the rules. `latentcrate/variants.py` derives the final target and
+the image tag ([Removal](docs/configuration.md#removal)) from the
+frontend and Sage modes; the Dockerfile header is the stage map.
 
 ## Tests
 
@@ -82,13 +73,13 @@ elsewhere:
   change takes effect, pins and upgrading, updating the checkout,
   removal; `.env.example` is the settings reference, `pins.env` the pin
   reference.
-- `docs/models.md`: model sets, Hugging Face and Civitai access and the tokens,
+- `docs/models.md`: model sets, Hugging Face and Civitai access,
   licenses, stamps, manifest keys, the templates tools and drafts.
 - `docs/nodes.md`: Manager installs, node sets, local nodes, captured
   dependencies and the policy files, SageAttention.
 - `docs/frontends.md`: the frontend modes.
-- `docs/privacy.md`: what runs where, the network and Manager defaults
-  and their limits, strict mode.
+- `docs/privacy.md`: what runs where, where each token goes, the network
+  and Manager defaults and their limits, strict mode.
 - `docs/troubleshooting.md`: observed failures, one section each.
 - `docs/validation.md#status`: the only statement of what is validated;
   procedures; WSL2 differences; known gaps.
@@ -140,8 +131,9 @@ The loaders enforce the manifest rules:
   credential-free HTTPS URL on a host in
   `config/custom-nodes/allowed-git-hosts.txt` and a full lowercase
   commit (`latentcrate/nodes.py`).
-- A model file is a Hugging Face repository at a full commit with
-  `source`, `destination`, `size`, and `sha256`; the set carries at least
+- A model file is a Hugging Face file at a full commit or a Civitai
+  version, with a `destination`; a shipped set pins its `size` and
+  `sha256`, a private set may omit them. The set carries at least
   one license with an immutable HTTPS URL and commit-pinned official
   workflow URLs (`latentcrate/models/manifest.py`).
 - Every manifest carries a one-line `description`, and names and
@@ -237,9 +229,9 @@ against its reason.
   compare sizes and hashes without a download, and stays out of the
   gate. Reconsider if the Hub drops the metadata endpoint.
 - **An `.env` key absent from `.env.example` is refused, naming
-  `.env.example`; `HF_TOKEN` is accepted.** An unlisted key is a typo or
-  an engine variable that belongs in the shell. Reconsider when a
-  documented need for pass-through appears.
+  `.env.example`; `HF_TOKEN` and `CIVITAI_TOKEN` are accepted.** An
+  unlisted key is a typo or an engine variable that belongs in the
+  shell. Reconsider when a documented need for pass-through appears.
 - **The entrypoint policy is tested by `tests/test_entrypoint.py`
   driving the real `services/comfy/entrypoint.sh` through bash.** One
   test runner. Reconsider if the entrypoint gains behavior bash under a
@@ -254,14 +246,16 @@ against its reason.
   ([Private sets](docs/models.md#private-sets)). Reconsider if a private
   set is ever shared or a record-only file is found swapped.
 - **Civitai is a source beside Hugging Face, pinned by version id, size,
-  and SHA-256, with `CIVITAI_TOKEN` sent to Civitai's own hosts only.** Many
-  LoRAs and fine-tunes exist nowhere else; the pins catch a re-upload,
-  and the per-hop host check keeps the token off the signed CDN redirect
-  ([Civitai sources](docs/models.md#civitai-sources)). Reconsider if
-  deleted or re-uploaded versions break shipped sets often, or if the
-  token leaves `civitai.com` and `civitai.red` on any path.
+  and SHA-256.** Many LoRAs and fine-tunes exist nowhere else, and the
+  pins catch a re-upload
+  ([Civitai sources](docs/models.md#civitai-sources));
+  [Privacy](docs/privacy.md#what-runs-where) says where the token goes.
+  Reconsider if deleted or re-uploaded versions break shipped sets
+  often, or if the token leaves `civitai.com` and `civitai.red` on any
+  path.
 - **`smoke-gpu` proves function, not provenance.** Provenance is proven
-  at build time by the pinned digests and commits; the smoke test
-  checks that the running image works
+  at build time by the pinned digests and commits, except the Python
+  packages that resolve from PyPI at build time; the smoke test checks
+  that the running image works
   ([Procedures](docs/validation.md#procedures)). Reconsider if a run
   shows an image that passes while built from the wrong inputs.

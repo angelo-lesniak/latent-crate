@@ -503,7 +503,8 @@ class ProjectContractTests(unittest.TestCase):
         # A tag can be moved, so every `_REF` in pins.env has its `_COMMIT`
         # beside it, and each fetch of a `_REF` is followed in the same RUN,
         # after the checkout, by a check of HEAD against that `_COMMIT`,
-        # which the stage declares. The frontend tag is the one `_REF` the
+        # which the stage declares; the check's one alternative is its
+        # failure branch, which exits, so no `|| true` can neutralise it. The frontend tag is the one `_REF` the
         # Dockerfile never fetches: release mode passes its `_COMMIT` as
         # FRONTEND_GIT_REF, which the frontend-git-builder checks.
         rule = "every git fetch of a _REF asserts the pinned _COMMIT in the same RUN"
@@ -521,8 +522,9 @@ class ProjectContractTests(unittest.TestCase):
                     self.assertIn(check, run[checkout:], f"{rule}: {name}_REF in {DOCKERFILE}")
                     self.assertRegex(
                         run[checkout:],
-                        rf"not the pinned {name}_COMMIT[^\n]*\n[^\n]*>&2; exit 1; \}}",
-                        f"{rule}: {name}_REF names both pins and exits",
+                        re.escape(check) + rf" \\\n\s*\|\| \{{ printf '[^\n|]*not the pinned {name}_COMMIT[^\n|]*\n"
+                        r"[^\n|]*>&2; exit 1; \}; \}(?: \\\n\s*&&|\Z)",
+                        f"{rule}: {name}_REF names both pins and exits, and nothing else follows the check",
                     )
                     self.assertTrue(
                         re.search(rf"^ARG {name}_COMMIT$", chunk, re.MULTILINE),
@@ -530,7 +532,11 @@ class ProjectContractTests(unittest.TestCase):
                     )
         self.assertEqual(fetched, refs - {"COMFYUI_FRONTEND_REF"}, f"{rule}: a _REF the Dockerfile never fetches")
         frontend = " ".join(stage(code(DOCKERFILE), "frontend-git-builder").split())
-        self.assertIn('test "$(git rev-parse HEAD)" = "${FRONTEND_GIT_REF}"', frontend, f"{rule}: the frontend commit")
+        self.assertRegex(
+            frontend,
+            re.escape('test "$(git rev-parse HEAD)" = "${FRONTEND_GIT_REF}"') + r" \\ && ",
+            f"{rule}: the frontend commit, followed by && alone",
+        )
 
     def test_third_party_node_packages_build_in_cuda_and_install_offline(self) -> None:
         # The copied requirement tree is rewritten and compiled in the pinned

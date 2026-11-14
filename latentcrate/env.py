@@ -36,6 +36,8 @@ from .names import COMMIT_RE, SHA256_RE
 # The model downloader's tokens: read into `Settings.hf_token` and
 # `Settings.civitai_token`, never a setting, never exported.
 TOKEN_KEYS = ("HF_TOKEN", "CIVITAI_TOKEN")
+# What an Authorization header can carry: printable ASCII without spaces.
+TOKEN_RE = re.compile(r"[\x21-\x7e]+")
 # Host paths, resolved from the repository root when relative and to their
 # real path always, so the mounts and the overlap rule see one spelling of
 # a directory.
@@ -449,6 +451,9 @@ def load(root: Path, environ: dict[str, str] | None = None) -> Settings:
     for key in TOKEN_KEYS:
         defaults.pop(key, None)
         tokens[key] = environ.pop(key, file_values.pop(key, None)) or None
+        # A token pasted from a CRLF file keeps its CR; the header would be refused mid-download.
+        if tokens[key] is not None and not TOKEN_RE.fullmatch(tokens[key]):
+            raise LatentCrateError(f"{key} holds a space, line break, or other character no token has; paste it again")
 
     values = dict(defaults)
     values.update(file_values)

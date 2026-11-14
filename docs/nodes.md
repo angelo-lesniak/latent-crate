@@ -117,25 +117,16 @@ so `SAGEATTENTION_REF` in `pins.env` stays in the 2.2 line until KJNodes
 moves; the image build and `smoke-gpu` import the same names. Set
 `global` only after representative workflows pass with `available`.
 
-Measured on the GPU host with the official MiniMax H3 image-to-video
-template (124 frames at 1344×768, one seed; the A/B row of
-[Status](validation.md#status)): SDPA 150 s, `--use-ck-attention` 93 s,
-the core Model Sparse Attention node 83 s, the KJNodes patch under
-`available` 77 s, `global` with the patch 76 s, `global` alone 71 s.
-`global` is the fastest path and looked the same as SDPA, as did every
-clip but the block-sparse one, which looked noticeably worse, so Model
-Sparse Attention is not recommended for H3. Every run peaked at 31.1–31.3 GiB of the 31.8 GiB of GPU
-memory, so the patch's lower peak did not show on this card, where the
-model fills the memory.
+`global` was fastest and matched SDPA visually; block-sparse looked
+worse ([Status](validation.md#status)).
 
-Limits: when a Sage kernel raises (an unsupported head size), ComfyUI
-v0.45.0 runs PyTorch attention for that call and logs it each time, so a
+Limits: when a Sage kernel raises (an unsupported head size), the pinned
+ComfyUI runs PyTorch attention for that call and logs it each time, so a
 model it does not support floods the log and runs slower, never crashes
 ([ComfyUI #10689](https://github.com/Comfy-Org/ComfyUI/issues/10689)).
 MiniMax H3 above about 150k tokens yields noise on the FP8 path under
 both `global` and the KJNodes patch
 ([ComfyUI #15263](https://github.com/Comfy-Org/ComfyUI/issues/15263),
 [SageAttention #388](https://github.com/thu-ml/SageAttention/issues/388));
-the shipped templates sit near 31k tokens at 124 frames, so a longer or
-larger clip is outside the tested range, and `--use-ck-attention` in
-`COMFYUI_EXTRA_ARGS` is the clean fallback.
+longer or larger clips than the templates' defaults are untested, and
+`--use-ck-attention` in `COMFYUI_EXTRA_ARGS` is the clean fallback.

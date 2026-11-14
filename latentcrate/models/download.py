@@ -65,6 +65,8 @@ def download(pending: PendingFile, tokens: Tokens) -> Path:
     if pending.state == "complete":
         return staged
     received = pending.received
+    # An unsized file's .part is never resumed (library.pending_file).
+    again = "run models fetch again to " + ("resume" if model_file.size is not None else "start over")
     headers = {"Range": f"bytes={received}-"} if received else {}
     size = model_file.size
     try:
@@ -110,13 +112,11 @@ def download(pending: PendingFile, tokens: Tokens) -> Path:
         raise LatentCrateError(f"download failed for {model_file.destination}: HTTP {error.code}") from error
     except (OSError, http.client.HTTPException) as error:
         raise LatentCrateError(
-            f"download of {model_file.destination} stopped after {received} of {size} bytes ({error}); "
-            "run models fetch again to resume"
+            f"download of {model_file.destination} stopped after {received} of {size} bytes ({error}); {again}"
         ) from error
     if received < size:
         raise LatentCrateError(
-            f"download of {model_file.destination} stopped after {received} of {size} bytes; "
-            "run models fetch again to resume"
+            f"download of {model_file.destination} stopped after {received} of {size} bytes; {again}"
         )
     os.replace(part, staged)
     return staged

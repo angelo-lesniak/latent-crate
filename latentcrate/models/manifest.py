@@ -26,6 +26,12 @@ LICENSE_URL_RE = re.compile(
 # out: Cloudflare challenges its pages over HTTP/1.1, so check --remote
 # could never reach them.
 CIVITAI_MODEL_URL_RE = re.compile(r"^https://civitai\.com/models/[1-9][0-9]*$")
+# The library's own names below the models directory, which no destination
+# may take. A stamp is written beside a file once its checksum matched; see
+# library.file_state.
+STAMP_SUFFIX = ".latentcrate-verified"
+LOCK_NAME = ".latentcrate-model-set.lock"
+STAGING_NAME = ".latentcrate-downloads"
 
 
 @dataclass(frozen=True)
@@ -139,6 +145,8 @@ def read_file(raw: object, index: int, name: str, private: bool) -> ModelFile:
     hub_keys = {"repository", "revision", "source"}
     require_keys(raw, {*hub_keys, "civitai_version", "civitai_file", "destination", "size", "sha256"}, context)
     destination = relative_path(raw.get("destination"), "destination", context)
+    if any(part in (LOCK_NAME, STAGING_NAME) or part.endswith(STAMP_SUFFIX) for part in destination.split("/")):
+        raise LatentCrateError(f"{name}: file {index} destination uses a name LatentCrate reserves: {destination}")
     size = raw.get("size")
     digest = raw.get("sha256")
     version = raw.get("civitai_version")
