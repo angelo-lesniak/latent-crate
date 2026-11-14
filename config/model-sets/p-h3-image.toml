@@ -1,0 +1,54 @@
+schema = 1
+description = "PrunaAI P-H3-Image text-to-image and image-edit models (INT8 ConvRot) with the W4A8 prompt upsampler for the official ComfyUI workflows"
+workflow_urls = [
+  "https://github.com/Comfy-Org/workflow_templates/blob/c8e48bdcfc7241d7af588d20d4f924caf9d9d953/templates/image_p_h3_t2i.json",
+  "https://github.com/Comfy-Org/workflow_templates/blob/c8e48bdcfc7241d7af588d20d4f924caf9d9d953/templates/image_p_h3_image_edit.json",
+]
+
+[[license]]
+name = "MiniMax H3 Community License Agreement"
+url = "https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/42ed227ee7df40d41602854ae760620d6eb651fe/LICENSE"
+
+[[license]]
+name = "Apache License 2.0 (P-H3-Image text encoder Qwen3-VL-4B parts and prompt upsampler)"
+url = "https://huggingface.co/PrunaAI/P-H3-Image-Comfy/blob/44a0fb73f299da1bb715bdb5ff59ce3fd3c6f543/LICENSE-APACHE"
+
+[[file]]
+repository = "Comfy-Org/MiniMax-H3"
+revision = "4cc1d817b6184899b41293954329f576cb5ae86b"
+source = "diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors"
+destination = "diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors"
+size = 20970379616
+sha256 = "e889202c41dafb67b10d67b97f0d8541508036a6090af23425a5c2615d03c47a"
+
+[[file]]
+repository = "PrunaAI/P-H3-Image-Comfy"
+revision = "44a0fb73f299da1bb715bdb5ff59ce3fd3c6f543"
+source = "loras/p-h3-image_lora_bf16.safetensors"
+destination = "loras/p-h3-image_lora_bf16.safetensors"
+size = 1956195360
+sha256 = "0e9013ae2873e3415dcb7bb59a9677293bdbdb6f663e138a79bb9bdced00ea61"
+
+[[file]]
+repository = "PrunaAI/P-H3-Image-Comfy"
+revision = "44a0fb73f299da1bb715bdb5ff59ce3fd3c6f543"
+source = "text_encoders/p-h3-image_text_encoder_int8_convrot.safetensors"
+destination = "text_encoders/p-h3-image_text_encoder_int8_convrot.safetensors"
+size = 5120870504
+sha256 = "fb42c9ff0597e61729475d0b48b69b591ffe06d0b442a79dde22b14fadbe1c0f"
+
+[[file]]
+repository = "PrunaAI/P-H3-Image-Comfy"
+revision = "44a0fb73f299da1bb715bdb5ff59ce3fd3c6f543"
+source = "text_encoders/p-h3-image_prompt_upsampler_w4a8.safetensors"
+destination = "text_encoders/p-h3-image_prompt_upsampler_w4a8.safetensors"
+size = 6724096116
+sha256 = "74b206c0e3133aa0d1983fd8658c1526a53863cdcca5184538388e927f4e989b"
+
+[[file]]
+repository = "PrunaAI/P-H3-Image-Comfy"
+revision = "44a0fb73f299da1bb715bdb5ff59ce3fd3c6f543"
+source = "vae/p-h3-image_vae_int8_convrot.safetensors"
+destination = "vae/p-h3-image_vae_int8_convrot.safetensors"
+size = 3146996440
+sha256 = "583e0d43354b6b833aa9a0815a5fac831b1ef6d0c19a7eaa0616980a3dab5ffe"

@@ -42,7 +42,7 @@ every file, then downloads the files one after another. `up --model-set
 The MiniMax H3 license grants rights only inside its "Applicable
 Territory", which excludes the European Union, the United Kingdom, the
 Republic of Korea and the United States, so read the linked license
-before fetching a `minimax-h3-*` set.
+before fetching a `minimax-h3-*` or `p-h3-image` set.
 
 A gated repository needs `HF_TOKEN` in `.env`;
 [Privacy](privacy.md#what-runs-where) owns where the token goes.

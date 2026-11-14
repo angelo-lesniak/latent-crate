@@ -29,7 +29,8 @@ checkout's `pins.env` and Dockerfile.
 | 2026-11-13 | GPU host | `down` with no container of the project | pass; exit 0, no output |
 | 2026-11-13 | GPU host | writes into the models directory by ComfyUI, Manager, or the node set during the scripted run | none |
 | 2026-11-13 | GPU host | attention A/B: the official MiniMax H3 i2v template (124 frames, 1344×768, one seed) through the API per backend; wall seconds and device-wide peak GPU memory | SDPA 150 s; `--use-ck-attention` 93 s; Model Sparse Attention 83 s; KJNodes patch under `--sage available` 77 s; `--sage global` with the patch 76 s; `--sage global` alone 71 s; peak 31.1–31.3 GiB of 31.8 GiB in every run; 124 frames each; visually (maintainer): block-sparse noticeably worse, the rest indistinguishable |
-| 2026-11-14 | GPU host | UI generation: template `image_minimax_h3_image_t2i`; `image_minimax_h3_image_edit` with a reference image; `image_krea2_turbo_t2i_int8` with the `krea2_turbo_4step_rank_64_lora_comfyui` LoRA at 4 steps; `image_minimax_h3_image_t2i` with the `minimax_h3_pdmd_2nfe_comfyui` LoRA at 2 steps | pass (maintainer) |
+| 2026-11-14 | GPU host | UI: H3-Image text-to-image and edit templates, `image_minimax_h3_image_t2i` and `image_minimax_h3_image_edit` with set `minimax-h3-image-int8` | pass (maintainer) |
+| 2026-11-14 | GPU host | `models fetch p-h3-image minimax-h3-t2i`; UI: `image_p_h3_t2i` and `image_p_h3_image_edit` with set `p-h3-image`, `image_minimax_h3_t2i` with set `minimax-h3-t2i` | pass (maintainer) |
 
 ## Hosts
 
@@ -45,6 +46,7 @@ checkout's `pins.env` and Dockerfile.
 - `build --frontend-git` with a reference other than the pinned tag.
 - Dist or source mode combined with `--sage`: built in the gate's renders,
   not run on the host.
+- UI generation with the Krea 2 turbo 4-step and pDMD 2-step LoRA add-ons.
 - Workflow persistence across `down` and `up` on the pinned image.
 - A smoke on a card without the full encoder set: the smoke's NVENC step
   encodes one second with `h264_nvenc`, so it fails on a compute-only card

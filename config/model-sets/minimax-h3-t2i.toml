@@ -1,0 +1,39 @@
+schema = 1
+description = "MiniMax H3 text-to-image with the FL2VA video transformer and its 8-step Turbo LoRA for the official ComfyUI workflow"
+workflow_urls = ["https://github.com/Comfy-Org/workflow_templates/blob/c8e48bdcfc7241d7af588d20d4f924caf9d9d953/templates/image_minimax_h3_t2i.json"]
+
+[[license]]
+name = "MiniMax H3 Community License Agreement"
+url = "https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/42ed227ee7df40d41602854ae760620d6eb651fe/LICENSE"
+
+[[file]]
+repository = "Comfy-Org/MiniMax-H3"
+revision = "4cc1d817b6184899b41293954329f576cb5ae86b"
+source = "diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors"
+destination = "diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors"
+size = 20970379616
+sha256 = "e889202c41dafb67b10d67b97f0d8541508036a6090af23425a5c2615d03c47a"
+
+[[file]]
+repository = "Comfy-Org/MiniMax-H3"
+revision = "4cc1d817b6184899b41293954329f576cb5ae86b"
+source = "text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors"
+destination = "text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors"
+size = 15687142551
+sha256 = "35a88d51044231fe332301d7a62aa81e3f2cba62febeb446e2c1e3e0ef76f2c6"
+
+[[file]]
+repository = "lightx2v/Minimax-h3-Turbo"
+revision = "1a4a150fc6707329409eb52e5d75a0e987ac1928"
+source = "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors"
+destination = "loras/minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors"
+size = 1956193000
+sha256 = "2339acdf19bfe123f46b971ea35d367a84adb85de43627e1eceafa5a5b2b111e"
+
+[[file]]
+repository = "Comfy-Org/MiniMax-H3"
+revision = "4cc1d817b6184899b41293954329f576cb5ae86b"
+source = "vae/minimax_h3_video_vae_fp16.safetensors"
+destination = "vae/minimax_h3_video_vae_fp16.safetensors"
+size = 5207808496
+sha256 = "7c1f131492e7eddacaac9069a61b81bdd39de5cc96561e677c5eab1cdce5e522"
