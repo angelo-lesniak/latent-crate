@@ -1,27 +1,8 @@
+# Docker Engine: the supplementary group that owns shared or NAS model
+# storage, since Docker maps no host group into the container. bin/latentcrate
+# exports HOST_MODEL_GID from .env, or the calling user's group when .env
+# leaves it unset.
 services:
   comfy:
-    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     group_add:
-      - "${HOST_MODEL_GID:-1000}"
-  node-deps-snapshot:
-    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
-  node-set:
-    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
-  node-set-status:
-    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
-  model-set:
-    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
-    group_add:
-      - "${HOST_MODEL_GID:-1000}"
-  model-set-status:
-    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
-    group_add:
-      - "${HOST_MODEL_GID:-1000}"
-  template-inspector:
-    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
-  template-draft:
-    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
-  frontend-fetch:
-    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
-  frontend-build:
-    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+      - "${HOST_MODEL_GID:?exported by bin/latentcrate}"

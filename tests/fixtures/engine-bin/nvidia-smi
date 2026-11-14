@@ -1,0 +1,4 @@
+#!/bin/sh
+# The scratch host has no GPU unless a test says what the query reports.
+[ -n "${FAKE_NVIDIA_SMI:-}" ] || exit 1
+printf '%s\n' "$FAKE_NVIDIA_SMI"

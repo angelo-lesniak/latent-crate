@@ -46,9 +46,11 @@ def vcs_requirement(name: str, download: object) -> str | None:
         fail(f"unsafe VCS resolution for {name}")
     fragment = ""
     if subdirectory is not None:
-        if not isinstance(subdirectory, str) or not re.fullmatch(
-            r"[A-Za-z0-9._/-]+", subdirectory
-        ) or ".." in Path(subdirectory).parts:
+        if (
+            not isinstance(subdirectory, str)
+            or not re.fullmatch(r"[A-Za-z0-9._/-]+", subdirectory)
+            or ".." in Path(subdirectory).parts
+        ):
             fail(f"unsafe VCS subdirectory for {name}")
         fragment = f"#subdirectory={subdirectory}"
     return f"{name} @ git+{url}@{commit.lower()}{fragment}"

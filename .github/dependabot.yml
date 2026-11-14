@@ -1,5 +1,8 @@
 version: 2
 
+# The base images are pinned by tag and digest in pins.env, which Dependabot
+# cannot read; `pins check` is their update path, so a `docker` entry here
+# would find nothing.
 updates:
   - package-ecosystem: github-actions
     directory: /

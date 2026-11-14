@@ -41,9 +41,7 @@ def wheel_identity(path: Path) -> tuple[str, str]:
     try:
         with zipfile.ZipFile(path) as archive:
             metadata_files = [
-                name
-                for name in archive.namelist()
-                if name.endswith(".dist-info/METADATA") and name.count("/") == 1
+                name for name in archive.namelist() if name.endswith(".dist-info/METADATA") and name.count("/") == 1
             ]
             if len(metadata_files) != 1:
                 fail(f"wheel has an unexpected METADATA layout: {path.name}")
@@ -73,10 +71,7 @@ def main() -> None:
         canonical = canonicalize_name(name)
         previous = identities.get(canonical)
         if previous:
-            fail(
-                f"multiple wheels were built for {name}: "
-                f"{previous[1]} and {version}"
-            )
+            fail(f"multiple wheels were built for {name}: {previous[1]} and {version}")
         identities[canonical] = (name, version)
 
     overlay: list[tuple[str, str]] = []
@@ -95,15 +90,13 @@ def main() -> None:
 
     args.output.write_text(
         "".join(
-            f"{name}=={version}\n"
-            for name, version in sorted(overlay, key=lambda item: canonicalize_name(item[0]))
+            f"{name}=={version}\n" for name, version in sorted(overlay, key=lambda item: canonicalize_name(item[0]))
         ),
         encoding="utf-8",
     )
     args.base_satisfied_output.write_text(
         "".join(
-            f"{name}=={version}\n"
-            for name, version in sorted(satisfied, key=lambda item: canonicalize_name(item[0]))
+            f"{name}=={version}\n" for name, version in sorted(satisfied, key=lambda item: canonicalize_name(item[0]))
         ),
         encoding="utf-8",
     )

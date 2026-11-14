@@ -1,0 +1,190 @@
+#!/usr/bin/env python3
+"""Fake container engine for the package tests. Answers the probes the wrapper
+makes and records every `compose` invocation on stdout so tests can check the
+routing; no container ever runs. Behaves as `podman` or `docker` from its
+own file name or FAKE_ENGINE_NAME, exits 1 when HF_TOKEN or CIVITAI_TOKEN is in
+its environment, where no credential may be, and exits 1 for a `--format` template
+other than the exact ones the wrapper sends. Controls (environment variables):
+  FAKE_ENGINE_NAME=docker           the engine name; the `docker` fake sets it and execs this file
+  FAKE_PODMAN_ROOTLESS=false / FAKE_PODMAN_RUNTIME=runc   `podman info --format` values
+  FAKE_PODMAN_COMPOSE_DOCKER_PLUGIN=true   `podman compose version` names the Docker plugin
+  FAKE_ENGINE_STORAGE_ROOT=<dir>    what `info --format` reports as the storage root (default /)
+  FAKE_DOCKER_CDI_DIRS=<a>:<b>      the CDI spec directories `docker info` lists (default none)
+  FAKE_ENGINE_COMFY_STATE=<status>  one comfy container exists in this .State.Status; `ps` lists it
+                                    only when running, `ps --all` in every state
+  FAKE_ENGINE_COMFY_RUNNING=true    shorthand for FAKE_ENGINE_COMFY_STATE=running
+  FAKE_ENGINE_COMFY_EXITED=true     shorthand for FAKE_ENGINE_COMFY_STATE=exited
+  FAKE_ENGINE_PROJECT=<name>        the Compose project the container belongs to (default
+                                    COMPOSE_PROJECT_NAME, then latentcrate); `ps` honours the
+                                    project-label filter
+  FAKE_ENGINE_NO_LABELS=true        `inspect` reports Config.Labels as null
+  FAKE_ENGINE_COMFY_HOST=<ip>       the HostIp `inspect` reports for the published port (default 127.0.0.1)
+  FAKE_ENGINE_COMFY_PORT=<port>     the HostPort it reports (default COMFY_PORT, then 4207)
+  FAKE_ENGINE_POD=<name>            the Pod `inspect` reports the container in (default none)
+  FAKE_ENGINE_STATE=<status>        `inspect` reports this .State.Status for any container id
+                                    (default: the comfy state, then running)
+  FAKE_ENGINE_IMAGE_MISSING=true    `image inspect` exits 1 with "no such image"
+  FAKE_ENGINE_OTHER_IMAGE=true      `inspect --format {{.Image}}` names an image other than the
+                                    one `image inspect` reports
+  FAKE_ENGINE_LOGS_INTERRUPT=true   `logs` exits 130 after its trace, as a follow ended by Ctrl+C does
+  FAKE_ENGINE_NETWORK=<name>        `network ls --quiet --filter ...` lists this network (default none)
+  FAKE_ENGINE_RUN_WRITES=<path>     `run` creates this file, standing in for a container's output
+  FAKE_ENGINE_EXEC_STATUS=<n>       `exec` exits with this status after its trace (default 0)
+"""
+
+import json
+import os
+import shlex
+import sys
+
+name = os.environ.get("FAKE_ENGINE_NAME") or os.path.basename(sys.argv[0])
+arguments = sys.argv[1:]
+project = os.environ.get("FAKE_ENGINE_PROJECT") or os.environ.get("COMPOSE_PROJECT_NAME", "latentcrate")
+comfy_state = os.environ.get("FAKE_ENGINE_COMFY_STATE") or (
+    "running"
+    if os.environ.get("FAKE_ENGINE_COMFY_RUNNING") == "true"
+    else "exited"
+    if os.environ.get("FAKE_ENGINE_COMFY_EXITED") == "true"
+    else ""
+)
+CDI_DIRS_TEMPLATE = '{{range .CDISpecDirs}}{{.}}{{"\\n"}}{{end}}'
+IMAGE_ID = "sha256:" + "f" * 64
+if {"HF_TOKEN", "CIVITAI_TOKEN"} & set(os.environ):
+    print("fake engine: a model token leaked into the engine environment", file=sys.stderr)
+    sys.exit(1)
+
+
+def credentials():
+    """Every non-empty credential-shaped variable in the engine environment,
+    where none may be."""
+    names = sorted(key for key, value in os.environ.items() if key.endswith(("_API_KEY", "_TOKEN")) and value)
+    return f"env_keys={','.join(names)}"
+
+
+def stdin_kind():
+    """What the wrapper handed the engine on stdin: the terminal, /dev/null,
+    or something else (a pipe)."""
+    if os.isatty(0):
+        return "tty"
+    try:
+        return "devnull" if os.readlink("/proc/self/fd/0") == "/dev/null" else "other"
+    except OSError:
+        return "other"
+
+
+def unknown_format(template):
+    print(f"fake engine: unknown format {template}", file=sys.stderr)
+    sys.exit(1)
+
+
+def label_filter(label):
+    """The value of a `--filter label=<label>=<value>` argument, or an empty string."""
+    return next((arg.split("=", 2)[-1] for arg in arguments if arg.startswith(f"label={label}=")), "")
+
+
+def trace(kind):
+    print(
+        f"{kind} stdin={stdin_kind()} image={os.environ.get('LATENTCRATE_IMAGE', 'unset')} "
+        f"target={os.environ.get('COMFY_BUILD_TARGET', 'unset')} "
+        f"{credentials()} args=" + " ".join(shlex.quote(item) for item in arguments)
+    )
+
+
+first = arguments[0] if arguments else ""
+if first == "--version":
+    print(f"{name} version 6.1.0-fake" if name == "podman" else "Docker version fake")
+elif first == "info":
+    template = arguments[2] if arguments[1:2] == ["--format"] else ""
+    if not template:
+        print(f"fake {name} engine")
+    elif template == "{{.Host.Security.Rootless}}/{{.Host.OCIRuntime.Name}}":
+        print(f"{os.environ.get('FAKE_PODMAN_ROOTLESS', 'true')}/{os.environ.get('FAKE_PODMAN_RUNTIME', 'crun')}")
+    elif template in ("{{.Store.GraphRoot}}", "{{.DockerRootDir}}"):
+        print(os.environ.get("FAKE_ENGINE_STORAGE_ROOT", "/"))
+    elif template == CDI_DIRS_TEMPLATE:
+        for directory in os.environ.get("FAKE_DOCKER_CDI_DIRS", "").split(":"):
+            if directory:
+                print(directory)
+    else:
+        unknown_format(template)
+elif first == "compose" and arguments[1:2] == ["version"]:
+    if name == "podman":
+        print("podman version 6.1.0-fake")
+        if os.environ.get("FAKE_PODMAN_COMPOSE_DOCKER_PLUGIN") == "true":
+            print("Docker Compose version v2.0.0-fake")
+        else:
+            print("podman-compose version 1.6.0-fake")
+    else:
+        print("Docker Compose version fake")
+elif first == "compose":
+    trace("compose")
+elif first == "ps":
+    listed = comfy_state == "running" or ("--all" in arguments and comfy_state)
+    if (
+        listed
+        and label_filter("com.docker.compose.project") in ("", project)
+        and label_filter("com.docker.compose.service") in ("", "comfy")
+    ):
+        print("fake-comfy-container")
+elif first == "inspect":
+    if arguments[2] == "{{json .}}":
+        cid = arguments[-1]
+        port = os.environ.get("FAKE_ENGINE_COMFY_PORT", os.environ.get("COMFY_PORT", "4207"))
+        print(
+            json.dumps(
+                {
+                    "Id": cid,
+                    "Name": f"/{cid}",
+                    "Pod": os.environ.get("FAKE_ENGINE_POD", ""),
+                    "Config": {
+                        "Labels": None
+                        if os.environ.get("FAKE_ENGINE_NO_LABELS") == "true"
+                        else {"com.docker.compose.project": project, "com.docker.compose.service": "comfy"}
+                    },
+                    "NetworkSettings": {
+                        "Ports": {
+                            "8188/tcp": [
+                                {"HostIp": os.environ.get("FAKE_ENGINE_COMFY_HOST", "127.0.0.1"), "HostPort": port}
+                            ]
+                        }
+                    },
+                }
+            )
+        )
+    elif arguments[2] == "{{.State.Status}}":
+        print(os.environ.get("FAKE_ENGINE_STATE") or comfy_state or "running")
+    elif arguments[2] == "{{.Image}}":
+        print("sha256:" + "e" * 64 if os.environ.get("FAKE_ENGINE_OTHER_IMAGE") == "true" else IMAGE_ID)
+    else:
+        unknown_format(arguments[2])
+elif arguments[:3] == ["image", "inspect", "--format"]:
+    if arguments[3] != "{{.Id}}":
+        unknown_format(arguments[3])
+    if os.environ.get("FAKE_ENGINE_IMAGE_MISSING") == "true":
+        print(f"Error: {arguments[-1]}: no such image", file=sys.stderr)
+        sys.exit(1)
+    print(IMAGE_ID)
+elif arguments[:2] == ["network", "ls"]:
+    if arguments[2:3] == ["--quiet"] and os.environ.get("FAKE_ENGINE_NETWORK"):
+        print(os.environ["FAKE_ENGINE_NETWORK"])
+elif arguments[:2] in (["network", "rm"], ["pod", "rm"]):
+    trace(" ".join(arguments[:2]))
+elif first == "run":
+    trace(first)
+    if os.environ.get("FAKE_ENGINE_RUN_WRITES"):
+        os.makedirs(os.path.dirname(os.environ["FAKE_ENGINE_RUN_WRITES"]), exist_ok=True)
+        with open(os.environ["FAKE_ENGINE_RUN_WRITES"], "w", encoding="utf-8") as handle:
+            handle.write("fake engine output\n")
+elif first == "logs":
+    trace(first)
+    if os.environ.get("FAKE_ENGINE_LOGS_INTERRUPT") == "true":
+        sys.exit(130)
+elif arguments == ["version", "--format", "{{.Server.Version}}"]:
+    print("29.7.2-fake")
+elif first in ("build", "exec", "stop", "rm"):
+    trace(first)
+    if first == "exec":
+        sys.exit(int(os.environ.get("FAKE_ENGINE_EXEC_STATUS", "0")))
+else:
+    print(f"fake engine: unsupported invocation: {' '.join(arguments)}", file=sys.stderr)
+    sys.exit(1)

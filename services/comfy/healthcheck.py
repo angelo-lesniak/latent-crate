@@ -6,7 +6,6 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-
 # Must match the --database-url path in services/comfy/entrypoint.sh.
 database_path = Path("/data/user/comfyui.db")
 if not database_path.is_file() or not os.access(database_path, os.W_OK):

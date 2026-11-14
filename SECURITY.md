@@ -4,8 +4,9 @@ LatentCrate is intended for a trusted single-user or trusted-team environment.
 It is not a hardened multi-user service.
 
 ComfyUI Manager and custom nodes install and execute third-party code. The UI
-therefore binds to localhost by default. Do not expose it to an untrusted network
-without authentication and network controls maintained outside this project.
+therefore binds to `127.0.0.1` by default. Do not expose it to an untrusted
+network without authentication and network controls maintained outside this
+project. [Privacy](docs/privacy.md) says what the defaults do not prevent.
 
 Use the repository's **Security → Report a vulnerability** action to open a
 private GitHub security advisory. If that action is temporarily unavailable,

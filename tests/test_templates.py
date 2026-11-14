@@ -7,7 +7,6 @@ import tomllib
 import unittest
 from pathlib import Path
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = PROJECT_ROOT / "scripts" / "manage-templates.py"
 
@@ -62,9 +61,7 @@ class TemplateTests(unittest.TestCase):
             )
         }
 
-        result = self.module.local_templates(
-            [{"type": "image", "templates": entries}], workflows
-        )
+        result = self.module.local_templates([{"type": "image", "templates": entries}], workflows)
 
         self.assertEqual(
             [item.template_id for item in result],

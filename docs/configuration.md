@@ -1,210 +1,169 @@
 # Configuration
 
-Most users only need to edit `.env`. It contains settings for one machine and is
-not committed to Git.
+Settings live in `.env`, pins in `pins.env`, and your data in four host
+directories that the container mounts. [Models](models.md#how-a-set-works)
+and [Nodes](nodes.md#source-and-dependencies) cover what goes into two of
+them.
 
-Version profiles under `versions/` contain checked-in ComfyUI, frontend, CUDA,
-PyTorch, FFmpeg, SageAttention, and build-tool selections.
+## Settings
 
-Shell environment variables override `.env` and the selected version profile
-for one command:
+[`.env.example`](../.env.example) is the settings reference: every
+setting, its default, the precedence, and the command that applies a
+change.
 
-```bash
-COMFY_PORT=4210 bash bin/latentcrate up current --detach
-```
+## Storage layout
 
-## Storage and host identity
+| Setting | Container path | Mounted | Holds |
+| --- | --- | --- | --- |
+| `COMFY_DATA_DIR` | `/data` | writable | user settings, workflows, inputs, outputs, and the managed custom nodes under `custom_nodes` |
+| `COMFY_MODELS_DIR` | `/models` | writable | the model library |
+| `COMFY_CACHE_DIR` | `/cache` | writable | downloads, package caches, Triton, and temporary files |
+| `COMFY_LOCAL_NODES_DIR` | `/local/custom_nodes` | read-only | private or unregistered node source |
 
-| Setting | Default | Meaning |
-| --- | --- | --- |
-| `COMFY_DATA_DIR` | `./data/comfy` | User settings, workflows, inputs, outputs, and managed nodes |
-| `COMFY_MODELS_DIR` | `./data/models` | Shared model library |
-| `COMFY_CACHE_DIR` | `./data/cache` | Downloads, package caches, Triton, and temporary files |
-| `COMFY_LOCAL_NODES_DIR` | `./local/custom_nodes` | Read-only private or unregistered node source |
-| `HOST_UID` / `HOST_GID` | Set by `init` | Owner used for writable host files |
-| `HOST_MODEL_GID` | Host GID | Extra model-storage group used by Docker |
-| `UMASK` | `0002` | Permissions mask for created files |
+A relative path is resolved from the checkout. No directory may be or
+contain the checkout, and no two may overlap; every command refuses both.
 
-`HF_TOKEN` is an optional Hugging Face read token for gated model sets. Put it
-only in the uncommitted `.env`; the wrapper removes it from the environment
-used by Compose. See
-[Model sets](model-sets.md#hugging-face-access-and-licenses) for setup and
-token handling.
+[`config/comfy/extra_model_paths.yaml`](../config/comfy/extra_model_paths.yaml)
+maps the subdirectories of `/models` to ComfyUI model categories; a model
+set's `destination` names one of them. See
+[Models](models.md#how-a-set-works) for the path from a manifest to a
+category.
 
-`MODEL_SET_EXTRA_WRITE_ROOTS` is an advanced, colon-separated list of absolute
-container paths that the model downloader may reach through model symlinks.
-Each path still needs an explicit bind mount in the model helper services; this
-setting never creates mounts.
+Local nodes sit outside `/data`, so Manager cannot edit them. Manager's
+immediate installs land under the cache, outside the image, and are
+disposable. See [Nodes](nodes.md#after-a-manager-change) for their path
+and for what `up` captures.
 
-Relative paths are resolved from the repository root. See
-[storage layout](storage.md) for container paths and permission details.
+A symbolic link below the models directory may point outside it.
+`models fetch` writes through the link only when its target is listed in
+`MODEL_SET_EXTRA_WRITE_ROOTS`; the container sees the target only when the
+same path is bound inside it, and the Compose files bind the four
+directories above and nothing else. A link to another disk therefore
+serves `models fetch` but not ComfyUI; a host mount inside the models
+directory serves both.
 
-## Engine, GPU, and network
+[Status](validation.md#status) holds the measured image sizes;
+`doctor` warns when the engine storage is below its free-space floor.
 
-| Setting | Default | Meaning |
-| --- | --- | --- |
-| `CONTAINER_ENGINE` | Auto-detected | `docker` or `podman` |
-| `GPU_DEVICE` | `nvidia.com/gpu=all` | NVIDIA CDI device name |
-| `NVIDIA_DRIVER_CAPABILITIES` | `compute,utility,video` | NVIDIA runtime capabilities |
-| `COMFY_BIND_ADDRESS` | `127.0.0.1` | Host address used by the published UI port |
-| `COMFY_PORT` | `4207` | Host UI port |
-| `COMFY_ALLOW_REMOTE` | `false` | Required acknowledgement for a non-loopback bind |
-| `COMPOSE_PROJECT_NAME` | `latentcrate` | Compose container and network name prefix |
+## GPU and engine support
 
-Changing `COMPOSE_PROJECT_NAME` does not isolate images, saved dependency
-snapshots, or caches. For two fully independent setups, use separate checkouts,
-storage paths, and `LATENTCRATE_IMAGE`/`LATENTCRATE_TOOLS_IMAGE` names.
+CDI is the only GPU selector. `GPU_DEVICE` names the CDI device,
+`compose.gpu.yaml` requests it, and the image sets
+`NVIDIA_VISIBLE_DEVICES=void` so no other runtime path injects a second
+device set. A CDI specification for `nvidia.com/gpu` must exist where the
+engine reads it: `/etc/cdi` or `/var/run/cdi` for Podman, the daemon's
+CDI directories for Docker. `doctor` reports what it finds.
 
-Podman must be rootless and use `crun`. The wrapper also selects Docker image
-format for Podman builds because the Dockerfile relies on Bash `SHELL` metadata.
+`CUDA_MIN_DRIVER_MAJOR` in `pins.env` is the driver floor; `doctor`
+refuses an older driver.
 
-## SageAttention
+`COMFY_CUDA_ARCH_LIST` is the list of CUDA architectures the SageAttention
+and custom-node builds compile for. `doctor` prints the compute capability
+of each GPU and refuses a card the list does not cover. Outside
+LatentCrate, `nvidia-smi --query-gpu=compute_cap --format=csv,noheader`
+prints it. The list is a build setting: change it, then `build`.
 
-`LATENTCRATE_SAGE` (default `off`) selects one of three Sage modes; the
-modes and the per-command `--sage <mode>` override are defined in
-[shared variant flags](cli.md#shared-variant-flags).
+Podman runs rootless with `crun`; `keep-groups`, which passes the calling
+user's supplementary groups into the container, requires `crun`. Docker
+adds `HOST_MODEL_GID` as the supplementary group instead, the calling
+user's group when unset, and its daemon needs CDI enabled in
+`/etc/docker/daemon.json` with `"features": {"cdi": true}`.
 
-Use `available` to add SageAttention for workflows that select it themselves.
-Use `global` only after representative workflows have been tested with global
-Sage. See [SageAttention](sageattention.md).
+`CONTAINER_ENGINE` fixes the engine; unset, Podman is tried first, then
+Docker. Podman's Compose provider must be `podman-compose`: the Docker
+Compose plugin drops CDI device requests. `up` records the engine in
+`build/stack.json`; while the record exists every command uses that
+engine and refuses a `CONTAINER_ENGINE` that names the other one, and
+`down` removes the record.
 
-An existing `.env` with `LATENTCRATE_SAGE=available` or `global` remains an
-explicit opt-in. Set it to `off` to adopt the smaller default image.
+Under WSL2 the engine client is the Linux one inside the distribution,
+not a Windows `.exe` on the interop path. See
+[WSL2 differences](validation.md#wsl2-differences).
 
-## ComfyUI behavior
+## When a change takes effect
 
-| Setting | Default | Meaning |
-| --- | --- | --- |
-| `COMFY_ENABLE_MANAGER` | `true` | Enable ComfyUI Manager |
-| `COMFY_DISABLE_API_NODES` | `false` | Strict mode: disable external API nodes and frontend internet access |
-| `COMFY_DISABLE_METADATA` | `false` | Stop embedding prompts and workflows in generated files |
-| `COMFYUI_EXTRA_ARGS` | Empty | Extra whitespace-separated ComfyUI flags |
-| `RESTART_POLICY` | `no` | Compose restart policy |
-| `STOP_GRACE_PERIOD` | `30s` | Graceful shutdown time |
-| `COMFY_SHM_SIZE` | `8gb` | Shared-memory size |
-| `COMFY_TMPFS_SIZE` | `1g` | Writable `/tmp` size |
-| `COMFY_PIDS_LIMIT` | `2048` | Runtime process limit |
-
-`COMFYUI_EXTRA_ARGS` is an advanced setting for flags not covered elsewhere.
-Paths containing spaces are not supported in this value.
-
-`RESTART_POLICY=no` prevents a computer restart from unexpectedly reserving the
-GPU. Use `unless-stopped` when automatic restart is wanted.
-
-For node dependency behavior, Git requirements, private nodes, and pinned node
-sets, see [third-party nodes](third-party-nodes.md).
-
-Every `up` and `build` saves and rebuilds node dependencies by default. The
-`--use-saved-node-deps` flag is described in the [CLI reference](cli.md#up).
-
-## Frontend selection
-
-Prefer command-line options for temporary frontend work; they are listed in
-the CLI reference under [frontend flags](cli.md#frontend-flags). For a saved
-configuration, use:
-
-| Setting | Meaning |
+| Setting group | Applied by |
 | --- | --- |
-| `COMFY_FRONTEND_MODE` | `release`, `git`, `source`, or `dist` |
-| `FRONTEND_GIT_URL` | Public HTTPS repository used by Git mode |
-| `FRONTEND_GIT_REF` | Commit, branch, tag, or pull-request reference |
-| `COMFY_FRONTEND_SOURCE_DIR` | Local source checkout built in containers |
-| `COMFY_FRONTEND_DIST_DIR` | Existing built frontend files mounted read-only |
+| Host directories | `init` creates them, `up` mounts them |
+| Network, GPU, runtime | `up` |
+| Build | `build` |
+| Image variant | `build` and `up` |
+| Engine | every command |
+| `COMPOSE_PROJECT_NAME` | every command; run `down` before changing it |
 
-Each frontend flag selects the matching `COMFY_FRONTEND_MODE` for one command.
-See [frontend modes](frontends.md) before using source that you do not control.
+`up` recreates the container on every start, so a runtime change needs no
+`down` first. `.env.example` names the group of each setting.
 
-## Version profiles
+## Pins and upgrading
 
-A profile is a shell-compatible `.env` file under `versions/`. Copy an existing
-profile before experimenting:
+[`pins.env`](../pins.env) is the pin reference: every pin with its
+meaning in the comments beside it. It pins ComfyUI, its frontend, the
+PyTorch and CUDA images, FFmpeg, TorchCodec, and SageAttention; their
+other Python packages resolve from PyPI at build time, so a rebuild can
+change them, while a built image stays the one you tested.
 
-```bash
-cp versions/current.env versions/my-gpu.env
-# For another GPU, edit CUSTOM_NODE_CUDA_ARCH_LIST.
-# Also edit SAGE_CUDA_ARCH_LIST if you plan to opt in to SageAttention.
-# Edit LATENTCRATE_TAG to my-gpu so it matches the new profile name.
-bash bin/latentcrate doctor my-gpu
-bash bin/latentcrate up my-gpu --detach
+```text
+bin/latentcrate build [--sage mode]
+bin/latentcrate pins
+bin/latentcrate pins check [component|all]
 ```
 
-`LATENTCRATE_TAG` names the image that the profile builds; it must be the
-profile file name. The wrapper adds variant suffixes such as `-sage` when the
-matching option is selected. The project checks enforce the plain default tag
-for every file under `versions/`.
+`build` copies every node's requirement files into
+`build/custom-node-requirements`, builds the image for the Sage mode and
+frontend mode in force, and starts nothing; it refuses `--frontend-source`
+and `--frontend-dist`, which only `up` takes. `pins` prints the pins
+through the validating loader, so a bad edit is a refusal. `pins check`
+asks GitHub, GitLab, the npm registry, PyPI, and Docker Hub for the latest
+eligible version of each pin and prints it next to the pinned one; it
+writes nothing.
 
-Important build selections include:
+`PYTORCH_DEVEL_TAG`, `PYTORCH_RUNTIME_TAG`, `TORCHCODEC_VERSION`, and
+`CUDA_NPP_VERSION` change together. A source fetched by tag carries its
+commit beside the tag, and the build refuses a tag that moved to another
+commit. [Add a pin](../CONTRIBUTING.md#add-a-pin) holds the pin grammar
+and the family rule.
 
-- `PYTORCH_DEVEL_IMAGE` and `PYTORCH_RUNTIME_IMAGE`;
-- `COMFYUI_REF`, `COMFYUI_FRONTEND_REF`, and
-  `COMFY_FRONTEND_DIST_SHA256`;
-- `FFMPEG_REF`, codec-library references, and `CUDA_NPP_VERSION`;
-- `SAGEATTENTION_REF`, `SAGE_CUDA_ARCH_LIST`, and `SAGE_BUILD_JOBS`;
-- `CUSTOM_NODE_CUDA_ARCH_LIST`;
-- `TORCHCODEC_VERSION` and `TORCHCODEC_INDEX_URL`;
-- `FRONTEND_NODE_IMAGE`, `FRONTEND_PNPM_VERSION`, and `TOOL_PYTHON_IMAGE`;
-- `CUDA_MIN_DRIVER_MAJOR`.
+`LATENTCRATE_SAGE`, or `--sage` for one command, selects the image target
+and the runtime flag together; [SageAttention](nodes.md#sageattention)
+holds the modes.
 
-Change one dependency group at a time. `SAGE_BUILD_JOBS=2` is a low-memory
-default for typical 16 GB builders. Raise it only when the builder has enough
-measured free memory.
+`COMPOSE_PROJECT_NAME` prefixes the container and network names only; the
+image tag carries no project name. Two independent setups need separate
+checkouts, storage paths, and `LATENTCRATE_IMAGE` values.
 
-The external release and tool pins can be refreshed with
-`bash bin/latentcrate versions update <component|all> <profile>`; see the
-[version updater](cli.md#versions) for the component names and exact policy.
-Values outside that documented allowlist remain deliberate manual settings.
-PyTorch development and runtime images are always updated as one pair within
-their existing CUDA/cuDNN family.
+After a pin change run `build`, then `up`.
 
-### TorchCodec and CUDA NPP
+The entrypoint keeps the Triton and Torch extension caches per runtime
+under `triton/<runtime>` and `torch-extensions/<runtime>` in
+`COMFY_CACHE_DIR`. They are compilation caches that the next start fills
+again, so deleting them while ComfyUI is stopped is safe; do so when a
+kernel fails to load after a change to the image.
 
-An empty `TORCHCODEC_VERSION` disables TorchCodec for that profile. In the
-shipped profiles, `current` disables it and `edge` enables it. A non-empty value
-must select the CUDA-specific wheel that matches PyTorch.
+## Update the checkout
 
-TorchCodec's CUDA video path also needs parts of NVIDIA Performance Primitives
-(NPP). When TorchCodec is enabled, the build copies the matching `libnppc` and
-`libnppicc` runtime libraries from the selected CUDA development image. It does
-not copy NVCC, CUDA headers, or the full CUDA toolkit. The NVIDIA driver still
-comes from the host when the container starts.
+Run `git pull`, then `bash bin/latentcrate init` (it keeps an existing
+`.env`), `doctor`, and `up`. A setting the update removed from
+`.env.example` fails loudly, because an `.env` key the reference does not
+list is refused.
 
-Treat `TORCHCODEC_VERSION`, `TORCHCODEC_INDEX_URL`, `CUDA_NPP_VERSION`, and the
-two PyTorch images as one compatibility group. Update them together, then test
-CPU decoding during the build and a representative CUDA video workflow on an
-NVIDIA host.
+## Removal
 
-The project uses maintained container engines and Compose providers. It does not
-promise support for old versions. The versions in
-[validation status](validation-status.md) show what one test run used; they are
-not guaranteed minimum versions. CI also renders every Compose variant and
-generates all wrapper command shapes with podman-compose 1.6.0, without treating
-that exact version as a permanent minimum.
+`down` stops and removes the project's containers, pods, and networks and
+deletes `build/stack.json`. It leaves the images, the engine's build
+cache, the host directories, `build/`, and `reports/`.
 
-## Advanced: image names and tags
+| Path | Safe to delete when |
+| --- | --- |
+| `COMFY_DATA_DIR` | you do not want its workflows, outputs, and managed nodes any more |
+| `COMFY_MODELS_DIR` | you can fetch the sets again |
+| `COMFY_CACHE_DIR` | ComfyUI is stopped |
+| `COMFY_LOCAL_NODES_DIR` | never by this project; it is your source |
+| `build/` (the lock, the stack record, the requirement copies, model-set drafts) | no stack runs and no command runs; `custom-node-requirements/.gitkeep` is tracked |
+| `reports/` | any time |
 
-These settings control how the locally built images are named. Most users never
-change them.
-
-| Setting | Default | Meaning |
-| --- | --- | --- |
-| `LATENTCRATE_IMAGE` | `latentcrate/comfy` | Name of the ComfyUI runtime image |
-| `LATENTCRATE_TAG` | Set by the wrapper | Runtime image tag: the profile name plus variant suffixes, for example `current-sage` or `edge-frontend-git-sage` |
-| `LATENTCRATE_TOOLS_IMAGE` | `latentcrate/tools` | Name of the helper-tool images (dependency snapshot, node sets, release pinning, version updates, frontend builds) |
-| `LATENTCRATE_TOOLS_TAG` | Set by the wrapper | Tool image tag prefix: the profile name; each tool appends its own suffix (`-node-deps`, `-node-set`, `-model-set`, `-frontend-release`, `-version-update`, `-frontend`) |
-
-The wrapper derives `LATENTCRATE_TAG` and `LATENTCRATE_TOOLS_TAG` from the
-selected profile and options. Do not override the tags in `.env` or on the
-command line. The `LATENTCRATE_TAG` line inside a version profile file is
-different: it must be present and match the profile file name, which is why the
-copied-profile recipe tells you to edit it there. Override `LATENTCRATE_IMAGE`
-and `LATENTCRATE_TOOLS_IMAGE` only to keep two fully independent checkouts from
-sharing images.
-
-## Configuration safety
-
-The wrapper reads `.env` as a Bash file. Treat it as trusted local code, use
-shell-compatible quoting, and do not copy an unreviewed `.env` from another
-person.
-
-Use `bash bin/latentcrate ...` as the supported interface. Direct Compose calls
-need internal variables and engine overlays and skip important wrapper checks.
+Images are named
+`latentcrate/comfy:<release|git|dist>[-sage]-<COMFYUI_REF>`, with
+`LATENTCRATE_IMAGE` replacing the repository part.
+`<engine> image ls latentcrate/comfy` lists them; removing them and
+pruning the build cache are the engine's own commands, and the next `up`
+builds again.

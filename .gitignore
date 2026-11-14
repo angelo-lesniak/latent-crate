@@ -1,4 +1,5 @@
 .env
+.venv/
 .idea/
 .vscode/
 
@@ -8,13 +9,11 @@ reports/
 
 build/custom-node-requirements/*
 !build/custom-node-requirements/.gitkeep
-build/.custom-node-requirements.lock
 build/.custom-node-requirements.backup
 build/.custom-node-requirements.staging-*
-build/.node-deps-lifecycle.lock
-build/.node-deps-buildable.*
-build/.node-set-lifecycle.lock
+build/locks/
 build/model-set-drafts/
+build/stack.json
 
 __pycache__/
 *.py[cod]

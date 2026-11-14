@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Renders each Compose file combination the package can pass with the pinned
+# standalone podman-compose parser and checks the container arguments the
+# containment and privacy model depends on. No container engine is used: the
+# fake podman only answers the probes that podman-compose performs.
 set -Eeuo pipefail
 
 PROJECT_ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
@@ -8,170 +12,144 @@ cd "$PROJECT_ROOT"
 command -v podman-compose >/dev/null 2>&1 \
   || { printf 'podman-compose compatibility: podman-compose is required\n' >&2; exit 1; }
 
-unset \
-  COMFY_BUILD_TARGET \
-  COMFY_FRONTEND_DIST_DIR \
-  COMFY_FRONTEND_MODE \
-  COMPOSE_PROJECT_NAME \
-  FAKE_PODMAN_LOG \
-  FRONTEND_GIT_REF \
-  FRONTEND_GIT_REQUESTED_REF \
-  FRONTEND_GIT_URL
+unset FAKE_PODMAN_LOG HF_TOKEN CIVITAI_TOKEN
+# The Compose files require every setting and the values the package
+# derives on each call (compose.yaml, the interpolation note). The settings
+# come from the reference at their documented defaults; the storage paths
+# are then pointed at a scratch directory.
+set -a
+# shellcheck source=/dev/null
+. ./.env.example
+set +a
+HOST_UID=$(id -u)
+HOST_GID=$(id -g)
+export HOST_UID HOST_GID HOST_MODEL_GID="$HOST_GID"
+export FRONTEND_GIT_URL=https://github.com/Comfy-Org/ComfyUI_frontend.git
+export FRONTEND_GIT_REF=0000000000000000000000000000000000000000
+export FRONTEND_GIT_REQUESTED_REF=fixture
+TEST_ROOT=$(mktemp -d)
+trap 'rm -rf -- "$TEST_ROOT"' EXIT
+export COMFY_DATA_DIR="$TEST_ROOT/data"
+export COMFY_MODELS_DIR="$TEST_ROOT/models"
+export COMFY_CACHE_DIR="$TEST_ROOT/cache"
+export COMFY_LOCAL_NODES_DIR="$TEST_ROOT/local-nodes"
+dist_dir="$PROJECT_ROOT/tests/fixtures/frontend-dist"
+run_log="$TEST_ROOT/run.log"
 
-unset CUSTOM_NODE_CACHE_KEY
-export COMPOSE_PROJECT_NAME=latentcrate
-export NODE_SET_FILE="$PROJECT_ROOT/config/custom-nodes/sets/latent-nodepack.toml"
-export NODE_SET_TARGET_DIR="$PROJECT_ROOT/data/comfy/custom_nodes"
-export NODE_DEPS_SOURCE_DIR="$PROJECT_ROOT/data/comfy/custom_nodes"
-export NODE_DEPS_LOCAL_SOURCE_DIR="$PROJECT_ROOT/local/custom_nodes"
-export NODE_DEPS_OUTPUT_DIR="$PROJECT_ROOT/build"
-export FRONTEND_SOURCE_DIR="$PROJECT_ROOT/tests/fixtures/frontend-source"
-export FRONTEND_OUTPUT_DIR="$PROJECT_ROOT/data/cache/frontend-builds/test"
-export FRONTEND_PNPM_CACHE_DIR="$PROJECT_ROOT/data/cache/frontend-pnpm"
-export FRONTEND_WORK_DIR="$PROJECT_ROOT/data/cache/frontend-work/test"
-export TEMPLATE_DRAFT_OUTPUT_DIR="$PROJECT_ROOT/build/model-set-drafts"
-network_log="$PROJECT_ROOT/build/podman-compose-network.log"
-rm -f -- "$network_log"
-cleanup() {
-  rm -f -- "$network_log"
-}
-trap cleanup EXIT
+fake_engine="$PROJECT_ROOT/tests/fixtures/podman-compose-bin/podman"
+chmod +x "$fake_engine"
 
-mkdir -p \
-  "$NODE_SET_TARGET_DIR" \
-  "$NODE_DEPS_LOCAL_SOURCE_DIR" \
-  "$NODE_DEPS_OUTPUT_DIR" \
-  "$FRONTEND_OUTPUT_DIR" \
-  "$FRONTEND_PNPM_CACHE_DIR" \
-  "$FRONTEND_WORK_DIR" \
-  "$TEMPLATE_DRAFT_OUTPUT_DIR"
-
-compose_files=(--file compose.yaml --file compose.podman.yaml)
-if [[ "${OS:-}" == Windows_NT ]]; then
-  fake_engine=$(cygpath -w "$PROJECT_ROOT/tests/fixtures/podman-compose-bin/podman.cmd")
-  fake_network_log=$(cygpath -w "$network_log")
-else
-  fake_engine="$PROJECT_ROOT/tests/fixtures/podman-compose-bin/podman"
-  fake_network_log=$network_log
-  chmod +x "$fake_engine"
-fi
-
-podman_compose_dry_run() {
-  podman-compose "${compose_files[@]}" \
-    --env-file versions/edge.env \
-    --podman-path "$fake_engine" \
-    --dry-run "$@" >/dev/null
+# podman-compose warns about every network a render leaves unused; its
+# output is shown only when a render fails.
+quiet() {
+  local output
+  output=$("$@" 2>&1 >/dev/null) || { printf '%s\n' "$output" >&2; return 1; }
 }
 
-podman_compose_tool_dry_run() {
-  podman-compose "${compose_files[@]}" \
-    --env-file versions/edge.env \
-    --profile tools \
-    --podman-path "$fake_engine" \
-    --dry-run "$@" >/dev/null
-}
-
-for profile in current edge; do
-  podman-compose "${compose_files[@]}" \
-    --env-file "versions/${profile}.env" \
-    --podman-path "$fake_engine" config >/dev/null
-done
-
-COMFY_FRONTEND_MODE=git \
-COMFY_BUILD_TARGET=runtime-frontend-git-sage \
-FRONTEND_GIT_URL=https://github.com/Comfy-Org/ComfyUI_frontend.git \
-FRONTEND_GIT_REF=0000000000000000000000000000000000000000 \
-FRONTEND_GIT_REQUESTED_REF=fixture \
-  podman-compose "${compose_files[@]}" \
-    --env-file versions/edge.env \
-    --podman-path "$fake_engine" config >/dev/null
-
-COMFY_FRONTEND_MODE=dist \
-COMFY_FRONTEND_DIST_DIR="$PROJECT_ROOT/tests/fixtures/frontend-dist" \
-  podman-compose "${compose_files[@]}" \
-    --file compose.frontend-dist.yaml \
-    --env-file versions/current.env \
-    --podman-path "$fake_engine" config >/dev/null
-
-tool_services=$(podman-compose "${compose_files[@]}" \
-  --env-file versions/edge.env --profile tools \
-  --podman-path "$fake_engine" config --services)
-for service in \
-  comfy \
-  node-deps-snapshot \
-  frontend-release-pin \
-  version-update \
-  node-set \
-  node-set-status \
-  model-set \
-  model-set-status \
-  template-inspector \
-  template-draft \
-  frontend-fetch \
-  frontend-build; do
-  grep -Fxq "$service" <<< "$tool_services" \
-    || { printf 'podman-compose compatibility: tools profile misses %s\n' "$service" >&2; exit 1; }
-done
-
-# `--dry-run build` resolves the selected profiled service without contacting
-# a Podman engine. This catches the provider behavior that originally reported
-# a directly targeted helper as missing.
-for service in \
-  node-deps-snapshot \
-  frontend-release-pin \
-  version-update \
-  node-set \
-  node-set-status \
-  model-set \
-  model-set-status \
-  frontend-fetch \
-  frontend-build; do
-  podman_compose_tool_dry_run build "$service"
-done
-
-# Generate Podman arguments for every helper and user-facing runtime command.
-# The fixture answers only the engine probes that podman-compose performs even
-# in dry-run mode; no container engine or network is used.
-for service in \
-  node-deps-snapshot \
-  frontend-release-pin \
-  version-update \
-  node-set \
-  node-set-status \
-  frontend-fetch \
-  frontend-build; do
-  podman_compose_tool_dry_run run --rm --no-deps "$service"
-done
-podman_compose_tool_dry_run run --rm --no-deps -T frontend-release-pin \
-  digest Comfy-Org/ComfyUI_frontend@v1.50.4
-podman_compose_tool_dry_run run --rm --no-deps -T version-update list
-for service in model-set model-set-status; do
-  podman_compose_tool_dry_run run --rm --no-deps -T "$service" status all
-done
-podman_compose_tool_dry_run run --rm --no-deps -T template-inspector list
-podman_compose_tool_dry_run run --rm --no-deps -T template-draft \
-  create-model-set fixture --name fixture
-
-(
-  export FAKE_PODMAN_LOG=$fake_network_log
-  podman-compose "${compose_files[@]}" \
-    --env-file versions/edge.env \
-    --podman-path "$fake_engine" \
-    run --rm --no-deps comfy >/dev/null
-)
-grep -Fq -- '--network=latentcrate_default:alias=comfy' "$network_log" \
-  || { printf 'podman-compose compatibility: comfy does not use the default network\n' >&2; exit 1; }
-if grep -Fq -- '--network=latentcrate_version-sources:alias=comfy' "$network_log"; then
-  printf 'podman-compose compatibility: comfy joined the version-sources helper network\n' >&2
+fail() {
+  printf 'podman-compose compatibility: %s\n' "$1" >&2
   exit 1
+}
+
+# The variants (variants.Variant.compose_env): the release and Git
+# frontends run the `runtime` target as container mode git, dist mode the
+# frontend-less `comfy-runtime` with the dist overlay, and a Sage mode the
+# `runtime-sage` target, with the dist overlay on top when both are set.
+# Each runs the command that follows.
+release() {
+  LATENTCRATE_IMAGE=latentcrate/comfy:release-fixture COMFY_BUILD_TARGET=runtime COMFY_FRONTEND_MODE=git "$@"
+}
+sage() {
+  LATENTCRATE_IMAGE=latentcrate/comfy:release-sage-fixture COMFY_BUILD_TARGET=runtime-sage COMFY_FRONTEND_MODE=git \
+    LATENTCRATE_SAGE=available "$@"
+}
+dist() {
+  LATENTCRATE_IMAGE=latentcrate/comfy:dist-fixture COMFY_BUILD_TARGET=comfy-runtime COMFY_FRONTEND_MODE=dist \
+    COMFY_FRONTEND_DIST_DIR="$dist_dir" "$@"
+}
+dist_sage() {
+  LATENTCRATE_IMAGE=latentcrate/comfy:dist-sage-fixture COMFY_BUILD_TARGET=runtime-sage COMFY_FRONTEND_MODE=dist \
+    COMFY_FRONTEND_DIST_DIR="$dist_dir" LATENTCRATE_SAGE=available "$@"
+}
+# The file combinations engine.Engine.compose passes: the service with the
+# Podman overlay, the GPU device request unless the command runs without a
+# GPU, and the dist-mode frontend mount (added by the caller).
+base() {
+  podman-compose --file compose.yaml --file compose.podman.yaml --env-file pins.env --podman-path "$fake_engine" "$@"
+}
+gpu() {
+  base --file compose.gpu.yaml "$@"
+}
+
+# render <variant> <files> [more files]
+render() {
+  quiet "$1" "$2" "${@:3}" config
+}
+
+render release gpu
+render sage gpu
+render dist gpu --file compose.frontend-dist.yaml
+render dist_sage gpu --file compose.frontend-dist.yaml
+render release base
+
+# The arguments a start produces, from the one `run` the fake engine logs;
+# `--service-ports` publishes the port the way `up` does.
+run_logged() {
+  rm -f -- "$run_log"
+  FAKE_PODMAN_LOG=$run_log quiet "$1" "$2" "${@:3}" run --rm --no-deps -T --service-ports comfy
+}
+logged() {
+  grep -Fq -- "$1" "$run_log"
+}
+
+# A token in the environment reaches no Compose call (test_project_contracts
+# pins the files; this pins the rendered arguments).
+HF_TOKEN=hf-fixture-not-a-token CIVITAI_TOKEN=civitai-fixture-not-a-token run_logged release gpu
+for leaked in hf-fixture-not-a-token HF_TOKEN civitai-fixture-not-a-token CIVITAI_TOKEN; do
+  if logged "$leaked"; then
+    fail 'a token reached the podman command line'
+  fi
+done
+logged "--device $GPU_DEVICE" || fail 'comfy has no GPU device with the gpu overlay'
+logged "-p $COMFY_BIND_ADDRESS:$COMFY_PORT:8188" || fail 'comfy does not publish the UI port on the bind address'
+logged '--network=latentcrate_default:alias=comfy' || fail 'comfy does not use the default network'
+logged '--read-only' || fail 'comfy is not read-only'
+logged "keep-id:uid=$HOST_UID\\,gid=$HOST_GID" || fail 'comfy does not use keep-id'
+logged '--group-add keep-groups' || fail 'comfy does not keep the supplementary groups'
+logged '--label com.docker.compose.project=latentcrate' || fail 'the project label the package finds containers by is missing'
+logged '--label com.docker.compose.service=comfy' || fail 'the service label the package finds containers by is missing'
+logged "-v $COMFY_DATA_DIR:/data" || fail 'the data directory is not mounted writable at /data'
+logged "-v $COMFY_MODELS_DIR:/models" || fail 'the models directory is not mounted writable at /models'
+logged "-v $COMFY_CACHE_DIR:/cache" || fail 'the cache directory is not mounted writable at /cache'
+logged "-v $COMFY_LOCAL_NODES_DIR:/local/custom_nodes:ro" || fail 'the local nodes are not mounted read-only'
+logged "-e LATENTCRATE_SAGE_MODE=$LATENTCRATE_SAGE" || fail 'the Sage mode does not reach the container'
+
+# Without the GPU overlay (`templates`, --allow-no-gpu) no device is requested.
+run_logged release base
+if logged '--device'; then
+  fail 'comfy has a GPU device without the gpu overlay'
 fi
 
-podman_compose_dry_run build comfy
-podman_compose_dry_run up --no-build --detach comfy
-podman_compose_dry_run up --no-build --force-recreate --detach comfy
-podman_compose_dry_run down
-podman_compose_dry_run ps
-podman_compose_dry_run logs --follow comfy
-podman_compose_dry_run exec comfy bash
+# Dist mode: the prebuilt tree is bound read-only at the entrypoint's root.
+run_logged dist gpu --file compose.frontend-dist.yaml
+logged "-v $dist_dir:/opt/latentcrate-frontend-dist:ro" || fail 'the dist overlay does not bind the frontend read-only'
+logged '-e COMFY_FRONTEND_MODE=dist' || fail 'the dist overlay does not select dist mode in the container'
+
+# Dist mode with Sage: the overlay and the Sage mode reach the same container.
+run_logged dist_sage gpu --file compose.frontend-dist.yaml
+logged "-v $dist_dir:/opt/latentcrate-frontend-dist:ro" || fail 'the dist overlay does not bind the frontend with Sage'
+logged '-e LATENTCRATE_SAGE_MODE=available' || fail 'the Sage mode does not reach the dist container'
+
+# The commands the package issues through Compose (runtime.py, templates.py).
+dry_run() {
+  quiet "$1" "$2" --dry-run "${@:3}"
+}
+dry_run release gpu build comfy
+dry_run release gpu up --no-build --force-recreate --detach comfy
+dry_run release base run --rm --no-deps -T --entrypoint python comfy \
+  /usr/local/bin/latentcrate-manage-templates.py list
+dry_run release base run --rm --no-deps -T \
+  --volume "$TEST_ROOT/model-set-drafts:/output" --entrypoint python comfy \
+  /usr/local/bin/latentcrate-manage-templates.py create-model-set fixture --name fixture
 
 printf 'LatentCrate podman-compose 1.6 compatibility checks passed.\n'

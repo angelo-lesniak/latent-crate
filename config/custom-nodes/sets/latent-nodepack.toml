@@ -1,10 +1,10 @@
-version = 1
+schema = 1
 description = "Pinned nodes for video, image, and general ComfyUI workflows"
 
 [[node]]
 name = "ComfyUI-WanVideoWrapper"
 repository = "https://github.com/kijai/ComfyUI-WanVideoWrapper"
-commit = "088128b224242e110d3906c6750e9a3a348a659b"
+commit = "a7439db30bed0c5b5fa437d77ae8a7bb220dfd00"
 
 [[node]]
 name = "comfyui-florence2"
@@ -19,32 +19,32 @@ commit = "26545cc2dd95bc3d27f056016300673bdeee78f5"
 [[node]]
 name = "comfyui-impact-pack"
 repository = "https://github.com/ltdrdata/ComfyUI-Impact-Pack"
-commit = "429d0159ad429e64d2b3916e6e7be9c22d025c3c"
+commit = "ed1bd80650a1d9c9f5d17d6411455e65ad43b58b"
 
 [[node]]
 name = "comfyui-inpaint-cropandstitch"
 repository = "https://github.com/lquesada/ComfyUI-Inpaint-CropAndStitch"
-commit = "606e2b4fd83fc44e1f0b403e1f076501db8c3749"
+commit = "6005efc02f7745649118edd89cdd084c2b9bd3ae"
 
 [[node]]
 name = "comfyui-kjnodes"
 repository = "https://github.com/kijai/ComfyUI-KJNodes"
-commit = "3f20054214fec9f9234fd3841ae6f1e4287948f6"
+commit = "83262fae95ab3d715c85cbde2701e5584b653285"
 
 [[node]]
 name = "comfyui-videohelpersuite"
 repository = "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite"
-commit = "115de7a9d9e34410cffb9ecfd268e993b11a50fb"
+commit = "4d907bee61e92c2e65af3bd6383a4e4d356126d1"
 
 [[node]]
 name = "comfyui_controlnet_aux"
 repository = "https://github.com/Fannovel16/comfyui_controlnet_aux"
-commit = "e8b689a513c3e6b63edc44066560ca5919c0576e"
+commit = "a587a4c1594524c1d2de5cd1a86cd868ff448e1c"
 
 [[node]]
 name = "rgthree-comfy"
 repository = "https://github.com/rgthree/rgthree-comfy"
-commit = "13b4399c00b5ef5a97b1b6800fc1185874740f5d"
+commit = "bc48c6aaeca87bedbc14245d89f9bc6be37a630e"
 
 [[node]]
 name = "was-ns"

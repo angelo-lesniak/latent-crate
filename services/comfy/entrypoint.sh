@@ -9,14 +9,14 @@ readonly MODELS_ROOT=/models
 readonly CACHE_ROOT=/cache
 readonly LOCAL_NODES_ROOT=/local/custom_nodes
 
-frontend_mode=${COMFY_FRONTEND_MODE:-${LATENTCRATE_FRONTEND_IMAGE_MODE:-release}}
+frontend_mode=${COMFY_FRONTEND_MODE:-${LATENTCRATE_FRONTEND_IMAGE_MODE:-git}}
 frontend_root=${COMFY_FRONTEND_ROOT:-$IMAGE_FRONTEND_ROOT}
 
 case "$frontend_mode" in
-  release|git)
-    if [[ "$frontend_mode" != "${LATENTCRATE_FRONTEND_IMAGE_MODE:-release}" ]]; then
-      printf 'LatentCrate: requested frontend mode %s does not match image mode %s.\n' \
-        "$frontend_mode" "${LATENTCRATE_FRONTEND_IMAGE_MODE:-release}" >&2
+  git)
+    if [[ "${LATENTCRATE_FRONTEND_IMAGE_MODE:-}" != git ]]; then
+      printf 'LatentCrate: frontend mode %s needs an image with a built-in frontend; this image has none.\n' \
+        "$frontend_mode" >&2
       exit 1
     fi
     if [[ "$frontend_root" != "$IMAGE_FRONTEND_ROOT" ]]; then
@@ -99,11 +99,6 @@ reject_hidden_custom_nodes() {
       [[ -d "$node_path" ]] || continue
       case "${node_path##*/}" in
         .|..) continue ;;
-        .latentcrate-node-set-*.disabled)
-          printf 'LatentCrate: interrupted custom-node set transaction detected: %s; run the matching "nodes install" or "nodes sync" command to recover it.\n' \
-            "$node_path" >&2
-          exit 1
-          ;;
       esac
       printf 'LatentCrate: hidden custom-node directories are not supported: %s\n' \
         "$node_path" >&2
@@ -200,7 +195,7 @@ printf '  Runtime package cache: %s\n' "$PYTHONUSERBASE"
 
 if ! python -m pip check; then
   printf 'LatentCrate: cached runtime packages have dependency conflicts.\n' >&2
-  printf 'Snapshot node requirements, rebuild the image, then clear %s.\n' "$PYTHONUSERBASE" >&2
+  printf 'Rebuild the image (bash bin/latentcrate build), then clear %s.\n' "$PYTHONUSERBASE" >&2
 fi
 
 if (($# > 0)); then

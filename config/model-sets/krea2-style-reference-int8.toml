@@ -1,6 +1,6 @@
 schema = 1
 description = "Krea-2 style-reference models using the INT8 ConvRot model for a 32 GB RTX 5090"
-workflow_urls = ["https://github.com/Comfy-Org/workflow_templates/blob/3db6490611e6a16b84b09110e61a07264ce47cd3/templates/image_krea2_turbo_int8_image_style_reference.json"]
+workflow_urls = ["https://github.com/Comfy-Org/workflow_templates/blob/c8e48bdcfc7241d7af588d20d4f924caf9d9d953/templates/image_krea2_turbo_int8_image_style_reference.json"]
 
 [[license]]
 name = "Krea 2 Community License"

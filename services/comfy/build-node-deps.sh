@@ -49,9 +49,8 @@ mkdir -p "$wheelhouse"
 # empty-requirements case below. The identity inputs arrive as build
 # arguments when this script runs inside the node-deps-builder image stage.
 {
-  printf 'pytorch-devel-image=%s\n' "${PYTORCH_DEVEL_IMAGE:-}"
-  printf 'custom-node-cache-key=%s\n' "${CUSTOM_NODE_CACHE_KEY:-}"
-  printf 'cuda-architecture-list=%s\n' "${CUSTOM_NODE_CUDA_ARCH_LIST:-}"
+  printf 'pytorch-devel-tag=%s\n' "${PYTORCH_DEVEL_TAG:-}"
+  printf 'cuda-architecture-list=%s\n' "${COMFY_CUDA_ARCH_LIST:-}"
   python --version
   python -c 'import torch; print(f"torch={torch.__version__}"); print(f"torch-cuda={torch.version.cuda}")'
   nvcc --version
