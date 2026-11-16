@@ -45,8 +45,8 @@ def read_toml(path: Path, known_keys: set[str], context: str) -> dict:
 def description(table: dict, context: str) -> str:
     """The one-line description every manifest kind carries, stripped."""
     value = table.get("description")
-    if not isinstance(value, str) or not value.strip() or "\n" in value.strip():
-        raise LatentCrateError(f"{context}: description must be one non-empty line")
+    if not isinstance(value, str) or not value.strip() or not value.strip().isprintable():
+        raise LatentCrateError(f"{context}: description must be one non-empty line of printable text")
     return value.strip()
 
 

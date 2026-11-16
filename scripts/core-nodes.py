@@ -4,10 +4,13 @@ registers without a custom node, read from its source without importing it.
 
 The types are the keys of NODE_CLASS_MAPPINGS in nodes.py and in each
 module ComfyUI loads as built in (the comfy_extras files nodes.py lists in
-init_builtin_extra_nodes, every comfy_api_nodes/nodes_*.py), or, where a
-module has no such keys, the ids its node classes and schemas name (see
-schema_ids). An id that is a computed expression is refused, since this
-reader cannot see its value; a node type it misses is reported by
+init_builtin_extra_nodes, every comfy_api_nodes/nodes_*.py); where a
+module has no such keys, the ids of the classes its extension's
+get_node_list returns (see node_list), or without that method, the ids its
+node classes and schemas name (see schema_ids). An id that is a computed
+expression, a node list that is no literal list of class names, and a
+listed class without exactly one id are refused, since this reader cannot
+see their value; a node type it misses is reported by
 `workflows check`, never passed. Regenerate after a COMFYUI_COMMIT bump:
 
     git clone --filter=blob:none https://github.com/comfyanonymous/ComfyUI <dir>
@@ -44,19 +47,19 @@ def mapping_keys(tree: ast.Module, where: str) -> list[str] | None:
     return None
 
 
-def schema_ids(tree: ast.Module, where: str) -> list[str]:
-    """The ids a V3 module gives its schemas: a `node_id=` literal; a
-    literal first argument to a helper whose first parameter is `node_id`;
-    a `schema.node_id = ` literal, as a subclass renames its parent's
-    schema; a class's own id literal (CLASS_ID_NAMES), which `cls.node_id`
-    reads."""
+def schema_ids(tree: ast.Module, scope: ast.AST, where: str) -> list[str]:
+    """The ids the schemas in `scope` (a class, or the whole module) name:
+    a `node_id=` literal; a literal first argument to a module helper whose
+    first parameter is `node_id`; a `schema.node_id = ` literal, as a
+    subclass renames its parent's schema; a class's own id literal
+    (CLASS_ID_NAMES), which `cls.node_id` reads."""
     helpers = {
         function.name
         for function in ast.walk(tree)
         if isinstance(function, ast.FunctionDef) and function.args.args and function.args.args[0].arg == "node_id"
     }
     found = []
-    for node in ast.walk(tree):
+    for node in ast.walk(scope):
         if isinstance(node, ast.Call):
             values = [keyword.value for keyword in node.keywords if keyword.arg == "node_id"]
             if isinstance(node.func, ast.Name) and node.func.id in helpers and node.args:
@@ -81,6 +84,45 @@ def schema_ids(tree: ast.Module, where: str) -> list[str]:
     return found
 
 
+def class_id(tree: ast.Module, name: str, where: str) -> str:
+    """The id of the module's class `name`: its own, else the one it
+    inherits from a base class of the same module."""
+    classes = {statement.name: statement for statement in tree.body if isinstance(statement, ast.ClassDef)}
+    if name not in classes:
+        raise SystemExit(f"core-nodes: {where}: get_node_list names {name}, which is no class of the module")
+    ids = schema_ids(tree, classes[name], where)
+    if not ids:
+        bases = [base.id for base in classes[name].bases if isinstance(base, ast.Name) and base.id in classes]
+        ids = [class_id(tree, base, where) for base in bases]
+    if len(ids) != 1:
+        raise SystemExit(f"core-nodes: {where}: class {name} names {len(ids)} node ids, not one: {ids}")
+    return ids[0]
+
+
+def node_list(tree: ast.Module, where: str) -> list[str] | None:
+    """The ids of the classes an extension's `get_node_list` returns as a
+    list literal, or None without that method; ComfyUI registers only those,
+    so a class left out of the list (a test node, a commented-out entry) is
+    no core node."""
+    methods = [
+        function
+        for function in ast.walk(tree)
+        if isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef)) and function.name == "get_node_list"
+    ]
+    if not methods:
+        return None
+    body = methods[0].body
+    if (
+        len(methods) != 1
+        or len(body) != 1
+        or not isinstance(body[0], ast.Return)
+        or not isinstance(body[0].value, ast.List)
+        or not all(isinstance(item, ast.Name) for item in body[0].value.elts)
+    ):
+        raise SystemExit(f"core-nodes: {where}: get_node_list is not one method returning a list of class names")
+    return [class_id(tree, item.id, where) for item in body[0].value.elts]
+
+
 def extras_files(tree: ast.Module) -> list[str]:
     for function in tree.body:
         if isinstance(function, ast.AsyncFunctionDef) and function.name == "init_builtin_extra_nodes":
@@ -101,8 +143,8 @@ def main(argv: list[str]) -> int:
     for path in modules:
         where = path.relative_to(root).as_posix()
         tree = ast.parse(path.read_text(encoding="utf-8-sig"))
-        keys = mapping_keys(tree, where)
-        found = keys or schema_ids(tree, where)
+        listed = node_list(tree, where)
+        found = mapping_keys(tree, where) or (schema_ids(tree, tree, where) if listed is None else listed)
         # A miss leaves a core node out, which `workflows check` reports, so
         # an empty module (nodes_replacements.py registers none) is only noted.
         if not found:

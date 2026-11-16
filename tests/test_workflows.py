@@ -450,6 +450,26 @@ class WorkflowSetTests(unittest.TestCase):
                     (1, [f"node {kind}: no pack id and not a core node at {COMFYUI_REF}"]),
                 )
 
+    def test_characters_that_do_not_print_are_escaped_in_the_report(self) -> None:
+        status, found = self.lines(
+            [
+                node("X\x07", cnr_id=None),
+                node("A", "a\tb.safetensors", cnr_id="x\x1b[31m"),
+                node("B", aux_id="a/b\r", cnr_id=None),
+            ],
+            node_sets={},
+        )
+        self.assertEqual(status, 1)
+        self.assertEqual(
+            sorted(found),
+            [
+                "model a\\tb.safetensors: no model set provides it",
+                "node X\\x07: no pack id and not a core node at " + COMFYUI_REF,
+                "node pack a/b\\r (B): no custom-node set provides it",
+                "node pack x\\x1b[31m (A): no custom-node set provides it",
+            ],
+        )
+
     def test_a_workflow_that_is_not_ui_format_json_is_refused(self) -> None:
         cases = {
             "not valid JSON": "{",
@@ -461,17 +481,7 @@ class WorkflowSetTests(unittest.TestCase):
             "definitions.subgraphs must be a list": {"nodes": [], "definitions": {"subgraphs": {}}},
             "subgraph s1 has no nodes list": {"nodes": [], "definitions": {"subgraphs": [{"id": "s1"}]}},
             "node X has properties that are not a table": {"nodes": [{"type": "X", "properties": []}]},
-            "node type 'X\\\\x07' has a character that does not print": {"nodes": [{"type": "X\x07"}]},
-            "model name 'a\\\\tb.safetensors' has a character": {
-                "nodes": [{"type": "X", "widgets_values": ["a\tb.safetensors"]}]
-            },
             "every node needs a type$": {"nodes": [{"type": ""}]},
-            "node A has a pack id 'x\\\\x1b\\[31m' that does not print": {
-                "nodes": [{"type": "A", "properties": {"cnr_id": "x\x1b[31m"}}]
-            },
-            "node B has a pack id 'a/b\\\\r' that does not print": {
-                "nodes": [{"type": "B", "properties": {"aux_id": "a/b\r"}}]
-            },
         }
         # Too long a number and too deep a nesting: the wording is the interpreter's.
         overflowing = (

@@ -44,23 +44,23 @@ class RewriteNodeRequirementsTests(unittest.TestCase):
 
     def test_rewrites_a_raw_tree_and_is_idempotent(self):
         raw = (
-            "git+https://github.com/ltdrdata/img2texture.git\n"
+            "git+https://github.com/facebookresearch/sam2.git\n"
             '  opencv-python-headless[ffmpeg,extra]>=4.8 ; python_version < "3.14"  # cv2\n'
             'sam-2 @ git+https://github.com/facebookresearch/sam2 ; python_version < "3.14"\n'
             f"demo @ git+https://github.com/example/demo.git@{COMMIT}\n"
-            '-e git+https://github.com/ltdrdata/img2texture.git ; python_version < "3.14"  # dev\n'
+            '-e git+https://github.com/facebookresearch/sam2.git ; python_version < "3.14"  # dev\n'
             "-r extra/more.txt\n"
             "numpy\r\n"
         )
         expected = (
-            "img2texture @ git+https://github.com/ltdrdata/img2texture.git@"
-            "d6159abea44a0b2cf77454d3d46962c8b21eb9d3\n"
+            "sam-2 @ git+https://github.com/facebookresearch/sam2.git@"
+            "2b90b9f5ceec907a1c18123530e92e794ad901a4\n"
             '  opencv-contrib-python[extra]>=4.8 ; python_version < "3.14"  # cv2\n'
             "sam-2 @ git+https://github.com/facebookresearch/sam2.git@"
             '2b90b9f5ceec907a1c18123530e92e794ad901a4 ; python_version < "3.14"\n'
             f"demo @ git+https://github.com/example/demo.git@{COMMIT}\n"
-            "-e img2texture @ git+https://github.com/ltdrdata/img2texture.git@"
-            'd6159abea44a0b2cf77454d3d46962c8b21eb9d3 ; python_version < "3.14"  # dev\n'
+            "-e sam-2 @ git+https://github.com/facebookresearch/sam2.git@"
+            '2b90b9f5ceec907a1c18123530e92e794ad901a4 ; python_version < "3.14"  # dev\n'
             "-r extra/more.txt\n"
             "numpy\n"
         )
@@ -103,13 +103,7 @@ class RewriteNodeRequirementsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             tree = self.write_tree(
                 Path(directory),
-                {
-                    "Example/requirements.txt": (
-                        "git+https://github.com/facebookresearch/sam2\n"
-                        "git+https://github.com/ltdrdata/cstr\n"
-                        "git+https://github.com/ltdrdata/ffmpy.git\n"
-                    )
-                },
+                {"Example/requirements.txt": "git+https://github.com/facebookresearch/sam2\n"},
             )
 
             result = self.run_rewrite(tree)
@@ -117,12 +111,7 @@ class RewriteNodeRequirementsTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(
                 (tree / "Example" / "requirements.txt").read_text(encoding="utf-8"),
-                "sam-2 @ git+https://github.com/facebookresearch/sam2.git@"
-                "2b90b9f5ceec907a1c18123530e92e794ad901a4\n"
-                "cstr @ git+https://github.com/ltdrdata/cstr.git@"
-                "0520c29a18a7a869a6e5983861d6f7a4c86f8e9b\n"
-                "ffmpy @ git+https://github.com/ltdrdata/ffmpy.git@"
-                "f000737698b387ffaeab7cd871b0e9185811230d\n",
+                "sam-2 @ git+https://github.com/facebookresearch/sam2.git@2b90b9f5ceec907a1c18123530e92e794ad901a4\n",
             )
 
     def test_does_not_parse_git_text_in_a_comment(self):
@@ -176,8 +165,8 @@ class RewriteNodeRequirementsTests(unittest.TestCase):
             "git+https://github.com/example/unpinned.git\n": "unpinned Git requirement",
             "git+https://gitlab.com/ltdrdata/cstr.git\n": "allowed-git-hosts.txt",
             "git+ssh://git@github.com/ltdrdata/cstr.git\n": "possible credential",
-            "git+https://github.com/ltdrdata/cstr.git@main\n": "permits only <no revision>",
-            "other @ git+https://github.com/ltdrdata/cstr.git\n": "does not match requirement package",
+            "git+https://github.com/facebookresearch/sam2.git@main\n": "permits only <no revision>",
+            "other @ git+https://github.com/facebookresearch/sam2.git\n": "does not match requirement package",
             f"demo @ git+https://github.com/example/demo.git@{COMMIT}?access_token=x\n": "must not contain a query",
             "demo @ git+https://github.com/example/demo.git@main \\\n": "multiline VCS requirements",
             "numpy \\\n": "invalid custom-node requirement",

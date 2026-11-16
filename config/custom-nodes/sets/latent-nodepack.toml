@@ -48,5 +48,5 @@ commit = "bc48c6aaeca87bedbc14245d89f9bc6be37a630e"
 
 [[node]]
 name = "was-ns"
-repository = "https://github.com/ltdrdata/was-node-suite-comfyui"
-commit = "44de705818d4663fefefde57ffe0ea5a9ea39df4"
+repository = "https://github.com/WASasquatch/was-node-suite-comfyui"
+commit = "338f521fc45b68c37bde52b99a94d2bc0ac6fd3d"

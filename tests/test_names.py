@@ -38,7 +38,7 @@ class SharedRuleTests(unittest.TestCase):
 
     def test_descriptions_and_relative_paths(self) -> None:
         self.assertEqual(names.description({"description": " one line "}, "x"), "one line")
-        for value in (None, "", " ", "two\nlines", 3):
+        for value in (None, "", " ", "two\nlines", "red \x1b[31m", 3):
             with self.assertRaisesRegex(LatentCrateError, "x: description must be one non-empty line"):
                 names.description({"description": value}, "x")
         self.assertEqual(

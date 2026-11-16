@@ -35,7 +35,7 @@ checkout's `pins.env` and Dockerfile.
 | 2026-11-16 | GPU host | `models check --remote`, `models fetch`, `models status --verify` of `moss-image-int8` and a private set | pass; 18.7 GB in 5 files, every file ready |
 | 2026-11-16 | GPU host | `workflows list`, `workflows check all` over five private sets of 168 workflows | pass; `check` exits 1 naming the packs and model files the sets lack |
 | 2026-11-16 | GPU host | `up --detach` with both workflow trees; `/proc/self/mountinfo`; `touch` inside and beside the trees; `GET /api/userdata?dir=workflows&recurse=true`; `POST /api/userdata/` over a set's file | pass; healthy in 61 s; both binds `ro`; writes inside fail with `Read-only file system`, beside them succeed; ComfyUI lists all 168 workflows; the POST answers 400 |
-| 2026-11-16 | GPU host | `GET /object_info` core types against `config/comfy/core-nodes.txt` | every running core type is listed; 13 listed types are not registered (test and conditional nodes) |
+| 2026-11-16 | GPU host | `GET /object_info` core types against `config/comfy/core-nodes.txt` | every running core type is listed; 13 listed types are not registered (classes ComfyUI leaves out of its registered node lists) |
 
 ## Hosts
 

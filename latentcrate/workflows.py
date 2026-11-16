@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from . import LatentCrateError
+from . import LatentCrateError, printable
 from .files import read_utf8
 from .models.manifest import CIVITAI_MODEL_URL_RE, IMMUTABLE_URL_RE, License, ModelSet, read_license, require_keys
 from .names import SET_NAME_RE, read_toml, relative_path
@@ -248,11 +248,8 @@ def subgraph_definitions(document: dict, context: str) -> dict[str, dict]:
     return found
 
 
-def model_name(value: str, context: str) -> str:
-    """A model path as ComfyUI resolves it; one that would print as more
-    than one plain line is refused."""
-    if not value.isprintable():
-        raise LatentCrateError(f"{context}: model name {value!r} has a character that does not print")
+def model_name(value: str) -> str:
+    """A model path as ComfyUI resolves it."""
     return value.replace("\\", "/")
 
 
@@ -268,11 +265,11 @@ def declared_models(value: object, context: str) -> set[tuple[str, str]]:
         name, directory = entry.get("name"), entry.get("directory", "")
         if not isinstance(name, str) or not name or not isinstance(directory, str):
             raise LatentCrateError(f"{context}: a models entry needs a name and a directory string")
-        found.add((model_name(directory, context).strip("/"), model_name(name, context)))
+        found.add((model_name(directory).strip("/"), model_name(name)))
     return found
 
 
-def widget_models(values: object, context: str) -> set[str]:
+def widget_models(values: object) -> set[str]:
     """The widget values that name a model file, relative to its category,
     at any depth. A table is a row of a multi-model loader (rgthree's Power
     Lora Loader: `{"on": true, "lora": "x.safetensors", ...}`) and counts
@@ -290,7 +287,7 @@ def widget_models(values: object, context: str) -> set[str]:
         elif isinstance(value, str) and value.lstrip().startswith(("{", "[")) and (encoded := json_value(value)):
             pending.append(encoded)
         elif isinstance(value, str) and "\n" not in value and value.lower().endswith(MODEL_SUFFIXES):
-            found.add(model_name(value, context))
+            found.add(model_name(value))
     return found
 
 
@@ -317,15 +314,13 @@ def needs(document: dict, context: str, core_nodes: frozenset[str]) -> Needs:
             if not isinstance(node, dict) or not isinstance(node.get("type"), str) or not node["type"]:
                 raise LatentCrateError(f"{context}: every node needs a type")
             kind = node["type"]
-            if not kind.isprintable():
-                raise LatentCrateError(f"{context}: node type {kind!r} has a character that does not print")
             # A hand-edited file may write null; the frontend saves a table.
             properties = node.get("properties") if node.get("properties") is not None else {}
             if not isinstance(properties, dict):
                 raise LatentCrateError(f"{context}: node {kind} has properties that are not a table")
             if node.get("mode") in INACTIVE_MODES:
                 continue
-            names = set() if kind in NOTE_TYPES else widget_models(node.get("widgets_values"), context)
+            names = set() if kind in NOTE_TYPES else widget_models(node.get("widgets_values"))
             # Templates list alternatives too; an entry counts once a widget selects it.
             selected = {entry for entry in declared_models(properties.get("models"), context) if entry[1] in names}
             found.models |= selected
@@ -339,9 +334,6 @@ def needs(document: dict, context: str, core_nodes: frozenset[str]) -> Needs:
                 continue
             # The frontend's own order (getCnrIdFromProperties): a non-empty cnr_id, then aux_id.
             cnr_id, aux_id = properties.get("cnr_id"), properties.get("aux_id")
-            for pack_id in (cnr_id, aux_id):
-                if isinstance(pack_id, str) and not pack_id.isprintable():
-                    raise LatentCrateError(f"{context}: node {kind} has a pack id {pack_id!r} that does not print")
             if cnr_id == CORE_PACK:
                 # Saved on a newer ComfyUI, with a node the pinned one lacks.
                 if kind not in core_nodes:
@@ -430,6 +422,6 @@ def check(
             where = f"{workflow_set.name}/{workflow.file}"
             found = needs(read_workflow_json(workflow_set.directory / workflow.file, where), where, core_nodes)
             for line, resolved in report(found, providers, node_sets, comfyui_ref):
-                print(f"{where}: {line}")
+                print(f"{where}: {printable(line)}")
                 result |= not resolved
     return int(result)

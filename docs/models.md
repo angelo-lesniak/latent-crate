@@ -122,7 +122,7 @@ refuses any other key.
 | `workflow_urls` | yes | Unique commit-pinned `Comfy-Org/workflow_templates` blob URLs |
 | `[[license]]` | one or more | A model license the user accepts before downloading |
 | `license.name` | yes | Shown by `fetch` |
-| `license.url` | yes | An HTTPS URL pinned to a 40-character commit on `huggingface.co`, `github.com`, or `cdn.jsdelivr.net`; a private set may also name `https://civitai.com/models/<id>` |
+| `license.url` | yes | An HTTPS URL of one file at a full lowercase commit on `huggingface.co`, `github.com`, or `cdn.jsdelivr.net`, without a query, fragment, backslash, percent-encoded dot, or `.` or `..` segment; a private set may also name `https://civitai.com/models/<id>` |
 | `[[file]]` | one or more | One pinned Hugging Face file or Civitai model version |
 | `file.repository` | Hugging Face files | `<owner>/<repository>` |
 | `file.revision` | Hugging Face files | Full lowercase commit of the repository |

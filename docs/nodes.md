@@ -58,6 +58,9 @@ them. A successful install writes the set name to
 record and refuses to start while a node of the set is missing, naming
 `nodes install`. `status` prints one line per node: `ready`, `missing`,
 `dirty`, `different-commit`, `different-repository`, or `conflict`.
+`install` and `sync` refuse a `dirty`, `different-repository`, or
+`conflict` node: move its directory out of `COMFY_DATA_DIR/custom_nodes`,
+then run `sync`.
 `check` validates a manifest against
 `config/custom-nodes/allowed-git-hosts.txt` without touching the
 checkouts. `export` prints a manifest for the clean public checkouts
@@ -69,6 +72,17 @@ entries of `name`, `repository`, and `commit`: a credential-free HTTPS
 `owner/repository` URL on an allowed host and a full lowercase commit.
 The common refusals are sections of
 [troubleshooting](troubleshooting.md).
+
+`latent-nodepack` installs WAS Node Suite v3 from
+[WASasquatch/was-node-suite-comfyui](https://github.com/WASasquatch/was-node-suite-comfyui)
+as `was-ns`, so a workflow that names the pack `was-ns` or
+`was-node-suite-comfyui` resolves. A workflow saved with an older WAS
+Node Suite loses `Image Send HTTP`, `Text Random Prompt`, and
+`True Random.org Number Generator`, has four retired ids that
+ComfyUI's missing-node dialog replaces, and gets different results from
+six nodes;
+[Opening a workflow saved before v3](https://github.com/WASasquatch/was-node-suite-comfyui/blob/338f521fc45b68c37bde52b99a94d2bc0ac6fd3d/README.md#opening-a-workflow-saved-before-v3)
+lists them.
 
 ## Local nodes
 

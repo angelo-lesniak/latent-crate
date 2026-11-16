@@ -14,6 +14,7 @@ import sys
 import unittest
 from unittest import mock
 
+import latentcrate
 from latentcrate import LatentCrateError, checkpins, cli, env
 from tests.support import SOURCE_ROOT, Scratch
 
@@ -383,6 +384,11 @@ destination = "loras/gone.safetensors"
         self.expect_failure(
             "fix the [fail] lines above before starting (bash bin/latentcrate doctor repeats them)", "up"
         )
+
+    def test_a_notice_escapes_what_does_not_print_and_keeps_its_lines(self) -> None:
+        with contextlib.redirect_stderr(io.StringIO()) as printed:
+            latentcrate.warn("node X\x1b]0;t\x07 has properties\nsubgraph s\x1b[31m")
+        self.assertEqual(printed.getvalue(), "LatentCrate: node X\\x1b]0;t\\x07 has properties\nsubgraph s\\x1b[31m\n")
 
     def test_option_errors(self) -> None:
         self.expect_failure("unexpected argument for down: extra", "down", "extra")

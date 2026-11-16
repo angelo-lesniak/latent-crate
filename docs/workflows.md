@@ -49,6 +49,8 @@ with `<set>/<file>:`.
 | `node <type>: comfy-core but not a core node at <COMFYUI_REF>` | The workflow says the node is built into ComfyUI, but the pinned ComfyUI does not have it, usually because the workflow was saved on a newer ComfyUI. Delete the node, or wait for a `COMFYUI_REF` that has it. |
 
 `check` exits `1` on a `no … provides it` or `not a core node` line.
+A character in a workflow that does not print, such as an escape or a
+tab, is printed as its escape sequence (`\x1b`, `\t`).
 
 A pack id is a node's `cnr_id`, else its `aux_id`. An `aux_id` matches
 a node-set entry's GitHub `owner/repository`, a `cnr_id` its `name` or
@@ -60,11 +62,7 @@ nodes print nothing; a subgraph prints the nodes inside it.
 The core list includes the partner API nodes, so with
 `COMFY_DISABLE_API_NODES=true` ([strict mode](privacy.md#strict-mode))
 a workflow that uses them passes `check`, but ComfyUI lacks those nodes
-at runtime. The list is read from ComfyUI's source, so it also holds
-test nodes and nodes ComfyUI registers only under a condition; a
-workflow that uses one of those passes `check` but may fail at runtime
-([Validation](validation.md#status) records how many the host run did
-not register).
+at runtime.
 
 ## Private sets
 

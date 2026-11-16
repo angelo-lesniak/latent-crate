@@ -156,6 +156,9 @@ class NodeTests(unittest.TestCase):
         node_set = nodes.read_manifest(shipped, self.hosts)
         self.assertEqual(node_set.name, "latent-nodepack")
         self.assertEqual(len(node_set.nodes), 10)
+        # The name matches workflows saved with cnr_id was-ns, the repository those saved with was-node-suite-comfyui.
+        was = next(node for node in node_set.nodes if node.name == "was-ns")
+        self.assertEqual(was.repository, "https://github.com/WASasquatch/was-node-suite-comfyui")
         self.assertIn("latent-nodepack", nodes.catalog(self.scratch.root / "config", self.hosts))
         self.assertEqual(nodes.public_repository("https://github.com/Owner/Repo.git"), "https://github.com/Owner/Repo")
         with self.assertRaisesRegex(LatentCrateError, "old: schema must be 1"):

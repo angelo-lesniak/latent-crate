@@ -16,8 +16,6 @@ AudioEncoderEncode
 AudioEncoderLoader
 AudioEqualizer3Band
 AudioMerge
-AutogrowNamesTestNode
-AutogrowPrefixTestNode
 BakeAmbientOcclusion
 BakeNormalMapFromMesh
 BakeTextureFromViews
@@ -25,7 +23,6 @@ BakeTextureFromVoxel
 BasicGuider
 BasicScheduler
 BatchCameras
-BatchImagesMasksLatentsNode
 BatchImagesNode
 BatchLatentsNode
 BatchMasksNode
@@ -124,14 +121,12 @@ ColorTransfer
 CombineHooks2
 CombineHooks4
 CombineHooks8
-ComboOptionTestNode
 ComfyAndNode
 ComfyCloudFlux2TextToImageNode
 ComfyCloudMageFlowTextToImageNode
 ComfyCloudMageFlowTurboTextToImageNode
 ComfyCloudMiniMaxH3FirstLastFrameToVideoNode
 ComfyCloudMiniMaxH3ImageToVideoNode
-ComfyCloudMiniMaxH3ReferenceToVideoNode
 ComfyCloudMiniMaxH3TextToVideoNode
 ComfyCloudMiniMaxMusic3TextToAudioNode
 ComfyCloudZImageTurboNode
@@ -139,7 +134,6 @@ ComfyMathExpression
 ComfyNotNode
 ComfyNumberConvert
 ComfyOrNode
-ComfySoftSwitchNode
 ComfySwitchNode
 ConcatenateVideo
 ConditioningAverage
@@ -167,7 +161,6 @@ ControlNetInpaintingAliMamaApply
 ControlNetLoader
 ConvertArrayToString
 ConvertDictionaryToString
-ConvertStringToComboNode
 CosmosImageToVideoLatent
 CosmosPredict2ImageToVideoLatent
 CreateBoundingBoxes
@@ -187,10 +180,8 @@ CropMask
 CurveEditor
 CustomCombo
 DA3GeometryToMesh
-DA3GeometryToPointCloud
 DA3Inference
 DA3Render
-DCTestNode
 DecimateMesh
 DiffControlNetLoader
 DifferentialDiffusion
@@ -382,7 +373,6 @@ ImageUpscaleWithModel
 ImageYUVToRGB
 InpaintModelConditioning
 InstructPixToPixConditioning
-InvertBooleanNode
 InvertMask
 JoinAudioChannels
 JoinImageWithAlpha
@@ -577,7 +567,6 @@ MinimaxHailuo03RegenerateNode
 MinimaxHailuo03TextToVideoNode
 MinimaxHailuoVideoNode
 MinimaxImageToVideoNode
-MinimaxSubjectToVideoNode
 MinimaxTextToVideoNode
 MireloTextToSFX
 MireloVideoToSFX
@@ -621,7 +610,6 @@ ModelSamplingSD3
 ModelSamplingStableCascade
 ModelSave
 Morphology
-MultiGPU_Options
 MultiGPU_WorkUnits
 NAGuidance
 NormalizeImages
@@ -718,7 +706,6 @@ RecraftStyleV3DigitalIllustration
 RecraftStyleV3InfiniteStyleLibrary
 RecraftStyleV3LogoRaster
 RecraftStyleV3RealisticImage
-RecraftStyleV3VectorIllustrationNode
 RecraftTextToImageNode
 RecraftTextToVectorNode
 RecraftV4CreateStyleNode

@@ -11,22 +11,3 @@ package = "sam-2"
 repository = "https://github.com/facebookresearch/sam2.git"
 requested_ref = ""
 commit = "2b90b9f5ceec907a1c18123530e92e794ad901a4"
-
-# was-ns names the three ltdrdata forks below by branch.
-[[pin]]
-package = "img2texture"
-repository = "https://github.com/ltdrdata/img2texture.git"
-requested_ref = ""
-commit = "d6159abea44a0b2cf77454d3d46962c8b21eb9d3"
-
-[[pin]]
-package = "cstr"
-repository = "https://github.com/ltdrdata/cstr.git"
-requested_ref = ""
-commit = "0520c29a18a7a869a6e5983861d6f7a4c86f8e9b"
-
-[[pin]]
-package = "ffmpy"
-repository = "https://github.com/ltdrdata/ffmpy.git"
-requested_ref = ""
-commit = "f000737698b387ffaeab7cd871b0e9185811230d"
