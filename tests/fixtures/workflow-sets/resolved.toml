@@ -1,0 +1,13 @@
+schema = 1
+description = "Fixture: text to image, and an upscale inside a subgraph"
+
+[[workflow]]
+file = "t2i.json"
+provenance = "custom"
+
+[[workflow]]
+file = "upscale/subgraph.json"
+provenance = "modified-clone"
+source = "https://github.com/Comfy-Org/workflow_templates/blob/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/templates/fixture_upscale.json"
+license = { name = "MIT", url = "https://github.com/Comfy-Org/workflow_templates/blob/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/LICENSE" }
+note = "Wrapped the upscale in a subgraph"

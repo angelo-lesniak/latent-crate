@@ -25,9 +25,15 @@ NOTE = (
 )
 RTX_5090 = GpuFacts("0", "GPU-abc", "12.0", "615.78.08", "NVIDIA GeForce RTX 5090")
 RTX_3090 = GpuFacts("1", "GPU-def", "8.6", "615.78.08", "NVIDIA GeForce RTX 3090")
-DATA = HostPath("the data directory", Path("/srv/data"), "COMFY_DATA_DIR", mounted=True, writable=True)
+DATA = HostPath(
+    "the data directory", Path("/srv/data"), "COMFY_DATA_DIR", mounted=True, writable=True, created_by_init=True
+)
 LOCAL_NODES = HostPath(
-    "the local custom-node directory", Path("/srv/local-nodes"), "COMFY_LOCAL_NODES_DIR", mounted=True
+    "the local custom-node directory",
+    Path("/srv/local-nodes"),
+    "COMFY_LOCAL_NODES_DIR",
+    mounted=True,
+    created_by_init=True,
 )
 SMI_LINE = "0, GPU-abc, 12.0, 615.78.08, NVIDIA GeForce RTX 5090"
 IN_USE = "[Errno 98] Address already in use"
@@ -367,8 +373,11 @@ class EvaluateTests(unittest.TestCase):
         models = HostPath("the models directory", Path("/srv/models"), "COMFY_MODELS_DIR", mounted=True, writable=True)
         managed = HostPath("the managed custom-node directory", Path("/srv/data/custom_nodes"), created_by_init=True)
         cache = HostPath("the cache directory", Path("/srv/cache"), "COMFY_CACHE_DIR", mounted=True, writable=True)
+        # A mounted directory init does not create ships with the checkout.
+        shipped = HostPath("the shipped workflow directory", Path("/srv/checkout/workflows"), mounted=True)
         storage = [
             StorageFact(DATA, False, False, False),
+            StorageFact(shipped, False, False, False),
             StorageFact(models, True, True, False),
             StorageFact(LOCAL_NODES, True, True, False),
             StorageFact(managed, True, True, True),
@@ -382,6 +391,7 @@ class EvaluateTests(unittest.TestCase):
         self.assertEqual(
             failures(lines),
             [
+                "[fail] the shipped workflow directory is missing from the checkout: /srv/checkout/workflows",
                 "[fail] the models directory is not writable: /srv/models",
                 "[fail] the local custom-node directory is not readable: /srv/local-nodes",
                 "[fail] the cache directory is not a directory: /srv/cache",
@@ -516,14 +526,16 @@ class GatherTests(unittest.TestCase):
         self.assertTrue(facts.cdi_spec_present)
         self.assertIsInstance(facts.storage_free_kb, int)
         self.assertEqual(
-            [(fact.place.key, fact.exists, fact.is_dir, fact.accessible) for fact in facts.storage],
+            [(fact.place.label, fact.exists, fact.is_dir, fact.accessible) for fact in facts.storage],
             [
-                ("COMFY_DATA_DIR", True, True, True),
-                ("", False, False, False),
-                ("COMFY_MODELS_DIR", True, True, True),
-                ("COMFY_CACHE_DIR", True, True, True),
-                ("COMFY_LOCAL_NODES_DIR", True, True, True),
-                ("", False, False, False),
+                ("the data directory", True, True, True),
+                ("the managed custom-node directory", False, False, False),
+                ("the models directory", True, True, True),
+                ("the cache directory", True, True, True),
+                ("the local custom-node directory", True, True, True),
+                ("the private model-set directory", False, False, False),
+                ("the shipped workflow directory", True, True, True),
+                ("the private workflow directory", False, False, False),
             ],
         )
         self.assertEqual(facts.models_gid, (self.scratch.storage / "models").stat().st_gid)

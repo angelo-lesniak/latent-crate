@@ -16,9 +16,16 @@ change.
 | Setting | Container path | Mounted | Holds |
 | --- | --- | --- | --- |
 | `COMFY_DATA_DIR` | `/data` | writable | user settings, workflows, inputs, outputs, and the managed custom nodes under `custom_nodes` |
+| - | `/data/user/default/workflows/latentcrate` | read-only | `config/workflow-sets/workflows`: the shipped [workflow sets](workflows.md) |
+| - | `/data/user/default/workflows/latentcrate-local` | read-only | `local/workflow-sets/workflows`: the private workflow sets |
 | `COMFY_MODELS_DIR` | `/models` | writable | the model library |
 | `COMFY_CACHE_DIR` | `/cache` | writable | downloads, package caches, Triton, and temporary files |
 | `COMFY_LOCAL_NODES_DIR` | `/local/custom_nodes` | read-only | private or unregistered node source |
+
+`up` creates `user/default/workflows/latentcrate` and
+`latentcrate-local` in `COMFY_DATA_DIR`, and refuses a symbolic link on
+that path; while the container runs, the binds hide anything saved
+there.
 
 A relative path is resolved from the checkout. No directory may be or
 contain the checkout, and no two may overlap; every command refuses both.
@@ -37,7 +44,7 @@ and for what `up` captures.
 A symbolic link below the models directory may point outside it.
 `models fetch` writes through the link only when its target is listed in
 `MODEL_SET_EXTRA_WRITE_ROOTS`; the container sees the target only when the
-same path is bound inside it, and the Compose files bind the four
+same path is bound inside it, and the Compose files bind the
 directories above and nothing else. A link to another disk therefore
 serves `models fetch` but not ComfyUI; a host mount inside the models
 directory serves both.
@@ -131,7 +138,11 @@ holds the modes.
 image tag carries no project name. Two independent setups need separate
 checkouts, storage paths, and `LATENTCRATE_IMAGE` values.
 
-After a pin change run `build`, then `up`.
+After a pin change run `build`, then `up`. After a `COMFYUI_COMMIT`
+change, regenerate `config/comfy/core-nodes.txt` (the node types
+`workflows check` counts as core) with the command in
+[`scripts/core-nodes.py`](../scripts/core-nodes.py); the gate checks
+only that its header names the pinned commit, so never edit it by hand.
 
 The entrypoint keeps the Triton and Torch extension caches per runtime
 under `triton/<runtime>` and `torch-extensions/<runtime>` in

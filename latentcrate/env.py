@@ -372,13 +372,19 @@ class Settings:
         return self.root / "local" / "model-sets"
 
     @property
+    def local_workflow_sets_dir(self) -> Path:
+        return self.root / "local" / "workflow-sets"
+
+    @property
     def storage(self) -> tuple[HostPath, ...]:
         """Every host path the wrapper owns or mounts, with its rules: the
         one list that `load`, `init`, and `doctor` iterate. The storage
-        directories are real paths already; the checkout is resolved here
-        so the rules see one spelling."""
+        directories are real paths already; the checkout and the workflow
+        directories in it are resolved here so the rules see one spelling."""
         root = Path(os.path.realpath(self.root))
         mounted = {"mounted": True, "created_by_init": True}
+        shipped_workflows = Path(os.path.realpath(root / "config" / "workflow-sets" / "workflows"))
+        private_workflows = Path(os.path.realpath(root / "local" / "workflow-sets" / "workflows"))
         return (
             HostPath("the LatentCrate checkout", root),
             HostPath("the data directory", self.data_dir, "COMFY_DATA_DIR", writable=True, **mounted),
@@ -387,6 +393,9 @@ class Settings:
             HostPath("the cache directory", self.cache_dir, "COMFY_CACHE_DIR", writable=True, **mounted),
             HostPath("the local custom-node directory", self.local_nodes_dir, "COMFY_LOCAL_NODES_DIR", **mounted),
             HostPath("the private model-set directory", self.local_model_sets_dir, created_by_init=True),
+            # The directory beside the manifests, which alone is mounted (latentcrate.workflows).
+            HostPath("the shipped workflow directory", shipped_workflows, mounted=True),
+            HostPath("the private workflow directory", private_workflows, **mounted),
         )
 
     def subprocess_env(self, **extra: str) -> dict[str, str]:
@@ -485,14 +494,17 @@ def load(root: Path, environ: dict[str, str] | None = None) -> Settings:
     mounted = [place for place in settings.storage if place.mounted]
     for place in mounted:
         if checkout.is_relative_to(place.path):
-            raise LatentCrateError(f"{place.key} must not be or contain the LatentCrate checkout: {place.path}")
+            raise LatentCrateError(
+                f"{place.key or place.label} must not be or contain the LatentCrate checkout: {place.path}"
+            )
     # A directory mounted twice is written through two mounts, and the
     # managed custom nodes must not be the local ones.
     for outer in mounted:
         for inner in mounted:
             if inner is not outer and inner.path.is_relative_to(outer.path):
                 raise LatentCrateError(
-                    f"{outer.key} and {inner.key} must be separate directories, neither inside the other: "
+                    f"{outer.key or outer.label} and {inner.key or inner.label} must be separate directories, "
+                    "neither inside the other: "
                     f"{outer.path}, {inner.path}"
                 )
     return settings

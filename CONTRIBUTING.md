@@ -25,10 +25,10 @@ standard library and targets Python 3.11 (`ruff.toml`, the floor
 `bin/latentcrate` enforces); `bin/latentcrate` only launches it. The
 image's shell and Python live under `services/comfy/` and in
 `scripts/manage-templates.py`. `config/` holds the manifests
-(`model-sets/`, `custom-nodes/sets/`) and the policy files the image
-copies in. `Settings.storage` in `latentcrate/env.py` is the shared list
-of host paths; `init` and `doctor` iterate it instead of naming
-directories. Each module's docstring says what it does.
+(`model-sets/`, `custom-nodes/sets/`, `workflow-sets/`) and the policy
+files the image copies in. `Settings.storage` in `latentcrate/env.py`
+is the shared list of host paths; `init` and `doctor` iterate it
+instead of naming directories. Each module's docstring says what it does.
 
 [Source and dependencies](docs/nodes.md#source-and-dependencies) says
 how node requirements reach the image; `services/comfy/install-node-deps.sh`
@@ -77,6 +77,8 @@ elsewhere:
   licenses, stamps, manifest keys, the templates tools and drafts.
 - `docs/nodes.md`: Manager installs, node sets, local nodes, captured
   dependencies and the policy files, SageAttention.
+- `docs/workflows.md`: workflow sets, provenance, manifest keys,
+  private sets, `workflows check`.
 - `docs/frontends.md`: the frontend modes.
 - `docs/privacy.md`: what runs where, where each token goes, the network
   and Manager defaults and their limits, strict mode.
@@ -123,7 +125,7 @@ release and CUDA family (`env.cuda_family`); change the four together.
    keyed by the pin in `latentcrate/checkpins.py` and a case in
    `tests/test_checkpins.py`.
 
-## Node sets and model sets
+## Node, model, and workflow sets
 
 The loaders enforce the manifest rules:
 
@@ -136,12 +138,18 @@ The loaders enforce the manifest rules:
   `sha256`, a private set may omit them. The set carries at least
   one license with an immutable HTTPS URL and commit-pinned official
   workflow URLs (`latentcrate/models/manifest.py`).
+- A workflow entry states its provenance
+  ([Manifest keys](docs/workflows.md#manifest-keys)); review checks that
+  a clone's license permits redistribution and, for a modified clone,
+  modification. The gate requires every shipped workflow set to resolve
+  against the shipped model and node sets (`tests/test_workflows.py`).
 - Every manifest carries a one-line `description`, and names and
   selections follow `latentcrate/names.py`.
 
 [Node sets](docs/nodes.md#node-sets) holds the node-set procedure and
 [Add a set](docs/models.md#add-a-set) the model-set procedure with
-`models draft` and `models check --remote`.
+`models draft` and `models check --remote`, and
+[Add a set](docs/workflows.md#add-a-set) the workflow-set procedure.
 
 Do not commit models, tokens, `.env`, `build/`, `data/`, `local/`, or
 `reports/`.
@@ -245,6 +253,12 @@ against its reason.
   set nobody else fetches, while the shipped loader stays strict
   ([Private sets](docs/models.md#private-sets)). Reconsider if a private
   set is ever shared or a record-only file is found swapped.
+- **Every workflow set mounts, read-only, always.** A Compose bind is
+  static, so mounting only some sets would need a generated overlay, and
+  the files are kilobytes; read-only keeps ComfyUI out of the checkout
+  ([How a set works](docs/workflows.md#how-a-set-works)). Reconsider
+  when a user asks to hide sets they do not use or to save edits back
+  into a set.
 - **Civitai is a source beside Hugging Face, pinned by version id, size,
   and SHA-256.** Many LoRAs and fine-tunes exist nowhere else, and the
   pins catch a re-upload

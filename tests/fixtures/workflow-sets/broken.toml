@@ -1,0 +1,8 @@
+schema = 1
+description = "Fixture: a workflow whose model, node pack, and node no set provides"
+
+[[workflow]]
+file = "missing.json"
+provenance = "clone"
+source = "https://huggingface.co/example/fixture/blob/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/missing.json"
+license = { name = "Apache-2.0", url = "https://huggingface.co/example/fixture/blob/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/LICENSE" }

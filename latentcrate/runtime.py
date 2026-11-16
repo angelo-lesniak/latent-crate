@@ -16,7 +16,7 @@ import re
 import shutil
 import subprocess
 import time
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from . import LatentCrateError, warn
 from .engine import PROJECT_LABEL, SERVICE, Engine
@@ -40,6 +40,9 @@ INCLUDE_RE = re.compile(r"^\s*(?:-r|--requirement|-c|--constraint)(?:\s+|=)(?P<p
 DURATION_RE = re.compile(r"^([0-9]+)([smh])$")
 UNIT_SECONDS = {"s": 1, "m": 60, "h": 3600}
 SMOKE_SCRIPT = "/usr/local/bin/latentcrate-gpu-smoke"
+# The workflow-set bind targets of compose.yaml, below the /data bind: a
+# nested bind needs its mountpoint, which an engine would create owned by root.
+WORKFLOW_MOUNTPOINTS = ("user/default/workflows/latentcrate", "user/default/workflows/latentcrate-local")
 
 
 def grace_seconds(settings: Settings) -> int:
@@ -173,6 +176,18 @@ def build_image(settings: Settings, engine: Engine, variant: Variant, pinned: di
         build(settings, engine, variant, pinned)
 
 
+def create_mountpoint(data_dir: Path, mountpoint: str) -> None:
+    """Create a workflow-set mountpoint below the data directory one level at
+    a time. The container writes the data directory, so a symbolic link on
+    the way could make the wrapper create directories elsewhere on the host."""
+    path = data_dir
+    for part in PurePosixPath(mountpoint).parts:
+        path = path / part
+        if path.is_symlink():
+            raise LatentCrateError(f"refusing a symbolic link where a workflow-set mountpoint goes: {path}")
+        path.mkdir(exist_ok=True)
+
+
 def start_stack(
     settings: Settings, engine: Engine, variant: Variant, pinned: dict[str, str], *, timeout: int, detach: bool
 ) -> int:
@@ -188,6 +203,8 @@ def start_stack(
         require_selected_set(settings)
         build(settings, engine, variant, pinned)
         engine.require_port(settings.port)
+        for mountpoint in WORKFLOW_MOUNTPOINTS:
+            create_mountpoint(settings.data_dir, mountpoint)
         # Recreated unconditionally so Compose cannot keep a container
         # that still points at the previous image.
         engine.compose(

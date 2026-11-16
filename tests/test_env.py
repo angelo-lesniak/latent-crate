@@ -10,7 +10,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from latentcrate import LatentCrateError, env
+from latentcrate import LatentCrateError, env, workflows
 from tests.support import SOURCE_ROOT
 
 STORAGE = ("COMFY_DATA_DIR", "COMFY_MODELS_DIR", "COMFY_CACHE_DIR", "COMFY_LOCAL_NODES_DIR")
@@ -250,6 +250,12 @@ class SettingsTests(unittest.TestCase):
             env.load(self.tmp, {"COMFY_CACHE_DIR": "data/models", "COMFY_MODELS_DIR": "data/models"})
         with self.assertRaisesRegex(LatentCrateError, "^COMFY_DATA_DIR and COMFY_MODELS_DIR must be separate"):
             env.load(self.tmp, {"COMFY_DATA_DIR": "data"})
+        # A mount without a setting is named by its label.
+        with self.assertRaisesRegex(
+            LatentCrateError,
+            "^COMFY_LOCAL_NODES_DIR and the private workflow directory must be separate directories",
+        ):
+            env.load(self.tmp, {"COMFY_LOCAL_NODES_DIR": "local"})
 
     def test_the_storage_map_names_every_path_the_rules_apply_to(self) -> None:
         settings = env.load(self.tmp, {})
@@ -266,11 +272,21 @@ class SettingsTests(unittest.TestCase):
                 ("the cache directory", "COMFY_CACHE_DIR", True, True, True),
                 ("the local custom-node directory", "COMFY_LOCAL_NODES_DIR", True, False, True),
                 ("the private model-set directory", "", False, False, True),
+                ("the shipped workflow directory", "", True, False, False),
+                ("the private workflow directory", "", True, False, True),
             ],
         )
         by_label = {place.label: place for place in settings.storage}
         self.assertEqual(by_label["the LatentCrate checkout"].path, self.tmp.resolve())
         self.assertEqual(by_label["the private model-set directory"].path, self.tmp / "local" / "model-sets")
+        self.assertEqual(
+            by_label["the shipped workflow directory"].path,
+            self.tmp.resolve() / "config" / "workflow-sets" / workflows.WORKFLOWS_DIR,
+        )
+        self.assertEqual(
+            by_label["the private workflow directory"].path,
+            self.tmp.resolve() / "local" / "workflow-sets" / workflows.WORKFLOWS_DIR,
+        )
         self.assertEqual(
             by_label["the managed custom-node directory"].path, self.tmp / "data" / "comfy" / "custom_nodes"
         )

@@ -1,7 +1,8 @@
 """The catalog and selection shared by the manifest kinds under config/
 (model sets under config/model-sets, node sets under
-config/custom-nodes/sets) and the rules every manifest kind shares: one
-reader, one relative-path rule, one description rule, one digest pattern."""
+config/custom-nodes/sets, workflow sets under config/workflow-sets) and
+the rules every manifest kind shares: one reader, one relative-path rule,
+one description rule, one digest pattern."""
 
 from __future__ import annotations
 

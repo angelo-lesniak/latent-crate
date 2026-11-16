@@ -79,6 +79,17 @@ services:
         source: "${COMFY_LOCAL_NODES_DIR:?exported by bin/latentcrate from .env}"
         target: /local/custom_nodes
         read_only: true
+      # Every workflow set, always (CONTRIBUTING.md, Settled decisions), in
+      # ComfyUI's user workflow directory (the entrypoint's --user-directory,
+      # user `default`); runtime.start_stack creates the mountpoints.
+      - type: bind
+        source: ./config/workflow-sets/workflows
+        target: /data/user/default/workflows/latentcrate
+        read_only: true
+      - type: bind
+        source: ./local/workflow-sets/workflows
+        target: /data/user/default/workflows/latentcrate-local
+        read_only: true
     environment:
       COMFY_ENABLE_MANAGER: "${COMFY_ENABLE_MANAGER:?exported by bin/latentcrate from .env}"
       COMFY_FRONTEND_MODE: "${COMFY_FRONTEND_MODE:?set by bin/latentcrate}"

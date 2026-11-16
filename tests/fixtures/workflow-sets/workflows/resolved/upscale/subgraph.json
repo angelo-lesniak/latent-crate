@@ -1,0 +1,338 @@
+{
+  "id": "b3c0e2f1-5a8d-4f7e-a1c9-6e2d4b8f0a72",
+  "revision": 0,
+  "last_node_id": 3,
+  "last_link_id": 2,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "LoadImage",
+      "pos": [
+        0,
+        0
+      ],
+      "size": [
+        315,
+        82
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            1
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "LoadImage",
+        "cnr_id": "comfy-core",
+        "ver": "0.45.0"
+      },
+      "widgets_values": [
+        "example.png",
+        "image"
+      ]
+    },
+    {
+      "id": 2,
+      "type": "8d3f6a52-1c0e-4b8e-9d55-0f6a2b7c9e31",
+      "pos": [
+        350,
+        0
+      ],
+      "size": [
+        315,
+        82
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 1
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            2
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "8d3f6a52-1c0e-4b8e-9d55-0f6a2b7c9e31"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 3,
+      "type": "SaveImage",
+      "pos": [
+        700,
+        0
+      ],
+      "size": [
+        315,
+        82
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 2
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "SaveImage",
+        "cnr_id": "comfy-core",
+        "ver": "0.45.0"
+      },
+      "widgets_values": [
+        "upscaled"
+      ]
+    }
+  ],
+  "links": [
+    [
+      1,
+      1,
+      0,
+      2,
+      0,
+      "IMAGE"
+    ],
+    [
+      2,
+      2,
+      0,
+      3,
+      0,
+      "IMAGE"
+    ]
+  ],
+  "groups": [],
+  "definitions": {
+    "subgraphs": [
+      {
+        "id": "8d3f6a52-1c0e-4b8e-9d55-0f6a2b7c9e31",
+        "version": 1,
+        "state": {
+          "lastGroupId": 0,
+          "lastNodeId": 3,
+          "lastLinkId": 4,
+          "lastRerouteId": 0
+        },
+        "revision": 0,
+        "config": {},
+        "name": "Upscale",
+        "inputNode": {
+          "id": -10,
+          "bounding": [
+            -200,
+            0,
+            120,
+            60
+          ]
+        },
+        "outputNode": {
+          "id": -20,
+          "bounding": [
+            900,
+            0,
+            120,
+            60
+          ]
+        },
+        "inputs": [
+          {
+            "id": "0c1e",
+            "name": "image",
+            "type": "IMAGE",
+            "linkIds": [
+              3
+            ]
+          }
+        ],
+        "outputs": [
+          {
+            "id": "9f2a",
+            "name": "IMAGE",
+            "type": "IMAGE",
+            "linkIds": [
+              4
+            ]
+          }
+        ],
+        "widgets": [],
+        "nodes": [
+          {
+            "id": 1,
+            "type": "UpscaleModelLoader",
+            "pos": [
+              0,
+              0
+            ],
+            "size": [
+              315,
+              82
+            ],
+            "flags": {},
+            "order": 0,
+            "mode": 0,
+            "inputs": [],
+            "outputs": [
+              {
+                "name": "UPSCALE_MODEL",
+                "type": "UPSCALE_MODEL",
+                "links": [
+                  1
+                ]
+              }
+            ],
+            "properties": {
+              "Node name for S&R": "UpscaleModelLoader",
+              "cnr_id": "comfy-core",
+              "ver": "0.45.0"
+            },
+            "widgets_values": [
+              "fixture-4x.pth"
+            ]
+          },
+          {
+            "id": 2,
+            "type": "ImageUpscaleWithModel",
+            "pos": [
+              350,
+              0
+            ],
+            "size": [
+              315,
+              82
+            ],
+            "flags": {},
+            "order": 1,
+            "mode": 0,
+            "inputs": [
+              {
+                "name": "upscale_model",
+                "type": "UPSCALE_MODEL",
+                "link": 1
+              },
+              {
+                "name": "image",
+                "type": "IMAGE",
+                "link": 3
+              }
+            ],
+            "outputs": [
+              {
+                "name": "IMAGE",
+                "type": "IMAGE",
+                "links": [
+                  2
+                ]
+              }
+            ],
+            "properties": {
+              "Node name for S&R": "ImageUpscaleWithModel",
+              "cnr_id": "comfy-core",
+              "ver": "0.45.0"
+            }
+          },
+          {
+            "id": 3,
+            "type": "WanVideoBlockSwap",
+            "pos": [
+              700,
+              0
+            ],
+            "size": [
+              315,
+              82
+            ],
+            "flags": {},
+            "order": 2,
+            "mode": 0,
+            "inputs": [
+              {
+                "name": "image",
+                "type": "IMAGE",
+                "link": 2
+              }
+            ],
+            "outputs": [
+              {
+                "name": "IMAGE",
+                "type": "IMAGE",
+                "links": [
+                  4
+                ]
+              }
+            ],
+            "properties": {
+              "Node name for S&R": "WanVideoBlockSwap",
+              "aux_id": "kijai/ComfyUI-WanVideoWrapper",
+              "ver": "a7439db30bed0c5b5fa437d77ae8a7bb220dfd00"
+            },
+            "widgets_values": [
+              20,
+              false
+            ]
+          }
+        ],
+        "groups": [],
+        "links": [
+          {
+            "id": 1,
+            "origin_id": 1,
+            "origin_slot": 0,
+            "target_id": 2,
+            "target_slot": 0,
+            "type": "UPSCALE_MODEL"
+          },
+          {
+            "id": 2,
+            "origin_id": 2,
+            "origin_slot": 0,
+            "target_id": 3,
+            "target_slot": 0,
+            "type": "IMAGE"
+          },
+          {
+            "id": 3,
+            "origin_id": -10,
+            "origin_slot": 0,
+            "target_id": 2,
+            "target_slot": 1,
+            "type": "IMAGE"
+          },
+          {
+            "id": 4,
+            "origin_id": 3,
+            "origin_slot": 0,
+            "target_id": -20,
+            "target_slot": 0,
+            "type": "IMAGE"
+          }
+        ],
+        "extra": {}
+      }
+    ]
+  },
+  "config": {},
+  "extra": {},
+  "version": 0.4
+}

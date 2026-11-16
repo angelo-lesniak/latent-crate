@@ -432,8 +432,11 @@ def _storage_findings(facts: HostFacts) -> list[Finding]:
     findings = []
     for fact in facts.storage:
         label, path = fact.place.label, fact.place.path
-        if not fact.exists:
+        if not fact.exists and fact.place.created_by_init:
             findings.append(Finding("warn", f"{label} does not exist yet: {path} (bin/latentcrate init creates it)"))
+            continue
+        if not fact.exists:
+            findings.append(Finding("fail", f"{label} is missing from the checkout: {path}"))
             continue
         if not fact.is_dir:
             findings.append(Finding("fail", f"{label} is not a directory: {path}"))

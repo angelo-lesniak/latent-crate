@@ -275,12 +275,33 @@ class RuntimeTests(unittest.TestCase):
             ],
         )
         self.assertIn("compose stdin=devnull", [line for line in traces if "up --no-build" in line][0])
+        for mountpoint in ("latentcrate", "latentcrate-local"):
+            self.assertTrue((settings.data_dir / "user" / "default" / "workflows" / mountpoint).is_dir(), mountpoint)
         self.assertNotIn("logs", "\n".join(traces))
         self.assertEqual(
             json.loads((self.scratch.root / "build" / "stack.json").read_text()),
             {"engine": "docker", "project": "latentcrate"},
         )
         self.assertEqual(printed.getvalue().splitlines()[-1], f"LatentCrate is healthy at {settings.service_url}")
+
+    def test_a_workflow_mountpoint_is_never_created_through_a_symbolic_link(self) -> None:
+        # The container writes the data directory and could plant either link.
+        data, outside = self.scratch.storage / "data", self.scratch.tmp / "outside"
+        outside.mkdir()
+        cases = (
+            ("user", data / "user"),
+            ("user/default/workflows/latentcrate", data / runtime.WORKFLOW_MOUNTPOINTS[0]),
+        )
+        for linked, path in cases:
+            with self.subTest(linked=linked):
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.symlink_to(outside)
+                with self.assertRaisesRegex(
+                    LatentCrateError, f"^refusing a symbolic link where a workflow-set mountpoint goes: {path}$"
+                ):
+                    runtime.create_mountpoint(data, runtime.WORKFLOW_MOUNTPOINTS[0])
+                self.assertEqual(list(outside.iterdir()), [])
+                path.unlink()
 
     def test_a_foreground_up_follows_the_logs_and_ctrl_c_stops_the_container(self) -> None:
         settings = self.settings(FAKE_ENGINE_COMFY_RUNNING="true", FAKE_ENGINE_LOGS_INTERRUPT="true")

@@ -14,17 +14,22 @@ REPOSITORY_RE = re.compile(r"^(?!\.{1,2}/)[A-Za-z0-9_.-]+/(?!\.{1,2}$)[A-Za-z0-9
 WORKFLOW_URL_RE = re.compile(
     r"^https://github\.com/Comfy-Org/workflow_templates/blob/[0-9a-f]{40}/templates/[A-Za-z0-9_.-]+\.json$"
 )
-LICENSE_URL_RE = re.compile(
-    r"^(?:"
+# A file at a full commit, as a license or a workflow's source cites it:
+# no query or fragment, no backslash (which URL parsers read as `/`), and no
+# `.` or `..` segment, spelled plainly or percent-encoded, which could lead
+# away from the pinned tree.
+IMMUTABLE_URL_RE = re.compile(
+    r"^(?!.*[?#\\])(?!.*%2[eE])(?!.*/\.{1,2}(?:/|$))(?:"
     r"https://huggingface\.co/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/blob/[0-9a-f]{40}/[^\s]+"
     r"|https://cdn\.jsdelivr\.net/gh/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+@[0-9a-f]{40}/[^\s]+"
     r"|https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/blob/[0-9a-f]{40}/[^\s]+"
     r")$"
 )
 # A model page is edited in place by its uploader and has no pinned form,
-# so only a private set may name one as its license. civitai.red is left
-# out: Cloudflare challenges its pages over HTTP/1.1, so check --remote
-# could never reach them.
+# so only a private set may name one as its license or as a workflow's
+# source (latentcrate.workflows). civitai.red is left out: Cloudflare
+# challenges its pages over HTTP/1.1, so check --remote could never reach
+# them.
 CIVITAI_MODEL_URL_RE = re.compile(r"^https://civitai\.com/models/[1-9][0-9]*$")
 # The library's own names below the models directory, which no destination
 # may take. A stamp is written beside a file once its checksum matched; see
@@ -99,7 +104,9 @@ def read_manifest(path: Path, *, private: bool = False) -> ModelSet:
     raw_licenses = document.get("license")
     if not isinstance(raw_licenses, list) or not raw_licenses:
         raise LatentCrateError(f"{name}: at least one [[license]] entry is required")
-    licenses = [read_license(raw, index, name, private) for index, raw in enumerate(raw_licenses, start=1)]
+    licenses = [
+        read_license(raw, f"{name}: license {index}", private) for index, raw in enumerate(raw_licenses, start=1)
+    ]
 
     raw_files = document.get("file")
     if not isinstance(raw_files, list) or not raw_files:
@@ -115,20 +122,21 @@ def read_manifest(path: Path, *, private: bool = False) -> ModelSet:
     return ModelSet(name, description, tuple(workflow_urls), tuple(licenses), tuple(files), private)
 
 
-def read_license(raw: object, index: int, name: str, private: bool) -> License:
-    """One [[license]] entry: a name and an immutable approved HTTPS URL, or
-    for a private set also a Civitai model page."""
+def read_license(raw: object, context: str, private: bool) -> License:
+    """A license table (a model set's [[license]], a workflow's license): a
+    name and an immutable approved HTTPS URL, or for a private set also a
+    Civitai model page."""
     if not isinstance(raw, dict):
-        raise LatentCrateError(f"{name}: license {index} must be a table")
-    require_keys(raw, {"name", "url"}, f"{name} license {index}")
+        raise LatentCrateError(f"{context} must be a table")
+    require_keys(raw, {"name", "url"}, context)
     license_name = raw.get("name")
     url = raw.get("url")
     if not isinstance(license_name, str) or not license_name.strip():
-        raise LatentCrateError(f"{name}: license {index} needs a name")
+        raise LatentCrateError(f"{context} needs a name")
     if not isinstance(url, str) or not (
-        LICENSE_URL_RE.fullmatch(url) or (private and CIVITAI_MODEL_URL_RE.fullmatch(url))
+        IMMUTABLE_URL_RE.fullmatch(url) or (private and CIVITAI_MODEL_URL_RE.fullmatch(url))
     ):
-        raise LatentCrateError(f"{name}: license {index} needs an immutable approved HTTPS URL")
+        raise LatentCrateError(f"{context} needs an immutable approved HTTPS URL")
     return License(license_name.strip(), url)
 
 

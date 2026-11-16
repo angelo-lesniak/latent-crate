@@ -7,6 +7,7 @@ import contextlib
 import io
 import os
 import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -39,6 +40,8 @@ USAGE_LINES = (
     "nodes status <set>",
     "nodes check <set>",
     "nodes export <custom-nodes-dir>",
+    "workflows list",
+    "workflows check <set> [<set> ...] | all",
     "templates list",
     "templates create-model-set <template> [--name name]",
     "pins",
@@ -190,6 +193,7 @@ class CliTests(unittest.TestCase):
         for name in ("data", "data/custom_nodes", "models", "cache", "local-nodes"):
             self.assertTrue((fresh / name).is_dir(), name)
         self.assertTrue((self.scratch.root / "local" / "model-sets").is_dir())
+        self.assertTrue((self.scratch.root / "local" / "workflow-sets" / "workflows").is_dir())
         self.assertEqual(oct(env_file.stat().st_mode & 0o777), "0o600")
         lines = env_file.read_text().splitlines()
         self.assertTrue(lines and all(line.startswith("#") for line in lines), lines)
@@ -239,6 +243,54 @@ class CliTests(unittest.TestCase):
         self.expect_failure(
             f"model set minimax-h3-i2v is declared twice: {shipped} and {private / 'minimax-h3-i2v.toml'}",
             "models",
+            "list",
+            **NO_ENGINE,
+        )
+
+    def test_workflows_list_and_check_cover_the_private_sets_and_refuse_a_shipped_name(self) -> None:
+        # No set ships yet, so the shipped ones come from the fixtures too.
+        fixtures = SOURCE_ROOT / "tests" / "fixtures" / "workflow-sets"
+        shipped = self.scratch.root / "config" / "workflow-sets"
+        private = self.scratch.root / "local" / "workflow-sets"
+        shutil.copy2(fixtures / "resolved.toml", shipped)
+        shutil.copytree(fixtures / "workflows" / "resolved", shipped / "workflows" / "resolved")
+        private.mkdir(parents=True)
+        shutil.copy2(fixtures / "broken.toml", private)
+        shutil.copytree(fixtures / "workflows" / "broken", private / "workflows" / "broken")
+        self.assertEqual(
+            self.succeed("workflows", "list", **NO_ENGINE),
+            "resolved - Fixture: text to image, and an upscale inside a subgraph\n"
+            "broken - Fixture: a workflow whose model, node pack, and node no set provides (local)\n",
+        )
+        result = self.scratch.run("workflows", "check", "broken", **NO_ENGINE)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("broken/missing.json: model absent.safetensors: no model set provides it\n", result.stdout)
+        # Private model sets provide models too.
+        commit = "a" * 40
+        (self.scratch.root / "local" / "model-sets").mkdir(parents=True)
+        (self.scratch.root / "local" / "model-sets" / "mine.toml").write_text(
+            f"""schema = 1
+description = "Private"
+workflow_urls = ["https://github.com/Comfy-Org/workflow_templates/blob/{commit}/templates/x.json"]
+[[license]]
+name = "Test"
+url = "https://huggingface.co/example/model/blob/{commit}/LICENSE"
+[[file]]
+repository = "example/model"
+revision = "{commit}"
+source = "gone.safetensors"
+destination = "loras/gone.safetensors"
+"""
+        )
+        result = self.scratch.run("workflows", "check", "broken", **NO_ENGINE)
+        self.assertIn("broken/missing.json: model loras/gone.safetensors: mine (local)\n", result.stdout)
+        self.expect_failure("unknown workflow set: nope (available: resolved, broken)", "workflows", "check", "nope")
+
+        shutil.copy2(fixtures / "resolved.toml", private)
+        shutil.copytree(fixtures / "workflows" / "resolved", private / "workflows" / "resolved")
+        self.expect_failure(
+            f"workflow set resolved is declared twice: {shipped / 'resolved.toml'} and {private / 'resolved.toml'}",
+            "workflows",
             "list",
             **NO_ENGINE,
         )

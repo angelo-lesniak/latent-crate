@@ -352,6 +352,23 @@ class ModelSetTests(unittest.TestCase):
         ):
             with self.subTest(url=url), self.assertRaisesRegex(LatentCrateError, "license 1 needs"):
                 self.read(MANIFEST_HEAD.replace(LICENSE_URL, url) + row, private=True)
+        # A pinned URL names one file of the pinned tree, and nothing else.
+        base = f"https://github.com/example/model/blob/{COMMIT}"
+        self.assertEqual(
+            self.read(MANIFEST_HEAD.replace(LICENSE_URL, f"{base}/..x/L") + row + pins).licenses[0].url, f"{base}/..x/L"
+        )
+        for suffix in (
+            "../LICENSE",
+            "a/./LICENSE",
+            "%2e%2e/LICENSE",
+            "%2E./LICENSE",
+            "LICENSE?plain=1",
+            "LICENSE#L1",
+            # TOML-escaped: a\..\..\LICENSE
+            "a\\\\..\\\\..\\\\LICENSE",
+        ):
+            with self.subTest(suffix=suffix), self.assertRaisesRegex(LatentCrateError, "license 1 needs"):
+                self.read(MANIFEST_HEAD.replace(LICENSE_URL, f"{base}/{suffix}") + row)
 
     def test_the_catalog_adds_private_sets_after_the_shipped_ones_and_tolerates_their_absence(self):
         shipped = models.catalog(CONFIG)

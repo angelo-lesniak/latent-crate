@@ -159,5 +159,5 @@ active, and for local use.
 4. Complete the draft (licenses, the workflow commit, destinations) and
    move it to `config/model-sets/`.
 5. Run `bash bin/latentcrate models check --remote <name>`, then `bash
-   tests/static.sh`. [Contributing](../CONTRIBUTING.md#node-sets-and-model-sets)
+   tests/static.sh`. [Contributing](../CONTRIBUTING.md#node-model-and-workflow-sets)
    owns the review rules for a shipped set.

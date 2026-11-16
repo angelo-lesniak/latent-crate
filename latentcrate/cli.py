@@ -31,6 +31,7 @@ from . import (
     templates,
     variants,
     warn,
+    workflows,
 )
 from . import engine as engines
 from .names import SET_NAME_RE, select_sets
@@ -420,6 +421,23 @@ def cmd_nodes_export(context: Context, _options: Options, names: list[str]) -> N
     print(nodes.export(Path(names[0]), settings.subprocess_env(), hosts), end="")
 
 
+def workflow_catalog(settings: env.Settings) -> dict[str, workflows.WorkflowSet]:
+    return workflows.catalog(settings.config_dir, settings.local_workflow_sets_dir)
+
+
+def cmd_workflows_list(context: Context, _options: Options, _names: list[str]) -> None:
+    for name, workflow_set in workflow_catalog(context.settings).items():
+        print(f"{name} - {workflow_set.description}" + (" (local)" if workflow_set.private else ""))
+
+
+def cmd_workflows_check(context: Context, _options: Options, names: list[str]) -> int:
+    settings = context.settings
+    selected = select_sets(workflow_catalog(settings), names, "workflow set")
+    node_sets = nodes.catalog(settings.config_dir, nodes.load_allowed_hosts(settings.config_dir))
+    core_nodes = workflows.load_core_nodes(settings.config_dir)
+    return workflows.check(selected, model_catalog(settings), node_sets, core_nodes, context.pinned["COMFYUI_REF"])
+
+
 def cmd_templates_list(context: Context, _options: Options, _names: list[str]) -> int:
     settings = context.settings
     engine = engines.detect(settings, launching=False)
@@ -582,6 +600,15 @@ COMMANDS = (
         {},
         cmd_nodes_export,
         arguments=(1, 1),
+    ),
+    Command("workflows list", "", "List the available workflow sets.", {}, cmd_workflows_list),
+    Command(
+        "workflows check",
+        SETS,
+        "Validate the selected sets offline and name the model and node sets their workflows need.",
+        {},
+        cmd_workflows_check,
+        arguments=(1, None),
     ),
     Command(
         "templates list",

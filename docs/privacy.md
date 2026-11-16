@@ -48,7 +48,7 @@ registry installs work; the shipped file is
 
 The `comfy` service runs with a read-only root filesystem, every Linux
 capability dropped, `no-new-privileges`, a process limit, and a bounded
-in-memory `/tmp`; only the four mounts of
+in-memory `/tmp`; only the mounts of
 [Storage layout](configuration.md#storage-layout) and a dist-mode
 frontend are reachable. Third-party nodes are not sandboxed: they run in
 the ComfyUI process with its access to every mount and to the network.

@@ -25,7 +25,7 @@ except ImportError:
         "(a silent skip would hollow out the gate, so the dependency is mandatory)"
     ) from None
 
-from latentcrate import PROJECT_ROOT, cli, engine, env, models, nodes, templates, variants
+from latentcrate import PROJECT_ROOT, cli, engine, env, models, nodes, runtime, templates, variants, workflows
 
 DOCKERFILE = "services/comfy/Dockerfile"
 ENTRYPOINT = "services/comfy/entrypoint.sh"
@@ -56,13 +56,17 @@ SERVICE_KEYS = {
     "environment",
     "healthcheck",
 }
-# The bind targets and how each is mounted: the three writable storage
-# directories and the read-only local node source.
+# The bind targets, their sources, and whether each is read-only: the three
+# writable storage directories, the read-only local node source, and the
+# workflow sets, read-only in ComfyUI's user workflow directory below the
+# data bind (runtime.WORKFLOW_MOUNTPOINTS).
 MOUNTS = {
-    "/data": ("COMFY_DATA_DIR", False),
-    "/models": ("COMFY_MODELS_DIR", False),
-    "/cache": ("COMFY_CACHE_DIR", False),
-    "/local/custom_nodes": ("COMFY_LOCAL_NODES_DIR", True),
+    "/data": ("${COMFY_DATA_DIR:?exported by bin/latentcrate from .env}", False),
+    "/models": ("${COMFY_MODELS_DIR:?exported by bin/latentcrate from .env}", False),
+    "/cache": ("${COMFY_CACHE_DIR:?exported by bin/latentcrate from .env}", False),
+    "/local/custom_nodes": ("${COMFY_LOCAL_NODES_DIR:?exported by bin/latentcrate from .env}", True),
+    "/data/user/default/workflows/latentcrate": (f"./config/workflow-sets/{workflows.WORKFLOWS_DIR}", True),
+    "/data/user/default/workflows/latentcrate-local": (f"./local/workflow-sets/{workflows.WORKFLOWS_DIR}", True),
 }
 # The values the package derives on every Compose call (variants.Variant
 # .compose_env and env.Settings.subprocess_env); everything else a Compose
@@ -303,9 +307,14 @@ class ProjectContractTests(unittest.TestCase):
             self.assertEqual(mount.get("type"), "bind", f"every mount is a long-form bind: {mount}")
             mounts[mount["target"]] = mount
         self.assertEqual(set(mounts), set(MOUNTS), "the comfy service binds a target the contracts do not name")
-        for target, (setting, read_only) in MOUNTS.items():
-            self.assertEqual(mounts[target]["source"], f"${{{setting}:?exported by bin/latentcrate from .env}}")
+        for target, (source, read_only) in MOUNTS.items():
+            self.assertEqual(mounts[target]["source"], source)
             self.assertEqual(bool(mounts[target].get("read_only")), read_only, f"{target} read-only: {read_only}")
+        # A bind nested in the data bind needs the mountpoint the package creates.
+        self.assertEqual(
+            [f"/data/{mountpoint}" for mountpoint in runtime.WORKFLOW_MOUNTPOINTS],
+            [target for target in MOUNTS if target.startswith("/data/")],
+        )
         self.assertEqual(
             comfy["environment"], ENVIRONMENT, "the container environment is exactly the required settings"
         )
@@ -452,7 +461,20 @@ class ProjectContractTests(unittest.TestCase):
         self.assertEqual(set(model_sets), {path.stem for path in (config / "model-sets").glob("*.toml")})
         node_sets = nodes.catalog(config, nodes.load_allowed_hosts(config))
         self.assertEqual(set(node_sets), {path.stem for path in (config / "custom-nodes" / "sets").glob("*.toml")})
-        self.assertTrue(model_sets and node_sets, "at least one manifest of each kind ships")
+        self.assertTrue(model_sets and node_sets, "at least one model set and one node set ship")
+        # No workflow set ships yet; the directory exists because compose.yaml mounts it.
+        shipped = config / "workflow-sets"
+        self.assertEqual(set(workflows.catalog(config)), {path.stem for path in shipped.glob("*.toml")})
+        self.assertTrue((shipped / workflows.WORKFLOWS_DIR).is_dir())
+
+    def test_the_core_node_list_names_the_pinned_comfyui(self) -> None:
+        # `workflows check` reads it as the pinned ComfyUI's own node types.
+        commit = env.load_pins(PROJECT_ROOT / "pins.env")["COMFYUI_COMMIT"]
+        self.assertEqual(
+            read_text("config/comfy/core-nodes.txt").splitlines()[0],
+            f"# ComfyUI {commit}",
+            "regenerate config/comfy/core-nodes.txt with scripts/core-nodes.py (its docstring has the command)",
+        )
 
     def test_the_image_stage_graph_and_build_argument_scope(self) -> None:
         # Three targets with the documented inheritance; the shared runtime

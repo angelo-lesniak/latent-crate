@@ -5,7 +5,8 @@
 # fake podman only answers the probes that podman-compose performs.
 set -Eeuo pipefail
 
-PROJECT_ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+# Physical, so the bind sources podman-compose resolves match the logged ones.
+PROJECT_ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
 readonly PROJECT_ROOT
 cd "$PROJECT_ROOT"
 
@@ -28,7 +29,20 @@ export FRONTEND_GIT_URL=https://github.com/Comfy-Org/ComfyUI_frontend.git
 export FRONTEND_GIT_REF=0000000000000000000000000000000000000000
 export FRONTEND_GIT_REQUESTED_REF=fixture
 TEST_ROOT=$(mktemp -d)
-trap 'rm -rf -- "$TEST_ROOT"' EXIT
+# podman-compose creates a missing bind source, and the private workflow
+# directory's lies in the checkout; the levels this run creates are removed.
+created=()
+for level in local local/workflow-sets local/workflow-sets/workflows; do
+  [[ -e "$level" ]] || created=("$level" "${created[@]}")
+done
+cleanup() {
+  rm -rf -- "$TEST_ROOT"
+  local level
+  for level in "${created[@]}"; do
+    [[ ! -d "$level" ]] || rmdir -- "$level"
+  done
+}
+trap cleanup EXIT
 export COMFY_DATA_DIR="$TEST_ROOT/data"
 export COMFY_MODELS_DIR="$TEST_ROOT/models"
 export COMFY_CACHE_DIR="$TEST_ROOT/cache"
@@ -122,6 +136,10 @@ logged "-v $COMFY_DATA_DIR:/data" || fail 'the data directory is not mounted wri
 logged "-v $COMFY_MODELS_DIR:/models" || fail 'the models directory is not mounted writable at /models'
 logged "-v $COMFY_CACHE_DIR:/cache" || fail 'the cache directory is not mounted writable at /cache'
 logged "-v $COMFY_LOCAL_NODES_DIR:/local/custom_nodes:ro" || fail 'the local nodes are not mounted read-only'
+for workflows in config/workflow-sets/workflows:latentcrate local/workflow-sets/workflows:latentcrate-local; do
+  logged "-v $PROJECT_ROOT/${workflows%%:*}:/data/user/default/workflows/${workflows#*:}:ro" \
+    || fail "the workflow sets in ${workflows%%:*} are not mounted read-only"
+done
 logged "-e LATENTCRATE_SAGE_MODE=$LATENTCRATE_SAGE" || fail 'the Sage mode does not reach the container'
 
 # Without the GPU overlay (`templates`, --allow-no-gpu) no device is requested.
