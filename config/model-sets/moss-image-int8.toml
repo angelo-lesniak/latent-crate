@@ -1,0 +1,56 @@
+schema = 1
+description = "MOSS-Image SFT and Base text-to-image models (INT8 ConvRot) with the Qwen3.5-9B text encoder for the official ComfyUI workflows"
+workflow_urls = [
+  "https://github.com/Comfy-Org/workflow_templates/blob/c8e48bdcfc7241d7af588d20d4f924caf9d9d953/templates/image_moss_image_t2i.json",
+  "https://github.com/Comfy-Org/workflow_templates/blob/c8e48bdcfc7241d7af588d20d4f924caf9d9d953/templates/image_moss_image_base_t2i.json",
+]
+
+[[license]]
+name = "Apache License 2.0 (MOSS-Image-SFT)"
+url = "https://huggingface.co/OpenMOSS-Team/MOSS-Image-SFT/blob/f972bd4b4b9e3852133cc5da954d87bc32cd8fb9/LICENSE"
+
+[[license]]
+name = "Apache License 2.0 (MOSS-Image-Base)"
+url = "https://huggingface.co/OpenMOSS-Team/MOSS-Image-Base/blob/85975793d8b3d432f1b6e27f352abaa4c2a4c0d3/LICENSE"
+
+[[license]]
+name = "Apache License 2.0 (FLUX.2 Small Decoder VAE)"
+url = "https://huggingface.co/black-forest-labs/FLUX.2-small-decoder/blob/a3efc24f613ef42d9428af62fdbd6f5fd8856c4a/README.md"
+
+[[license]]
+name = "Apache License 2.0 (Qwen3.5-9B text encoder)"
+url = "https://huggingface.co/Qwen/Qwen3.5-9B/blob/c202236235762e1c871ad0ccb60c8ee5ba337b9a/LICENSE"
+
+[[file]]
+repository = "Comfy-Org/MOSS-Image"
+revision = "2929efe3cdd506c0a430bcfca70a9a8d805cc095"
+source = "diffusion_models/moss_image_sft_int8_convrot.safetensors"
+destination = "diffusion_models/moss_image_sft_int8_convrot.safetensors"
+size = 5413698958
+sha256 = "b4d1475bc7eeffd7b809e82ea13a1fba1fb85c4e18365af3813722faa5c0fe4f"
+
+[[file]]
+repository = "Comfy-Org/MOSS-Image"
+revision = "2929efe3cdd506c0a430bcfca70a9a8d805cc095"
+source = "diffusion_models/moss_image_base_int8_convrot.safetensors"
+destination = "diffusion_models/moss_image_base_int8_convrot.safetensors"
+size = 5413698958
+sha256 = "f601c1e1161915fb3fea003da0c1782e374dd960fbb3978bc0e4e3fa1f2d8e6f"
+
+# The same bytes as Comfy-Org/MOSS-Image's copy; this pin matches
+# minimax-h3-image-int8, since sets naming one destination must agree on every key.
+[[file]]
+repository = "Comfy-Org/Qwen3.5"
+revision = "a3f61d217d07c6936174625ce5d06e6079e9393e"
+source = "text_encoders/qwen3.5_9b_w4a8_gptq.safetensors"
+destination = "text_encoders/qwen3.5_9b_w4a8_gptq.safetensors"
+size = 7343591088
+sha256 = "4cc6a1543ad2061806da46f35f90cadb4801dcba246c44782cf42ec0feb6407c"
+
+[[file]]
+repository = "Comfy-Org/MOSS-Image"
+revision = "2929efe3cdd506c0a430bcfca70a9a8d805cc095"
+source = "vae/flux2-vae_small.safetensors"
+destination = "vae/flux2-vae_small.safetensors"
+size = 249521340
+sha256 = "d8d52ba036475f5fb07c8b435e176d3d97ebfa82f0d1a1c317f9cc1e25bd013b"

@@ -31,6 +31,11 @@ checkout's `pins.env` and Dockerfile.
 | 2026-11-13 | GPU host | attention A/B: the official MiniMax H3 i2v template (124 frames, 1344×768, one seed) through the API per backend; wall seconds and device-wide peak GPU memory | SDPA 150 s; `--use-ck-attention` 93 s; Model Sparse Attention 83 s; KJNodes patch under `--sage available` 77 s; `--sage global` with the patch 76 s; `--sage global` alone 71 s; peak 31.1–31.3 GiB of 31.8 GiB in every run; 124 frames each; visually (maintainer): block-sparse noticeably worse, the rest indistinguishable |
 | 2026-11-14 | GPU host | UI: H3-Image text-to-image and edit templates, `image_minimax_h3_image_t2i` and `image_minimax_h3_image_edit` with set `minimax-h3-image-int8` | pass (maintainer) |
 | 2026-11-14 | GPU host | `models fetch p-h3-image minimax-h3-t2i`; UI: `image_p_h3_t2i` and `image_p_h3_image_edit` with set `p-h3-image`, `image_minimax_h3_t2i` with set `minimax-h3-t2i` | pass (maintainer) |
+| 2026-11-16 | GPU host | `bash tests/static.sh` strict, from the `.venv` | pass; 373 tests |
+| 2026-11-16 | GPU host | `models check --remote`, `models fetch`, `models status --verify` of `moss-image-int8` and a private set | pass; 18.7 GB in 5 files, every file ready |
+| 2026-11-16 | GPU host | `workflows list`, `workflows check all` over five private sets of 168 workflows | pass; `check` exits 1 naming the packs and model files the sets lack |
+| 2026-11-16 | GPU host | `up --detach` with both workflow trees; `/proc/self/mountinfo`; `touch` inside and beside the trees; `GET /api/userdata?dir=workflows&recurse=true`; `POST /api/userdata/` over a set's file | pass; healthy in 61 s; both binds `ro`; writes inside fail with `Read-only file system`, beside them succeed; ComfyUI lists all 168 workflows; the POST answers 400 |
+| 2026-11-16 | GPU host | `GET /object_info` core types against `config/comfy/core-nodes.txt` | every running core type is listed; 13 listed types are not registered (test and conditional nodes) |
 
 ## Hosts
 
@@ -40,7 +45,8 @@ checkout's `pins.env` and Dockerfile.
 
 ## Known gaps
 
-- Docker Engine with a GPU.
+- Docker Engine with a GPU, including the read-only workflow-set binds
+  inside the `/data` bind.
 - Docker Desktop's CDI path under WSL2.
 - WSL2 as a whole: the expected platform, no run recorded.
 - `build --frontend-git` with a reference other than the pinned tag.
