@@ -36,17 +36,22 @@ checkout's `pins.env` and Dockerfile.
 | 2026-11-16 | GPU host | `workflows list`, `workflows check all` over five private sets of 168 workflows | pass; `check` exits 1 naming the packs and model files the sets lack |
 | 2026-11-16 | GPU host | `up --detach` with both workflow trees; `/proc/self/mountinfo`; `touch` inside and beside the trees; `GET /api/userdata?dir=workflows&recurse=true`; `POST /api/userdata/` over a set's file | pass; healthy in 61 s; both binds `ro`; writes inside fail with `Read-only file system`, beside them succeed; ComfyUI lists all 168 workflows; the POST answers 400 |
 | 2026-11-16 | GPU host | `GET /object_info` core types against `config/comfy/core-nodes.txt` | every running core type is listed; 13 listed types are not registered (classes ComfyUI leaves out of its registered node lists) |
+| 2026-11-16 | GPU host | `bash tests/static.sh` from the `.venv`, at 88bba8d | pass; 378 tests |
+| 2026-11-16 | GPU host | `was-ns` checkout of the fork moved out of `custom_nodes`, `nodes sync latent-nodepack`, `up --detach`, `smoke-gpu` | pass; `was-ns` installed at WASasquatch 338f521; `up` healthy in 481 s with the node rebuild; WAS registers 613 node types, 86 more sit behind its disabled `llm` and `pssr` features; the smoke ends with `LatentCrate GPU verification passed.` |
+| 2026-11-16 | GPU host | `GET /object_info` core types against the regenerated `config/comfy/core-nodes.txt` | pass; the same 1058 types |
+| 2026-11-16 | GPU host | UI: the MOSS-Image templates `image_moss_image_t2i`, `image_moss_image_base_t2i`, `image_moss_image_t2i_bboxes`, `image_moss_image_base_t2i_bboxes`, `image_moss_image_color_depth_control`, and `image_moss_image_edit` with set `moss-image-int8` and a private set for the edit LoRA | pass (maintainer) |
+| 2026-11-16 | VM | `compose.yaml` with an override that runs busybox instead of the ComfyUI image, under rootless Podman and Docker Engine; `/proc/self/mountinfo`, `touch` inside and beside the workflow trees; the same without the mountpoints created first | pass; both binds `ro` under both engines, writes inside fail with `Read-only file system`, beside them succeed, the mountpoints stay the user's; without them created first, Docker creates `user/` and the mountpoints as `root:root` and Podman as a sub-UID |
 
 ## Hosts
 
 | Host | Hardware and software |
 | --- | --- |
 | GPU host | Arch Linux, kernel 7.2.14-arch1-1; RTX 5090 (compute capability 12.0), NVIDIA driver 615.78.08, CUDA 13.4; Podman 6.1.4 rootless with crun, podman-compose 1.6.0 |
+| VM | Arch Linux, kernel 7.3.4-arch1-2, no GPU; Podman 6.2.0 rootless, podman-compose 1.6.0; Docker Engine 29.9.3 with Compose 5.7.1 |
 
 ## Known gaps
 
-- Docker Engine with a GPU, including the read-only workflow-set binds
-  inside the `/data` bind.
+- Docker Engine with a GPU and the ComfyUI image.
 - Docker Desktop's CDI path under WSL2.
 - WSL2 as a whole: the expected platform, no run recorded.
 - `build --frontend-git` with a reference other than the pinned tag.
