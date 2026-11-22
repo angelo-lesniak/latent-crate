@@ -1,0 +1,63 @@
+schema = 1
+description = "Qwen-Image 2512 text-to-image model (FP8) with the Qwen2.5-VL 7B text encoder, the Lightning 4-step LoRA, and the ProGamerGov 360 panorama LoRA for the official ComfyUI text-to-image and 360 panorama workflows"
+workflow_urls = [
+  "https://github.com/Comfy-Org/workflow_templates/blob/c8e48bdcfc7241d7af588d20d4f924caf9d9d953/templates/image_qwen_Image_2512.json",
+  "https://github.com/Comfy-Org/workflow_templates/blob/c8e48bdcfc7241d7af588d20d4f924caf9d9d953/templates/template_qwen_Image_2512_360_lora.json",
+]
+
+[[license]]
+name = "Apache License 2.0 (Qwen-Image-2512)"
+url = "https://huggingface.co/Qwen/Qwen-Image-2512/blob/25468b98e3276ca6700de15c6628e51b7de54a26/README.md"
+
+[[license]]
+name = "Apache License 2.0 (Qwen2.5-VL 7B text encoder)"
+url = "https://huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct/blob/cc594898137f460bfe9f0759e9844b3ce807cfb5/README.md"
+
+[[license]]
+name = "Apache License 2.0 (Qwen-Image-2512 Lightning)"
+url = "https://huggingface.co/lightx2v/Qwen-Image-2512-Lightning/blob/4609161e308ce82018a42c2a0c9b107e865bb751/README.md"
+
+[[license]]
+name = "MIT License (ProGamerGov Qwen 360 Diffusion LoRA)"
+url = "https://huggingface.co/ProGamerGov/qwen-360-diffusion/blob/f63e5de60bd27b7d9af9c64f8c591381775ea9aa/LICENSE"
+
+[[file]]
+repository = "Comfy-Org/Qwen-Image"
+revision = "1f12b17be14c89b026c51a91d67c32f84bb047bc"
+source = "split_files/diffusion_models/qwen_image_2512_fp8_e4m3fn.safetensors"
+destination = "lc/qwen-image/diffusion_models/qwen_image_2512_fp8_e4m3fn.safetensors"
+size = 20430679144
+sha256 = "5dc80554d5d83390046a2f4a94ece06afb7700bf7b0aaf8bde9769793875876b"
+
+[[file]]
+repository = "Comfy-Org/Qwen-Image"
+revision = "1f12b17be14c89b026c51a91d67c32f84bb047bc"
+source = "split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors"
+destination = "lc/qwen-image/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors"
+size = 9384670680
+sha256 = "cb5636d852a0ea6a9075ab1bef496c0db7aef13c02350571e388aea959c5c0b4"
+
+# The krea2-int8 entry, since sets naming one destination must agree on every key.
+[[file]]
+repository = "Comfy-Org/Krea-2"
+revision = "e5ea8b4dd7f38f348b138eb0fe29f92c0e367e96"
+source = "vae/qwen_image_vae.safetensors"
+destination = "lc/shared/vae/qwen_image_vae.safetensors"
+size = 253806246
+sha256 = "a70580f0213e67967ee9c95f05bb400e8fb08307e017a924bf3441223e023d1f"
+
+[[file]]
+repository = "lightx2v/Qwen-Image-2512-Lightning"
+revision = "4609161e308ce82018a42c2a0c9b107e865bb751"
+source = "Qwen-Image-2512-Lightning-4steps-V1.0-fp32.safetensors"
+destination = "lc/qwen-image/loras/Qwen-Image-2512-Lightning-4steps-V1.0-fp32.safetensors"
+size = 1698951104
+sha256 = "ad12117461cb41e2ea637fec8df6392ce8e8550c47fbe2b829ed3deb98262066"
+
+[[file]]
+repository = "ProGamerGov/qwen-360-diffusion"
+revision = "f63e5de60bd27b7d9af9c64f8c591381775ea9aa"
+source = "qwen-360-diffusion-2512-int8-bf16-v2.safetensors"
+destination = "lc/qwen-image/loras/qwen-360-diffusion-2512-int8-bf16-v2.safetensors"
+size = 755039336
+sha256 = "11065421c2a4c8f503ee1be5d6dc0320a9ffb5bfaded2490813046fd2312578d"

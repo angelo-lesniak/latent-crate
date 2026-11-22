@@ -1,0 +1,96 @@
+schema = 1
+description = "Pixal3D and TRELLIS.2 image-to-3D models (INT8 ConvRot) with the DINOv3 encoder, the shape and texture VAEs, MoGe 2, and BiRefNet background removal for the official single-image and multi-view ComfyUI workflows"
+workflow_urls = [
+  "https://github.com/Comfy-Org/workflow_templates/blob/c8e48bdcfc7241d7af588d20d4f924caf9d9d953/templates/3d_pixal3d_trellis2_image_to_model.json",
+  "https://github.com/Comfy-Org/workflow_templates/blob/c8e48bdcfc7241d7af588d20d4f924caf9d9d953/templates/3d_pixal3d_multi_views.json",
+]
+
+[[license]]
+name = "MIT License (Pixal3D)"
+url = "https://huggingface.co/TencentARC/Pixal3D/blob/b0cb2e1b794cab9aa0ac38a95d794a4d9337437f/LICENSE"
+
+[[license]]
+name = "MIT License (TRELLIS.2)"
+url = "https://huggingface.co/microsoft/TRELLIS.2-4B/blob/af44b45f2e35a493886929c6d786e563ec68364d/README.md"
+
+[[license]]
+name = "DINOv3 License (custom; covers the DINOv3 encoder weights)"
+url = "https://github.com/facebookresearch/dinov3/blob/6876159a11b4df116f30f667f8c9888617df0751/LICENSE.md"
+
+[[license]]
+name = "Apache License 2.0 (NAF upsampler in the DINOv3 encoder file)"
+url = "https://github.com/valeoai/NAF/blob/37f2dfc180f2de53d98bd601109c0da0dd6b0f43/LICENSE"
+
+[[license]]
+name = "MIT License and Apache License 2.0 (MoGe)"
+url = "https://huggingface.co/Comfy-Org/MoGe/blob/1484985258ba7ef45c314144fcf0e90924ffbf44/LICENSE"
+
+[[license]]
+name = "MIT License (BiRefNet)"
+url = "https://huggingface.co/Comfy-Org/BiRefNet/blob/884af709e9b795d89dafbf97f29c8d6a2386f5c6/README.md"
+
+[[file]]
+repository = "Comfy-Org/Pixal3D"
+revision = "f37641be376725d324c56626007cc477f1249a69"
+source = "diffusion_models/pixal3d_int8_convrot.safetensors"
+destination = "lc/pixal3d/diffusion_models/pixal3d_int8_convrot.safetensors"
+size = 5584555824
+sha256 = "4621eac3b715484f79303c7152af641fe0b2b14f4d0e3d394fd6922d00f955ec"
+
+[[file]]
+repository = "Comfy-Org/Pixal3D"
+revision = "f37641be376725d324c56626007cc477f1249a69"
+source = "diffusion_models/pixal3d_multiview_int8_convrot.safetensors"
+destination = "lc/pixal3d/diffusion_models/pixal3d_multiview_int8_convrot.safetensors"
+size = 5584555824
+sha256 = "6b1eb3328930d921d3b57508d9c46cceec1c174dcedeebc14f176ab67d49f477"
+
+[[file]]
+repository = "Comfy-Org/Pixal3D"
+revision = "f37641be376725d324c56626007cc477f1249a69"
+source = "clip_vision/dino_v3_L_naf_fp32.safetensors"
+destination = "lc/pixal3d/clip_vision/dino_v3_L_naf_fp32.safetensors"
+size = 1215214176
+sha256 = "4ad2ec4e0879a5b5b04cd97325cc37da954a7b6edca5170b86510f17f2b2290f"
+
+[[file]]
+repository = "Comfy-Org/Pixal3D"
+revision = "f37641be376725d324c56626007cc477f1249a69"
+source = "vae/trellis_2_shape_vae_bf16.safetensors"
+destination = "lc/pixal3d/vae/trellis_2_shape_vae_bf16.safetensors"
+size = 1095844024
+sha256 = "de0cb4949a76c59ee5c091a995a69bcc8c51d5aeda939f0c641a50d2a72341f4"
+
+[[file]]
+repository = "Comfy-Org/Pixal3D"
+revision = "f37641be376725d324c56626007cc477f1249a69"
+source = "vae/trellis_2_texture_vae_bf16.safetensors"
+destination = "lc/pixal3d/vae/trellis_2_texture_vae_bf16.safetensors"
+size = 948461364
+sha256 = "714e5ebf094a610e12a8e3b5175c18a62f37f6ea4218acb6073644456b73ab0e"
+
+[[file]]
+repository = "Comfy-Org/TRELLIS.2"
+revision = "430a9d09b2416687018c8fe8edced2ad4858a439"
+source = "diffusion_models/trellis_2_int8_convrot.safetensors"
+destination = "lc/pixal3d/diffusion_models/trellis_2_int8_convrot.safetensors"
+size = 5253048192
+sha256 = "d01952ad137213f6a868f86b6b877026276f84af5eec23069217475a0bad3a31"
+
+[[file]]
+repository = "Comfy-Org/MoGe"
+revision = "1484985258ba7ef45c314144fcf0e90924ffbf44"
+source = "geometry_estimation/moge_2_vitl_normal_fp16.safetensors"
+destination = "lc/pixal3d/geometry_estimation/moge_2_vitl_normal_fp16.safetensors"
+size = 661859924
+sha256 = "cb1a692d03235671e959e81360d7b4d9f44aefadb1f852d6ca6aa17799d5e31f"
+
+# The utility-tools entry, since sets naming one destination must agree on
+# every key.
+[[file]]
+repository = "Comfy-Org/BiRefNet"
+revision = "884af709e9b795d89dafbf97f29c8d6a2386f5c6"
+source = "background_removal/birefnet.safetensors"
+destination = "lc/shared/background_removal/birefnet.safetensors"
+size = 444473596
+sha256 = "9ab37426bf4de0567af6b5d21b16151357149139362e6e8992021b8ce356a154"

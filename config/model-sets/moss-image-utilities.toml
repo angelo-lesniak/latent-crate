@@ -1,0 +1,27 @@
+schema = 1
+description = "MOSS-Image add-ons: the color and depth control LoRA and the MoGe 3 ViT-G geometry estimator for the official control workflow, whose Qwen3.5-9B INT8 text encoder resolves to the shipped W4A8 encoder through workflows adapt or one re-select in its loader"
+workflow_urls = ["https://github.com/Comfy-Org/workflow_templates/blob/c8e48bdcfc7241d7af588d20d4f924caf9d9d953/templates/image_moss_image_color_depth_control.json"]
+
+[[license]]
+name = "Apache License 2.0 per the Comfy-Org MOSS-Image card (color and depth control LoRA; the upstream darask0/MOSS-Image-color-depth-control repository is private or removed: HTTP 401 without a token)"
+url = "https://huggingface.co/Comfy-Org/MOSS-Image/blob/2929efe3cdd506c0a430bcfca70a9a8d805cc095/README.md"
+
+[[license]]
+name = "MIT License and Apache License 2.0 (MoGe)"
+url = "https://huggingface.co/Comfy-Org/MoGe/blob/1484985258ba7ef45c314144fcf0e90924ffbf44/LICENSE"
+
+[[file]]
+repository = "Comfy-Org/MOSS-Image"
+revision = "2929efe3cdd506c0a430bcfca70a9a8d805cc095"
+source = "loras/moss_image_color_depth_control.safetensors"
+destination = "lc/moss/loras/moss_image_color_depth_control.safetensors"
+size = 313063368
+sha256 = "e5c0c3efd05e4269207a39de6005798f14c90c6687c89c54eaffe4b76c43a763"
+
+[[file]]
+repository = "Comfy-Org/MoGe"
+revision = "1484985258ba7ef45c314144fcf0e90924ffbf44"
+source = "geometry_estimation/moge_3_vitg_fp16.safetensors"
+destination = "lc/moss/geometry_estimation/moge_3_vitg_fp16.safetensors"
+size = 2501605198
+sha256 = "a587e42936ae7080b419df4c047b0f0b075d3492418f76ce81fb0779925a1fe6"

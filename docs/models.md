@@ -1,7 +1,7 @@
 # Model sets
 
-A model set is the pinned list of Hugging Face or Civitai files one
-ComfyUI workflow needs. `models fetch` downloads them into the models directory
+A model set is a pinned list of Hugging Face or Civitai files for one
+model or task. `models fetch` downloads them into the models directory
 (`COMFY_MODELS_DIR`, mounted at `/models`) and verifies each against the
 manifest. [Configuration](configuration.md#storage-layout) owns where the
 directory lives and the bind a symbolic link below it needs.
@@ -19,6 +19,10 @@ to a ComfyUI model category, for example `diffusion_models/`,
 `text_encoders/`, `vae/`, or `loras/`; a file placed elsewhere downloads
 but no loader lists it. `bash bin/latentcrate models list` prints the
 sets with their descriptions and is the source for what exists.
+Most sets hold what the official templates of one model load; a
+`<model>-utilities` set, such as `krea2-utilities`, holds optional
+add-ons for one model family, and `utility-tools` holds
+model-independent tools.
 A file two selected sets both name downloads once; two sets that pin
 different content at one destination are refused together.
 
@@ -43,6 +47,9 @@ The MiniMax H3 license grants rights only inside its "Applicable
 Territory", which excludes the European Union, the United Kingdom, the
 Republic of Korea and the United States, so read the linked license
 before fetching a `minimax-h3-*` or `p-h3-image` set.
+`krea2-utilities` includes the Krea 2 identity edit V2 LoRA, whose
+license permits only non-commercial use without a license from its
+author.
 
 A gated repository needs `HF_TOKEN` in `.env`;
 [Privacy](privacy.md#what-runs-where) owns where the token goes.

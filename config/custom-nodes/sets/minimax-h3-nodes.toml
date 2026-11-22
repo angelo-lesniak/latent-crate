@@ -1,0 +1,22 @@
+schema = 1
+description = "MiniMax H3 nodes: the H3 motion context, the Fantastic MiniMax H3 prompt builder, the LBH latent upscaler, and H3 Relay"
+
+[[node]]
+name = "comfyui-h3-motion-context"
+repository = "https://github.com/NikoDemon80/ComfyUI-H3-Motion-Context"
+commit = "518c083d11d80fa5920222ad89889924ee4401c9"
+
+[[node]]
+name = "fantastic-minimax-h3-prompt-builder"
+repository = "https://github.com/Adudeguyman/ComfyUI-Fantastic-MiniMaxH3-PromptBuilder"
+commit = "22e719fe89336c628383363182a4da3cb58d4f9b"
+
+[[node]]
+name = "Comfyui_Minimax_h3_latent_Upscaler"
+repository = "https://github.com/LBH-123-AI/Comfyui_Minimax_h3_latent_Upscaler"
+commit = "f34cadb19f10fee7e36091b690cac39b4eb40573"
+
+[[node]]
+name = "h3-relay"
+repository = "https://github.com/akatz-ai/h3-relay"
+commit = "e2a7665b6eb8ea37a88c0de2c9c6b69a8f7c9220"

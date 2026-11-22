@@ -195,8 +195,24 @@ without SageAttention. Run the printed `up`. See
 custom-node set <name> is missing <nodes>; run: bash bin/latentcrate nodes install <name>
 ```
 
-`up` found the set's record but not every checkout. Run the printed
-install. See [Node sets](nodes.md#node-sets).
+`up` found the set in the record but not every checkout of it. Run the
+printed install. See [Node sets](nodes.md#node-sets).
+
+## Two custom-node sets pin one node differently
+
+```text
+custom-node sets <set> and <other> pin <node> to different commits; delete the line <set> from <record>, or fix the manifests
+```
+
+`nodes install`, `nodes sync`, `nodes status`, or `up` found two sets
+that pin the node directory `<node>` to different repositories or
+commits (the message says which). When a set is in the record
+`COMFY_DATA_DIR/custom_nodes/.latentcrate-node-set`, the message names
+its line. To switch to `<other>`, delete that line; if the repositories
+differ, move the node directory out of `COMFY_DATA_DIR/custom_nodes`;
+then run `bash bin/latentcrate nodes sync <other>`. When neither set is
+recorded, the message ends `use one of them or fix the manifests`:
+install only one. See [Node sets](nodes.md#node-sets).
 
 ## Stop ComfyUI before installing a node set
 

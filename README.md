@@ -85,7 +85,7 @@ container. `bash bin/latentcrate help` prints every command.
 | Find where your data lives, use another GPU, change a pin, or remove everything | [Configuration](docs/configuration.md) |
 | Download the files an official workflow needs, or add a set | [Models](docs/models.md) |
 | Add a custom node and make it load, or use SageAttention | [Nodes](docs/nodes.md) |
-| Find a set's workflows in ComfyUI, check what they need, or add a set | [Workflow sets](docs/workflows.md) |
+| Find a set's workflows in ComfyUI, check what they need, adapt their model paths, or add a set | [Workflow sets](docs/workflows.md) |
 | Test a frontend fork or local frontend build against the pinned backend | [Frontends](docs/frontends.md) |
 | Know what can leave the host, and lock the UI down | [Privacy](docs/privacy.md) |
 | Fix a failing command from its message | [Troubleshooting](docs/troubleshooting.md) |

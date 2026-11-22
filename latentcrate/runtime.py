@@ -23,7 +23,7 @@ from .engine import PROJECT_LABEL, SERVICE, Engine
 from .env import Settings
 from .files import publish_tree
 from .localhttp import http_get
-from .nodes import require_selected_set
+from .nodes import require_recorded_sets
 from .variants import Variant
 
 # A container in one of these states will not answer (`restarting`: a crash
@@ -200,7 +200,7 @@ def start_stack(
     the judgement that counts."""
     engine.require_port(settings.port)
     with engine.lock("up"):
-        require_selected_set(settings)
+        require_recorded_sets(settings)
         build(settings, engine, variant, pinned)
         engine.require_port(settings.port)
         for mountpoint in WORKFLOW_MOUNTPOINTS:

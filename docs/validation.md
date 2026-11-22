@@ -41,6 +41,10 @@ checkout's `pins.env` and Dockerfile.
 | 2026-11-16 | GPU host | `GET /object_info` core types against the regenerated `config/comfy/core-nodes.txt` | pass; the same 1058 types |
 | 2026-11-16 | GPU host | UI: the MOSS-Image templates `image_moss_image_t2i`, `image_moss_image_base_t2i`, `image_moss_image_t2i_bboxes`, `image_moss_image_base_t2i_bboxes`, `image_moss_image_color_depth_control`, and `image_moss_image_edit` with set `moss-image-int8` and a private set for the edit LoRA | pass (maintainer) |
 | 2026-11-16 | VM | `compose.yaml` with an override that runs busybox instead of the ComfyUI image, under rootless Podman and Docker Engine; `/proc/self/mountinfo`, `touch` inside and beside the workflow trees; the same without the mountpoints created first | pass; both binds `ro` under both engines, writes inside fail with `Read-only file system`, beside them succeed, the mountpoints stay the user's; without them created first, Docker creates `user/` and the mountpoints as `root:root` and Podman as a sub-UID |
+| 2026-11-17 | GPU host | `bash tests/static.sh` from the `.venv`, not strict, at the working tree synced 2026-11-17 | pass; 386 tests |
+| 2026-11-17 | GPU host | `models check --remote`, `models fetch`, `models status --verify` of `utility-tools`, `krea2-utilities`, `minimax-h3-utilities`, `minimax-h3-image-utilities` | pass; the fetch took 311 s; every file ready |
+| 2026-11-17 | GPU host | `nodes install latent-nodepack latent-nodepack-extras`, `up --detach`, `GET /object_info`, `smoke-gpu` | pass; the install record lists both sets; `up` healthy in 489 s with the node rebuild; ComfyUI's loaders list all 35 files of the four model sets; the packs register comfyui-krea2edit 2, comfyui-h3-motion-context 9, fantastic-minimax-h3-prompt-builder 16, comfyui-krea2-ostris-edit 2, RES4LYF 299, and the LBH upscaler 5 node types; no import failures; the smoke ends with `LatentCrate GPU verification passed.` |
+| 2026-11-17 | GPU host | UI: the templates `utility_birefnet_remove_background`, `utility_image_segment_sam3`, `utility_video_segment_sam3`, `utility_seedvr2_3b_int8_upscale_image`, and `utility_seedvr2_3b_int8_upscale_video` with set `utility-tools` | pass (maintainer) |
 
 ## Hosts
 
@@ -57,7 +61,13 @@ checkout's `pins.env` and Dockerfile.
 - `build --frontend-git` with a reference other than the pinned tag.
 - Dist or source mode combined with `--sage`: built in the gate's renders,
   not run on the host.
-- UI generation with the Krea 2 turbo 4-step and pDMD 2-step LoRA add-ons.
+- UI generation with the files of `krea2-utilities`,
+  `minimax-h3-utilities`, and `minimax-h3-image-utilities`, with the
+  nodes of `latent-nodepack-extras`, and with `comfyui-krea2edit`,
+  `comfyui-h3-motion-context`, `fantastic-minimax-h3-prompt-builder`,
+  and `comfyui-krea2-ostris-edit` of `latent-nodepack`.
+- A workflow changed by `workflows adapt` run in ComfyUI, including an
+  equivalent file and the `UNETLoader` `weight_dtype` reset.
 - Workflow persistence across `down` and `up` on the pinned image.
 - A smoke on a card without the full encoder set: the smoke's NVENC step
   encodes one second with `h264_nvenc`, so it fails on a compute-only card

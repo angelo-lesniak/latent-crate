@@ -1,0 +1,1650 @@
+{
+  "id": "bb98036f-2d5e-4aab-8ce6-2a0b4e684c54",
+  "revision": 0,
+  "last_node_id": 30,
+  "last_link_id": 45,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "MarkdownNote",
+      "pos": [
+        0,
+        30
+      ],
+      "size": [
+        440,
+        1300
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {},
+      "widgets_values": [
+        "## Krea 2 Rotate + Outpaint\n\nTurn, crop and pad a picture, and Krea 2 paints the new area. By AusBoss.\n\n[▶ AusBoss on YouTube](https://www.youtube.com/@ausbossdev) · videos on these nodes and workflows\n\n---\n\n1. Load your image. A new image resets the turn, crop and padding.\n2. Turn it with the round handle, drag the crop edges in, and drag the orange handles out to pad.\n3. Press **Run**.\n4. To steer the new area, say what belongs there in **What goes there**.\n\nOn one side, add at most about half your picture's size per run, or add to both sides. More on one side can paint a second scene.\n\nPad with **Pad Image for Outpainting** (left, top, right, bottom, in pixels) and turn in quarter turns with **Rotate Image**: the AusBoss handles for free rotation and cropping are not part of this copy.\n\n**LatentCrate changes** (modified clone of the MIT copy in [ausboss/ComfyUI-AusBoss @9986ded](https://github.com/ausboss/ComfyUI-AusBoss/blob/9986ded1096db8dae04ccb9bc7e3e2ac382472cd/example_workflows/Krea%202%20Rotate%20%2B%20Outpaint%20%28AusBoss%29.json)), so it runs without the AusBoss pack:\n\n- Image Crop + Rotate + Pad → Load Image, Rotate Image, Pad Image for Outpainting (grey fill, feathering 32, as the AusBoss feather), then Scale Image to Total Pixels (1.5 MP, steps 16) with Resize Image/Mask matching the mask to it: the padded canvas, not your picture alone, gets the 1.5 MP budget. Free-angle rotation, crop, and the median-colour refill of the reference are lost.\n- Krea 2 Encode → krea2edit grounded encode (the canvas through Qwen3-VL) + Reference Latent of the full-resolution encoded canvas + Edit Model Reference Method `index_timestep_zero`, with an empty CLIP Text Encode as negative.\n- Krea 2 Outpaint Model Patch (whole canvas) → none: core Krea 2 places the reference on frame 1 aligned with the canvas.\n- Stitch Inpaint (blend in) → Image Composite Masked of the canvas over the result through the inverted pad mask; tone matching is lost.\n- LoRA Loader → Load LoRA (model only); Seed → the KSampler seed; Text → String (Multiline); Show Text → Preview Any; Compare → Compare Images; Save Image → Save Image; Run Timer and the workflow card removed; both subgraphs flattened.\n- Krea 2 Turbo fp8 → the shipped int8 build (`krea2-int8`).\n\n**Models and nodes:** model sets `krea2-int8` and `krea2-utilities` (AnyPaint); node set `krea2-nodes` (krea2edit)."
+      ],
+      "title": "Krea 2 Rotate + Outpaint (AusBoss)"
+    },
+    {
+      "id": 2,
+      "type": "LoadImage",
+      "pos": [
+        500,
+        80
+      ],
+      "size": [
+        440,
+        440
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            34
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "slot_index": 1,
+          "links": null
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.45.0",
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "example.png",
+        "image"
+      ],
+      "title": "Your image"
+    },
+    {
+      "id": 3,
+      "type": "ImageScaleToTotalPixels",
+      "pos": [
+        500,
+        880
+      ],
+      "size": [
+        440,
+        110
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 36
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            38,
+            39,
+            40,
+            41,
+            42,
+            43
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.45.0",
+        "Node name for S&R": "ImageScaleToTotalPixels"
+      },
+      "widgets_values": [
+        "lanczos",
+        1.5,
+        16
+      ],
+      "title": "Resize to about 1.5 MP"
+    },
+    {
+      "id": 4,
+      "type": "ImageRotate",
+      "pos": [
+        500,
+        560
+      ],
+      "size": [
+        440,
+        60
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 34
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            35
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.45.0",
+        "Node name for S&R": "ImageRotate"
+      },
+      "widgets_values": [
+        "none"
+      ]
+    },
+    {
+      "id": 5,
+      "type": "ImagePadForOutpaint",
+      "pos": [
+        500,
+        660
+      ],
+      "size": [
+        440,
+        180
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 35
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            36
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "slot_index": 1,
+          "links": [
+            37
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.45.0",
+        "Node name for S&R": "ImagePadForOutpaint"
+      },
+      "widgets_values": [
+        0,
+        0,
+        0,
+        0,
+        32
+      ],
+      "title": "Pad - the new area"
+    },
+    {
+      "id": 6,
+      "type": "PrimitiveStringMultiline",
+      "pos": [
+        500,
+        1160
+      ],
+      "size": [
+        440,
+        160
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "slot_index": 0,
+          "links": [
+            9
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.45.0",
+        "Node name for S&R": "PrimitiveStringMultiline"
+      },
+      "widgets_values": [
+        "Extend this scene naturally into the added canvas. Preserve the existing viewpoint, materials and lighting."
+      ],
+      "title": "Text - What goes there"
+    },
+    {
+      "id": 7,
+      "type": "UNETLoader",
+      "pos": [
+        1020,
+        520
+      ],
+      "size": [
+        520,
+        90
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "slot_index": 0,
+          "links": [
+            4
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.45.0",
+        "Node name for S&R": "UNETLoader",
+        "models": [
+          {
+            "name": "krea2_turbo_int8_convrot.safetensors",
+            "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/e5ea8b4dd7f38f348b138eb0fe29f92c0e367e96/diffusion_models/krea2_turbo_int8_convrot.safetensors",
+            "directory": "diffusion_models"
+          }
+        ]
+      },
+      "widgets_values": [
+        "krea2_turbo_int8_convrot.safetensors",
+        "default"
+      ],
+      "title": "Diffusion model"
+    },
+    {
+      "id": 8,
+      "type": "CLIPLoader",
+      "pos": [
+        1020,
+        650
+      ],
+      "size": [
+        520,
+        110
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "CLIP",
+          "type": "CLIP",
+          "slot_index": 0,
+          "links": [
+            5,
+            10,
+            18
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.45.0",
+        "Node name for S&R": "CLIPLoader",
+        "models": [
+          {
+            "name": "qwen3vl_4b_fp8_scaled.safetensors",
+            "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/e5ea8b4dd7f38f348b138eb0fe29f92c0e367e96/text_encoders/qwen3vl_4b_fp8_scaled.safetensors",
+            "directory": "text_encoders"
+          }
+        ]
+      },
+      "widgets_values": [
+        "qwen3vl_4b_fp8_scaled.safetensors",
+        "krea2",
+        "default"
+      ],
+      "title": "Text encoder"
+    },
+    {
+      "id": 9,
+      "type": "VAELoader",
+      "pos": [
+        1020,
+        800
+      ],
+      "size": [
+        520,
+        60
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "VAE",
+          "type": "VAE",
+          "slot_index": 0,
+          "links": [
+            14,
+            26
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.45.0",
+        "Node name for S&R": "VAELoader",
+        "models": [
+          {
+            "name": "qwen_image_vae.safetensors",
+            "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/e5ea8b4dd7f38f348b138eb0fe29f92c0e367e96/vae/qwen_image_vae.safetensors",
+            "directory": "vae"
+          }
+        ]
+      },
+      "widgets_values": [
+        "qwen_image_vae.safetensors"
+      ],
+      "title": "VAE"
+    },
+    {
+      "id": 10,
+      "type": "LoraLoaderModelOnly",
+      "pos": [
+        1020,
+        900
+      ],
+      "size": [
+        520,
+        90
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 4
+        }
+      ],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "slot_index": 0,
+          "links": [
+            21
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.45.0",
+        "Node name for S&R": "LoraLoaderModelOnly",
+        "models": [
+          {
+            "name": "krea2_anypaint_rank32.safetensors",
+            "url": "https://huggingface.co/yijunwang2/krea2-anypaint/resolve/83e2d68707d838677037f0ec8fa79a5684386e06/krea2_anypaint_rank32.safetensors",
+            "directory": "loras"
+          }
+        ]
+      },
+      "widgets_values": [
+        "krea2_anypaint_rank32.safetensors",
+        1.0
+      ],
+      "title": "LoRA - AnyPaint"
+    },
+    {
+      "id": 11,
+      "type": "TextGenerate",
+      "pos": [
+        1580,
+        80
+      ],
+      "size": [
+        460,
+        440
+      ],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 5
+        },
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 39,
+          "shape": 7
+        },
+        {
+          "name": "video",
+          "type": "IMAGE",
+          "link": null,
+          "shape": 7
+        },
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": null,
+          "shape": 7
+        }
+      ],
+      "outputs": [
+        {
+          "name": "generated_text",
+          "type": "STRING",
+          "slot_index": 0,
+          "links": [
+            7,
+            8
+          ]
+        },
+        {
+          "name": "thinking",
+          "type": "STRING",
+          "slot_index": 1,
+          "links": null
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.45.0",
+        "Node name for S&R": "TextGenerate"
+      },
+      "widgets_values": [
+        "Describe this picture as it will look when finished, in 60 to 90 words. The flat mid-gray areas are blank space that will be painted to continue the scene: describe what naturally fills them, never call them gray, blank, empty or padding, and don't mention any tilt. Describe the subject, setting, materials, composition and lighting in plain factual language. Do not invent actions, camera motion or sound. Output only the description.",
+        180,
+        "on",
+        0.7,
+        64,
+        0.95,
+        0.05,
+        1.05,
+        20260922,
+        0,
+        true,
+        true,
+        "auto"
+      ],
+      "title": "Describe the canvas",
+      "color": "#14424d",
+      "bgcolor": "#161f21"
+    },
+    {
+      "id": 12,
+      "type": "PreviewAny",
+      "pos": [
+        1580,
+        560
+      ],
+      "size": [
+        460,
+        160
+      ],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "source",
+          "type": "*",
+          "link": 7
+        }
+      ],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "slot_index": 0,
+          "links": null
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.45.0",
+        "Node name for S&R": "PreviewAny"
+      },
+      "widgets_values": [],
+      "title": "Show Text - Description Krea 2 wrote"
+    },
+    {
+      "id": 13,
+      "type": "StringConcatenate",
+      "pos": [
+        1580,
+        760
+      ],
+      "size": [
+        460,
+        170
+      ],
+      "flags": {},
+      "order": 12,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "string_a",
+          "type": "STRING",
+          "widget": {
+            "name": "string_a"
+          },
+          "link": 8
+        },
+        {
+          "name": "string_b",
+          "type": "STRING",
+          "widget": {
+            "name": "string_b"
+          },
+          "link": 9
+        }
+      ],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "slot_index": 0,
+          "links": [
+            12
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.45.0",
+        "Node name for S&R": "StringConcatenate"
+      },
+      "widgets_values": [
+        "",
+        "",
+        "\n\n"
+      ],
+      "title": "Description plus your direction"
+    },
+    {
+      "id": 14,
+      "type": "MarkdownNote",
+      "pos": [
+        1580,
+        970
+      ],
+      "size": [
+        460,
+        90
+      ],
+      "flags": {},
+      "order": 13,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {},
+      "widgets_values": [
+        "Krea 2's text encoder reads the canvas, gray areas included, and describes the finished picture. Keep thinking on, or it can return nothing."
+      ]
+    },
+    {
+      "id": 15,
+      "type": "MarkdownNote",
+      "pos": [
+        1580,
+        1080
+      ],
+      "size": [
+        460,
+        90
+      ],
+      "flags": {},
+      "order": 14,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {},
+      "widgets_values": [
+        "The description comes first, then your line from What goes there. Together they are the prompt for the painting."
+      ]
+    },
+    {
+      "id": 16,
+      "type": "Krea2EditGroundedEncode",
+      "pos": [
+        2100,
+        80
+      ],
+      "size": [
+        400,
+        200
+      ],
+      "flags": {},
+      "order": 15,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 10
+        },
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 40,
+          "shape": 7
+        },
+        {
+          "name": "image_b",
+          "type": "IMAGE",
+          "link": null,
+          "shape": 7
+        },
+        {
+          "name": "prompt",
+          "type": "STRING",
+          "widget": {
+            "name": "prompt"
+          },
+          "link": 12
+        }
+      ],
+      "outputs": [
+        {
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "slot_index": 0,
+          "links": [
+            15
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfyui-krea2edit",
+        "ver": "13ef60f20828949becada815d3cbc371eb5ccaab",
+        "Node name for S&R": "Krea2EditGroundedEncode"
+      },
+      "widgets_values": [
+        "",
+        768,
+        ""
+      ],
+      "title": "Krea 2 grounded encode - prompt and canvas"
+    },
+    {
+      "id": 17,
+      "type": "VAEEncode",
+      "pos": [
+        2100,
+        320
+      ],
+      "size": [
+        400,
+        50
+      ],
+      "flags": {},
+      "order": 16,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "pixels",
+          "type": "IMAGE",
+          "link": 41
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 14
+        }
+      ],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "slot_index": 0,
+          "links": [
+            16,
+            19
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.45.0",
+        "Node name for S&R": "VAEEncode"
+      },
+      "widgets_values": [],
+      "title": "Canvas to latent"
+    },
+    {
+      "id": 18,
+      "type": "ReferenceLatent",
+      "pos": [
+        2100,
+        410
+      ],
+      "size": [
+        400,
+        50
+      ],
+      "flags": {},
+      "order": 17,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "conditioning",
+          "type": "CONDITIONING",
+          "link": 15
+        },
+        {
+          "name": "latent",
+          "type": "LATENT",
+          "link": 16,
+          "shape": 7
+        }
+      ],
+      "outputs": [
+        {
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "slot_index": 0,
+          "links": [
+            17
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.45.0",
+        "Node name for S&R": "ReferenceLatent"
+      },
+      "widgets_values": [],
+      "title": "Canvas as reference"
+    },
+    {
+      "id": 19,
+      "type": "FluxKontextMultiReferenceLatentMethod",
+      "pos": [
+        2100,
+        500
+      ],
+      "size": [
+        400,
+        60
+      ],
+      "flags": {},
+      "order": 18,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "conditioning",
+          "type": "CONDITIONING",
+          "link": 17
+        }
+      ],
+      "outputs": [
+        {
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "slot_index": 0,
+          "links": [
+            22
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.45.0",
+        "Node name for S&R": "FluxKontextMultiReferenceLatentMethod"
+      },
+      "widgets_values": [
+        "index_timestep_zero"
+      ]
+    },
+    {
+      "id": 20,
+      "type": "CLIPTextEncode",
+      "pos": [
+        2100,
+        600
+      ],
+      "size": [
+        400,
+        120
+      ],
+      "flags": {},
+      "order": 19,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 18
+        }
+      ],
+      "outputs": [
+        {
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "slot_index": 0,
+          "links": [
+            23
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.45.0",
+        "Node name for S&R": "CLIPTextEncode"
+      },
+      "widgets_values": [
+        ""
+      ],
+      "title": "Negative (empty)"
+    },
+    {
+      "id": 21,
+      "type": "SetLatentNoiseMask",
+      "pos": [
+        2100,
+        760
+      ],
+      "size": [
+        400,
+        50
+      ],
+      "flags": {},
+      "order": 20,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 19
+        },
+        {
+          "name": "mask",
+          "type": "MASK",
+          "link": 44
+        }
+      ],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "slot_index": 0,
+          "links": [
+            24
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.45.0",
+        "Node name for S&R": "SetLatentNoiseMask"
+      },
+      "widgets_values": [],
+      "title": "Paint only the gray"
+    },
+    {
+      "id": 22,
+      "type": "KSampler",
+      "pos": [
+        2540,
+        80
+      ],
+      "size": [
+        320,
+        270
+      ],
+      "flags": {},
+      "order": 21,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 21
+        },
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "link": 22
+        },
+        {
+          "name": "negative",
+          "type": "CONDITIONING",
+          "link": 23
+        },
+        {
+          "name": "latent_image",
+          "type": "LATENT",
+          "link": 24
+        }
+      ],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "slot_index": 0,
+          "links": [
+            25
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.45.0",
+        "Node name for S&R": "KSampler"
+      },
+      "widgets_values": [
+        7,
+        "fixed",
+        8,
+        1,
+        "er_sde",
+        "simple",
+        1
+      ],
+      "title": "Krea 2 Turbo sampler"
+    },
+    {
+      "id": 23,
+      "type": "VAEDecode",
+      "pos": [
+        2540,
+        390
+      ],
+      "size": [
+        320,
+        50
+      ],
+      "flags": {},
+      "order": 22,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 25
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 26
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            28
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.45.0",
+        "Node name for S&R": "VAEDecode"
+      },
+      "widgets_values": [],
+      "title": "Decode"
+    },
+    {
+      "id": 24,
+      "type": "InvertMask",
+      "pos": [
+        2540,
+        480
+      ],
+      "size": [
+        320,
+        30
+      ],
+      "flags": {},
+      "order": 23,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "mask",
+          "type": "MASK",
+          "link": 45
+        }
+      ],
+      "outputs": [
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "slot_index": 0,
+          "links": [
+            30
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.45.0",
+        "Node name for S&R": "InvertMask"
+      },
+      "widgets_values": [],
+      "title": "Your picture's area"
+    },
+    {
+      "id": 25,
+      "type": "ImageCompositeMasked",
+      "pos": [
+        2540,
+        550
+      ],
+      "size": [
+        320,
+        140
+      ],
+      "flags": {},
+      "order": 24,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "destination",
+          "type": "IMAGE",
+          "link": 28
+        },
+        {
+          "name": "source",
+          "type": "IMAGE",
+          "link": 42
+        },
+        {
+          "name": "mask",
+          "type": "MASK",
+          "link": 30,
+          "shape": 7
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            31,
+            33
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.45.0",
+        "Node name for S&R": "ImageCompositeMasked"
+      },
+      "widgets_values": [
+        0,
+        0,
+        false
+      ],
+      "title": "Stitch - put your image back"
+    },
+    {
+      "id": 26,
+      "type": "MarkdownNote",
+      "pos": [
+        2100,
+        860
+      ],
+      "size": [
+        400,
+        110
+      ],
+      "flags": {},
+      "order": 25,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {},
+      "widgets_values": [
+        "The canvas is the reference. Its mask marks the gray areas, so the sampler paints only there."
+      ]
+    },
+    {
+      "id": 27,
+      "type": "MarkdownNote",
+      "pos": [
+        2540,
+        860
+      ],
+      "size": [
+        400,
+        110
+      ],
+      "flags": {},
+      "order": 26,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {},
+      "widgets_values": [
+        "8 steps, CFG 1, er_sde and simple: the Krea 2 Turbo settings. The canvas goes in at full resolution as a reference latent at timestep zero; no model patch."
+      ]
+    },
+    {
+      "id": 28,
+      "type": "ImageCompare",
+      "pos": [
+        2940,
+        80
+      ],
+      "size": [
+        480,
+        495
+      ],
+      "flags": {},
+      "order": 27,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image_a",
+          "type": "IMAGE",
+          "link": 31,
+          "shape": 7
+        },
+        {
+          "name": "image_b",
+          "type": "IMAGE",
+          "link": 43,
+          "shape": 7
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.45.0",
+        "Node name for S&R": "ImageCompare"
+      },
+      "widgets_values": [],
+      "title": "Image Compare A/B - Before and after"
+    },
+    {
+      "id": 29,
+      "type": "SaveImage",
+      "pos": [
+        2940,
+        645
+      ],
+      "size": [
+        480,
+        520
+      ],
+      "flags": {},
+      "order": 28,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 33
+        }
+      ],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": null
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.45.0",
+        "Node name for S&R": "SaveImage"
+      },
+      "widgets_values": [
+        "krea2_rotate_outpaint"
+      ]
+    },
+    {
+      "id": 30,
+      "type": "ResizeImageMaskNode",
+      "pos": [
+        500,
+        1020
+      ],
+      "size": [
+        440,
+        110
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "input",
+          "name": "input",
+          "type": "IMAGE,MASK",
+          "link": 37
+        },
+        {
+          "label": "match",
+          "localized_name": "resize_type.match",
+          "name": "resize_type.match",
+          "type": "IMAGE,MASK",
+          "link": 38
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "resized",
+          "name": "resized",
+          "type": "MASK",
+          "links": [
+            44,
+            45
+          ]
+        }
+      ],
+      "title": "Mask to the same size",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.45.0",
+        "Node name for S&R": "ResizeImageMaskNode"
+      },
+      "widgets_values": [
+        "match size",
+        "disabled",
+        "bilinear"
+      ]
+    }
+  ],
+  "links": [
+    [
+      4,
+      7,
+      0,
+      10,
+      0,
+      "MODEL"
+    ],
+    [
+      5,
+      8,
+      0,
+      11,
+      0,
+      "CLIP"
+    ],
+    [
+      7,
+      11,
+      0,
+      12,
+      0,
+      "STRING"
+    ],
+    [
+      8,
+      11,
+      0,
+      13,
+      0,
+      "STRING"
+    ],
+    [
+      9,
+      6,
+      0,
+      13,
+      1,
+      "STRING"
+    ],
+    [
+      10,
+      8,
+      0,
+      16,
+      0,
+      "CLIP"
+    ],
+    [
+      12,
+      13,
+      0,
+      16,
+      3,
+      "STRING"
+    ],
+    [
+      14,
+      9,
+      0,
+      17,
+      1,
+      "VAE"
+    ],
+    [
+      15,
+      16,
+      0,
+      18,
+      0,
+      "CONDITIONING"
+    ],
+    [
+      16,
+      17,
+      0,
+      18,
+      1,
+      "LATENT"
+    ],
+    [
+      17,
+      18,
+      0,
+      19,
+      0,
+      "CONDITIONING"
+    ],
+    [
+      18,
+      8,
+      0,
+      20,
+      0,
+      "CLIP"
+    ],
+    [
+      19,
+      17,
+      0,
+      21,
+      0,
+      "LATENT"
+    ],
+    [
+      21,
+      10,
+      0,
+      22,
+      0,
+      "MODEL"
+    ],
+    [
+      22,
+      19,
+      0,
+      22,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      23,
+      20,
+      0,
+      22,
+      2,
+      "CONDITIONING"
+    ],
+    [
+      24,
+      21,
+      0,
+      22,
+      3,
+      "LATENT"
+    ],
+    [
+      25,
+      22,
+      0,
+      23,
+      0,
+      "LATENT"
+    ],
+    [
+      26,
+      9,
+      0,
+      23,
+      1,
+      "VAE"
+    ],
+    [
+      28,
+      23,
+      0,
+      25,
+      0,
+      "IMAGE"
+    ],
+    [
+      30,
+      24,
+      0,
+      25,
+      2,
+      "MASK"
+    ],
+    [
+      31,
+      25,
+      0,
+      28,
+      0,
+      "IMAGE"
+    ],
+    [
+      33,
+      25,
+      0,
+      29,
+      0,
+      "IMAGE"
+    ],
+    [
+      34,
+      2,
+      0,
+      4,
+      0,
+      "IMAGE"
+    ],
+    [
+      35,
+      4,
+      0,
+      5,
+      0,
+      "IMAGE"
+    ],
+    [
+      36,
+      5,
+      0,
+      3,
+      0,
+      "IMAGE"
+    ],
+    [
+      37,
+      5,
+      1,
+      30,
+      0,
+      "MASK"
+    ],
+    [
+      38,
+      3,
+      0,
+      30,
+      1,
+      "IMAGE"
+    ],
+    [
+      39,
+      3,
+      0,
+      11,
+      1,
+      "IMAGE"
+    ],
+    [
+      40,
+      3,
+      0,
+      16,
+      1,
+      "IMAGE"
+    ],
+    [
+      41,
+      3,
+      0,
+      17,
+      0,
+      "IMAGE"
+    ],
+    [
+      42,
+      3,
+      0,
+      25,
+      1,
+      "IMAGE"
+    ],
+    [
+      43,
+      3,
+      0,
+      28,
+      1,
+      "IMAGE"
+    ],
+    [
+      44,
+      30,
+      0,
+      21,
+      1,
+      "MASK"
+    ],
+    [
+      45,
+      30,
+      0,
+      24,
+      0,
+      "MASK"
+    ]
+  ],
+  "groups": [
+    {
+      "id": 1,
+      "title": "1 · Your input",
+      "bounding": [
+        480,
+        0,
+        480,
+        1360
+      ],
+      "color": "#1d5560",
+      "font_size": 24,
+      "flags": {}
+    },
+    {
+      "id": 2,
+      "title": "3 · Models",
+      "bounding": [
+        1000,
+        480,
+        560,
+        540
+      ],
+      "color": "#1d5560",
+      "font_size": 24,
+      "flags": {}
+    },
+    {
+      "id": 3,
+      "title": "2 · Write the prompt",
+      "bounding": [
+        1560,
+        0,
+        500,
+        1240
+      ],
+      "color": "#1d5560",
+      "font_size": 24,
+      "flags": {}
+    },
+    {
+      "id": 4,
+      "title": "Paint with Krea 2",
+      "bounding": [
+        2080,
+        0,
+        820,
+        1000
+      ],
+      "color": "#1d5560",
+      "font_size": 24,
+      "flags": {}
+    },
+    {
+      "id": 5,
+      "title": "4 · Result",
+      "bounding": [
+        2920,
+        0,
+        520,
+        1240
+      ],
+      "color": "#1d5560",
+      "font_size": 24,
+      "flags": {}
+    }
+  ],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.5,
+      "offset": [
+        0,
+        0
+      ]
+    },
+    "frontendVersion": "1.58.5"
+  },
+  "version": 0.4
+}

@@ -1,0 +1,35 @@
+schema = 1
+description = "Krea 2 add-on LoRAs for the INT8 workflows: Turbo 4-step, identity edit V2 (non-commercial license), and AnyPaint rank-32 inpaint and outpaint"
+workflow_urls = ["https://github.com/Comfy-Org/workflow_templates/blob/c8e48bdcfc7241d7af588d20d4f924caf9d9d953/templates/image_krea2_turbo_t2i_int8.json"]
+
+[[license]]
+name = "Krea 2 Community License"
+url = "https://huggingface.co/lvladikov/Krea2-Turbo-Distill-4step-LoRA/blob/d4d6c8e9edb60587f9f6531b89995e668d5982dc/LICENSE.pdf"
+
+[[license]]
+name = "Krea 2 Identity Edit V2 License (non-commercial; commercial use needs a license from the author)"
+url = "https://huggingface.co/conradlocke/krea2-identity-edit/blob/f33b26291c640e8ec50b0da420bfee3c9a660daa/LICENSE_V2.md"
+
+[[file]]
+repository = "lvladikov/Krea2-Turbo-Distill-4step-LoRA"
+revision = "d4d6c8e9edb60587f9f6531b89995e668d5982dc"
+source = "krea2_turbo_4step_rank_64_lora_comfyui.safetensors"
+destination = "lc/krea2/loras/krea2_turbo_4step_rank_64_lora_comfyui.safetensors"
+size = 438141176
+sha256 = "27a3d1644fa1a8c137b8549591e50acc4746f8e9bc736fccff80e506a8ee8ac7"
+
+[[file]]
+repository = "conradlocke/krea2-identity-edit"
+revision = "f33b26291c640e8ec50b0da420bfee3c9a660daa"
+source = "krea2_identity_edit_v2.safetensors"
+destination = "lc/krea2/loras/krea2_identity_edit_v2.safetensors"
+size = 1828285728
+sha256 = "c53843f9451963a6cb3c22dc4975205056b93a6575fb9347dd2bc6e055ef9877"
+
+[[file]]
+repository = "yijunwang2/krea2-anypaint"
+revision = "83e2d68707d838677037f0ec8fa79a5684386e06"
+source = "krea2_anypaint_rank32.safetensors"
+destination = "lc/krea2/loras/krea2_anypaint_rank32.safetensors"
+size = 228587752
+sha256 = "3a7d09f6b27f8ead160d340f2f59c11f4ee635c4a1ee87ffd8b1b9f9ba412f7a"

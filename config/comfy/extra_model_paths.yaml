@@ -22,6 +22,7 @@ latentcrate_models:
   style_models: style_models/
   unet: unet/
   upscale_models: upscale_models/
+  latent_upscale_models: latent_upscale_models/
   vae: vae/
   vae_approx: vae_approx/
   animatediff_models: animatediff_models/
@@ -40,6 +41,87 @@ latentcrate_models:
   instantid: instantid/
   audio_encoders: audio_encoders/
   model_patches: model_patches/
+  background_removal: background_removal/
+  frame_interpolation: frame_interpolation/
+  geometry_estimation: geometry_estimation/
+
+# The shipped model sets' files: one base per family below /models/lc,
+# with the categories its sets use; tests/test_project_contracts.py keeps
+# both equal.
+
+lc_flux2:
+  base_path: /models/lc/flux2
+  diffusion_models: diffusion_models/
+  text_encoders: text_encoders/
+  vae: vae/
+
+lc_krea2:
+  base_path: /models/lc/krea2
+  diffusion_models: diffusion_models/
+  loras: loras/
+  text_encoders: text_encoders/
+
+lc_minimax-h3:
+  base_path: /models/lc/minimax-h3
+  diffusion_models: diffusion_models/
+  embeddings: embeddings/
+  latent_upscale_models: latent_upscale_models/
+  loras: loras/
+  model_patches: model_patches/
+  text_encoders: text_encoders/
+  vae: vae/
+  vae_approx: vae_approx/
+
+lc_minimax-h3-image:
+  base_path: /models/lc/minimax-h3-image
+  diffusion_models: diffusion_models/
+  loras: loras/
+  text_encoders: text_encoders/
+  vae: vae/
+
+lc_moss:
+  base_path: /models/lc/moss
+  diffusion_models: diffusion_models/
+  geometry_estimation: geometry_estimation/
+  loras: loras/
+  vae: vae/
+
+lc_pixal3d:
+  base_path: /models/lc/pixal3d
+  clip_vision: clip_vision/
+  diffusion_models: diffusion_models/
+  geometry_estimation: geometry_estimation/
+  vae: vae/
+
+lc_qwen-image:
+  base_path: /models/lc/qwen-image
+  diffusion_models: diffusion_models/
+  loras: loras/
+  text_encoders: text_encoders/
+
+lc_utility:
+  base_path: /models/lc/utility
+  checkpoints: checkpoints/
+  diffusion_models: diffusion_models/
+  frame_interpolation: frame_interpolation/
+  text_encoders: text_encoders/
+  vae: vae/
+
+lc_wan:
+  base_path: /models/lc/wan
+  clip_vision: clip_vision/
+  diffusion_models: diffusion_models/
+  loras: loras/
+  text_encoders: text_encoders/
+  vae: vae/
+  vae_approx: vae_approx/
+
+lc_shared:
+  base_path: /models/lc/shared
+  background_removal: background_removal/
+  diffusion_models: diffusion_models/
+  text_encoders: text_encoders/
+  vae: vae/
 
 latentcrate_local_nodes:
   base_path: /local

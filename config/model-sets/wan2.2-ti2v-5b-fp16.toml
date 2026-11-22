@@ -1,0 +1,31 @@
+schema = 1
+description = "Wan 2.2 TI2V 5B (FP16) with the Wan 2.2 VAE for the official ComfyUI workflow"
+workflow_urls = ["https://github.com/Comfy-Org/workflow_templates/blob/c8e48bdcfc7241d7af588d20d4f924caf9d9d953/templates/video_wan2_2_5B_ti2v.json"]
+
+[[license]]
+name = "Apache License 2.0 (Wan 2.2)"
+url = "https://github.com/Wan-Video/Wan2.2/blob/1ea34ff48f87168174e12956e200b1d908b1c5ff/LICENSE.txt"
+
+[[file]]
+repository = "Comfy-Org/Wan-2.2"
+revision = "ee6f4a40737a995bf5818954cfce6d59443b0f04"
+source = "split_files/diffusion_models/wan2.2_ti2v_5B_fp16.safetensors"
+destination = "lc/wan/diffusion_models/wan2.2_ti2v_5B_fp16.safetensors"
+size = 9999658848
+sha256 = "456f901338bd9eadbded3828b819109a9b68e8a525ca5cf8d0049a69fcfeca1e"
+
+[[file]]
+repository = "Comfy-Org/Wan-2.2"
+revision = "ee6f4a40737a995bf5818954cfce6d59443b0f04"
+source = "split_files/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors"
+destination = "lc/wan/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors"
+size = 6735906897
+sha256 = "c3355d30191f1f066b26d93fba017ae9809dce6c627dda5f6a66eaa651204f68"
+
+[[file]]
+repository = "Comfy-Org/Wan-2.2"
+revision = "ee6f4a40737a995bf5818954cfce6d59443b0f04"
+source = "split_files/vae/wan2.2_vae.safetensors"
+destination = "lc/wan/vae/wan2.2_vae.safetensors"
+size = 1409400960
+sha256 = "e40321bd36b9709991dae2530eb4ac303dd168276980d3e9bc4b6e2b75fed156"

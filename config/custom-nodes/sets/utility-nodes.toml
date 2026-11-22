@@ -1,0 +1,37 @@
+schema = 1
+description = "Model-independent nodes for ComfyUI workflows: KJNodes, rgthree, VideoHelperSuite, Impact Pack, Inpaint Crop and Stitch, WAS Node Suite, and the RES4LYF samplers"
+
+[[node]]
+name = "comfyui-kjnodes"
+repository = "https://github.com/kijai/ComfyUI-KJNodes"
+commit = "83262fae95ab3d715c85cbde2701e5584b653285"
+
+[[node]]
+name = "rgthree-comfy"
+repository = "https://github.com/rgthree/rgthree-comfy"
+commit = "bc48c6aaeca87bedbc14245d89f9bc6be37a630e"
+
+[[node]]
+name = "comfyui-videohelpersuite"
+repository = "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite"
+commit = "4d907bee61e92c2e65af3bd6383a4e4d356126d1"
+
+[[node]]
+name = "comfyui-impact-pack"
+repository = "https://github.com/ltdrdata/ComfyUI-Impact-Pack"
+commit = "ed1bd80650a1d9c9f5d17d6411455e65ad43b58b"
+
+[[node]]
+name = "comfyui-inpaint-cropandstitch"
+repository = "https://github.com/lquesada/ComfyUI-Inpaint-CropAndStitch"
+commit = "6005efc02f7745649118edd89cdd084c2b9bd3ae"
+
+[[node]]
+name = "was-ns"
+repository = "https://github.com/WASasquatch/was-node-suite-comfyui"
+commit = "338f521fc45b68c37bde52b99a94d2bc0ac6fd3d"
+
+[[node]]
+name = "RES4LYF"
+repository = "https://github.com/ClownsharkBatwing/RES4LYF"
+commit = "cb2c312d979b3ab4aaca97a3b70f892f4be554f4"

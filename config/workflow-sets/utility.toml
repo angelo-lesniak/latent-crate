@@ -1,0 +1,8 @@
+schema = 1
+description = "Utilities: RelayVSR 4x video upscale"
+
+[[workflow]]
+file = "video-upscale-relayvsr-4x.json"
+provenance = "clone"
+source = "https://github.com/Comfy-Org/workflow_templates/blob/85984c2b1ee8c0aa39179bf122a7d01fa1b21c09/templates/utility_relayvsr_video_x4_upscale.json"
+license = { name = "MIT License", url = "https://github.com/Comfy-Org/workflow_templates/blob/85984c2b1ee8c0aa39179bf122a7d01fa1b21c09/LICENSE" }

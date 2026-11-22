@@ -7,6 +7,7 @@ import io
 import json
 import os
 import shutil
+import stat
 import tempfile
 import unittest
 from pathlib import Path
@@ -67,10 +68,26 @@ def node(kind: str, *widgets: object, mode: int = 0, **properties: object) -> di
     }
 
 
-def checked(selected: list[workflows.WorkflowSet], model_sets=MODEL_SETS, node_sets=NODE_SETS) -> tuple[int, str]:
+EQUIVALENTS = {
+    "fixture-style-v1.safetensors": workflows.Equivalent("loras/style/fixture-style.safetensors", "later version"),
+    "fixture-dit-fp8.safetensors": workflows.Equivalent("diffusion_models/fixture-dit.safetensors", "other precision"),
+}
+DIT = "fixture-dit.safetensors"
+SUMMARY = "{} workflow(s) adapted, {} model(s) not applied, {} workflow(s) refused"
+
+
+def checked(
+    selected: list[workflows.WorkflowSet], model_sets=MODEL_SETS, node_sets=NODE_SETS, equivalents=EQUIVALENTS
+) -> tuple[int, str]:
     with contextlib.redirect_stdout(io.StringIO()) as printed:
-        status = workflows.check(selected, model_sets, node_sets, CORE_NODES, COMFYUI_REF)
+        status = workflows.check(selected, model_sets, equivalents, node_sets, CORE_NODES, COMFYUI_REF)
     return status, printed.getvalue()
+
+
+def adapted(selected: list[workflows.WorkflowSet], model_sets=MODEL_SETS) -> tuple[int, list[str]]:
+    with contextlib.redirect_stdout(io.StringIO()) as printed:
+        status = workflows.adapt(selected, model_sets, EQUIVALENTS, CORE_NODES)
+    return status, printed.getvalue().splitlines()
 
 
 class WorkflowSetTests(unittest.TestCase):
@@ -286,7 +303,7 @@ class WorkflowSetTests(unittest.TestCase):
             (
                 [node("UNETLoader", dit, models=[{"name": dit, "directory": "loras"}])],
                 1,
-                [f"model loras/{dit}: no model set provides it"],
+                [f"model loras/{dit}: re-select diffusion_models/{dit} (fixture-models)"],
             ),
             (
                 [node("UNETLoader", dit, models=[{"name": dit, "directory": "/diffusion_models/"}])],
@@ -495,6 +512,303 @@ class WorkflowSetTests(unittest.TestCase):
             (directory / "workflows" / "fixture" / "a.json").write_text(text)
             with self.subTest(message=message), self.assertRaisesRegex(LatentCrateError, f"^fixture/a.json: {message}"):
                 checked([workflows.read_manifest(manifest)])
+
+    def test_a_model_at_another_path_or_with_an_equivalent_names_what_to_re_select(self) -> None:
+        dit = "fixture-dit.safetensors"
+        other = {**MODEL_SETS, "other": model_set("other", f"checkpoints/{dit}")}
+        cases = [
+            # The same file name below another directory, matched case-sensitively.
+            (MODEL_SETS, "Minimax\\" + dit, f"re-select diffusion_models/{dit} (fixture-models)"),
+            (MODEL_SETS, "Minimax/Fixture-dit.safetensors", "no model set provides it"),
+            # Several destinations: every one, none picked.
+            (other, f"x/{dit}", f"re-select checkpoints/{dit} (other) or diffusion_models/{dit} (fixture-models)"),
+            # A URL is no file to re-select.
+            (MODEL_SETS, f"https://example.com/diffusion_models/{dit}", "no model set provides it"),
+            # A reviewed equivalent, with its reason.
+            (
+                MODEL_SETS,
+                "old/fixture-style-v1.safetensors",
+                "equivalent loras/style/fixture-style.safetensors (fixture-models), later version",
+            ),
+        ]
+        for model_sets, value, outcome in cases:
+            with self.subTest(value=value):
+                self.assertEqual(
+                    self.lines([node("UNETLoader", value)], model_sets=model_sets),
+                    (1, [f"model {workflows.model_name(value)}: {outcome}"]),
+                )
+
+    def write_equivalents(self, body: str) -> Path:
+        (self.tmp / workflows.EQUIVALENTS_FILE).write_text(HEAD.replace('description = "Fixture"\n', "") + body)
+        return self.tmp
+
+    def test_the_equivalents_table_is_validated_against_the_shipped_sets(self) -> None:
+        dit = 'destination = "diffusion_models/fixture-dit.safetensors"\nreason = "same model, other precision"\n'
+        entry = f'[[equivalent]]\n{dit}names = ["fixture-dit-fp8.safetensors"]\n'
+        self.assertEqual(
+            workflows.load_equivalents(self.write_equivalents(entry), MODEL_SETS),
+            {
+                "fixture-dit-fp8.safetensors": workflows.Equivalent(
+                    "diffusion_models/fixture-dit.safetensors", "same model, other precision"
+                )
+            },
+        )
+        reason = 'reason = "r"\n'
+        cases = {
+            "at least one": "",
+            "destination must be a file a shipped model set downloads: 'vae/fixture-vae.safetensors'": (
+                f'[[equivalent]]\ndestination = "vae/fixture-vae.safetensors"\n{reason}names = ["a.safetensors"]\n'
+            ),
+            "fixture-4x.pth is the name of a file a shipped model set downloads": (
+                f'[[equivalent]]\n{dit}names = ["fixture-4x.pth"]\n'
+            ),
+            "equivalent 2: fixture-dit-fp8.safetensors is named twice": entry + entry,
+            "each name must be a model file name without a directory: 'x/a.safetensors'": (
+                f'[[equivalent]]\n{dit}names = ["x/a.safetensors"]\n'
+            ),
+            "each name must be a model file name without a directory: 'a.txt'": (
+                f'[[equivalent]]\n{dit}names = ["a.txt"]\n'
+            ),
+            "names must list one or more file names": f"[[equivalent]]\n{dit}names = []\n",
+            "reason must be one non-empty line": (
+                '[[equivalent]]\ndestination = "diffusion_models/fixture-dit.safetensors"\n'
+                'reason = "a\\nb"\nnames = ["a.safetensors"]\n'
+            ),
+            r"unknown field\(s\) in model-equivalents.toml: equivalent 1: url": entry + 'url = "x"\n',
+        }
+        for message, body in cases.items():
+            with self.subTest(message=message), self.assertRaisesRegex(LatentCrateError, message):
+                workflows.load_equivalents(self.write_equivalents(body), MODEL_SETS)
+
+    def test_the_shipped_equivalents_resolve_against_the_shipped_sets(self) -> None:
+        model_sets = models.catalog(CONFIG)
+        equivalents = workflows.load_equivalents(CONFIG, model_sets)
+        self.assertTrue(equivalents)
+        providers = workflows.model_providers(model_sets)
+        for name, equivalent in equivalents.items():
+            with self.subTest(name=name):
+                self.assertEqual(
+                    workflows.substitutes(f"any/{name}", providers, equivalents),
+                    ([equivalent.destination], equivalent.reason),
+                )
+
+    def write_raw(self, manifest: str, text: str, *, newline: str = "\n", private: bool = True):
+        """The set of fixture.toml and a.json, both written as given with the line ending."""
+        (self.tmp / "fixture.toml").write_bytes(manifest.replace("\n", newline).encode())
+        directory = self.tmp / "workflows" / "fixture"
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "a.json").write_bytes(text.replace("\n", newline).encode())
+        return workflows.read_manifest(self.tmp / "fixture.toml", private=private)
+
+    def files(self) -> tuple[str, str]:
+        return (
+            (self.tmp / "fixture.toml").read_bytes().decode(),
+            (self.tmp / "workflows" / "fixture" / "a.json").read_bytes().decode(),
+        )
+
+    def test_adapt_edits_only_the_references_check_reads_and_marks_a_clone_modified(self) -> None:
+        twins = {**MODEL_SETS, "other": model_set("other", "loras/twin.safetensors", "vae/twin.safetensors")}
+        old_entry = {"name": f"Minimax/{DIT}", "directory": "checkpoints", "url": "https://example.com/x"}
+        workflow = {
+            "nodes": [
+                node(
+                    "UNETLoader",
+                    "Minimax\\" + DIT,
+                    "default",
+                    models=[{**old_entry, "hash": "ab", "hash_type": "SHA256"}],
+                ),
+                node("UNETLoader", "fp8/fixture-dit-fp8.safetensors", "fp8_e4m3fn"),
+                node(
+                    "Power Lora Loader (rgthree)",
+                    {"on": True, "lora": "old/fixture-style-v1.safetensors"},
+                    {"on": False, "lora": "old/fixture-style-v1.safetensors"},
+                    cnr_id="rgthree-comfy",
+                ),
+                node("LoraLoader", json.dumps({"loras": [{"name": "fixture-style-v1.safetensors"}]})),
+                node("UpscaleModelLoader", "up/fixture-4x.pth", "x/twin.safetensors"),
+                # Nodes check does not read are neither edited nor validated.
+                node("UNETLoader", "Minimax/" + DIT, mode=4, models="not a list"),
+            ],
+            "models": [{"name": "fixture-style-v1.safetensors", "directory": "loras"}],
+            "definitions": {"subgraphs": [{"id": "unused", "nodes": [{"id": 9, "widgets_values": ["x/" + DIT]}]}]},
+        }
+        text = json.dumps(workflow, indent=2)
+        workflow_set = self.write_raw(HEAD + CLONE, text)
+        status, output = adapted([workflow_set], twins)
+        self.assertEqual(status, 0)
+        self.assertEqual(
+            output,
+            [
+                "fixture/a.json: model x/twin.safetensors: loras/twin.safetensors (other) or vae/twin.safetensors "
+                "(other): not applied, re-select one of them",
+                f"fixture/a.json: Minimax/{DIT} -> diffusion_models/{DIT}",
+                "fixture/a.json: fixture-style-v1.safetensors -> loras/style/fixture-style.safetensors "
+                "(equivalent: later version)",
+                f"fixture/a.json: fp8/fixture-dit-fp8.safetensors -> diffusion_models/{DIT} "
+                "(equivalent: other precision)",
+                "fixture/a.json: old/fixture-style-v1.safetensors -> loras/style/fixture-style.safetensors "
+                "(equivalent: later version)",
+                "fixture/a.json: up/fixture-4x.pth -> upscale_models/fixture-4x.pth",
+                "fixture/a.json: UNETLoader weight_dtype fp8_e4m3fn -> default",
+                "fixture/a.json: provenance clone -> modified-clone",
+                SUMMARY.format(1, 1, 0),
+            ],
+        )
+        manifest, result = self.files()
+        # Every other line keeps its bytes; a models entry is re-encoded in its own layout, without the old hashes.
+        url = f"https://huggingface.co/example/fixture/resolve/{COMMIT}/"
+        self.assertEqual(
+            set(result.splitlines()) - set(text.splitlines()),
+            set(
+                [
+                    f'            "name": "{DIT}",',
+                    '            "directory": "diffusion_models",',
+                    f'            "url": "{url}diffusion_models/{DIT}"',
+                    f'        "{DIT}",',
+                    f'        "{DIT}",',
+                    '          "lora": "style/fixture-style.safetensors"',
+                    '        "{\\"loras\\": [{\\"name\\": \\"style/fixture-style.safetensors\\"}]}"',
+                    '        "fixture-4x.pth",',
+                    '      "name": "style/fixture-style.safetensors",',
+                    '      "directory": "loras",',
+                    f'      "url": "{url}loras/style/fixture-style.safetensors"',
+                ]
+            ),
+        )
+        # Two hash lines go, a url line comes.
+        self.assertEqual(len(result.splitlines()), len(text.splitlines()) - 1)
+        self.assertEqual(
+            json.loads(result)["nodes"][2]["widgets_values"][1]["lora"], "old/fixture-style-v1.safetensors"
+        )
+        self.assertEqual(json.loads(result)["nodes"][5]["widgets_values"], [f"Minimax/{DIT}"])
+        self.assertEqual(
+            [(item.provenance, item.note) for item in workflows.read_manifest(self.tmp / "fixture.toml").workflows],
+            [("modified-clone", workflows.ADAPTED_NOTE)],
+        )
+        # Only the ambiguous model stays unresolved, and a second run changes nothing.
+        self.assertIn("model x/twin.safetensors: re-select", checked([workflow_set], twins)[1])
+        status, output = adapted([workflows.read_manifest(self.tmp / "fixture.toml", private=True)], twins)
+        self.assertEqual((status, output[-1]), (0, SUMMARY.format(0, 1, 0)))
+        self.assertEqual(self.files(), (manifest, result))
+
+    def test_adapt_keeps_line_endings_modes_comments_and_escapes(self) -> None:
+        text = json.dumps({"nodes": [node("UNETLoader", f"x/{DIT}"), node("CLIPTextEncode", "cut \ud83d é")]}, indent=1)
+        body = HEAD + CLONE.replace('provenance = "clone"', 'provenance = "clone"  # verbatim').replace(
+            'file = "a.json"', 'file = "a.json"  # upstream name'
+        )
+        self.write_raw(body, text, newline="\r\n")
+        for path in (self.tmp / "fixture.toml", self.tmp / "workflows" / "fixture" / "a.json"):
+            path.chmod(0o600)
+        status, _ = adapted([workflows.read_manifest(self.tmp / "fixture.toml", private=True)])
+        self.assertEqual(status, 0)
+        manifest, result = self.files()
+        self.assertIn(
+            'provenance = "modified-clone"  # verbatim\r\nnote = "model paths adapted to LatentCrate model sets"\r\n',
+            manifest,
+        )
+        self.assertIn('file = "a.json"  # upstream name\r\n', manifest)
+        self.assertNotIn("\n", manifest.replace("\r\n", ""))
+        self.assertEqual(result, text.replace("\n", "\r\n").replace(f'"x/{DIT}"', f'"{DIT}"'))
+        for path in (self.tmp / "fixture.toml", self.tmp / "workflows" / "fixture" / "a.json"):
+            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+
+    def test_adapt_escapes_a_lone_surrogate_it_re_encodes(self) -> None:
+        # The edited JSON string holds a non-ASCII character, so it is re-encoded
+        # unescaped; the lone surrogate it decodes to cannot be, and is escaped.
+        self.write_raw(
+            HEAD + CLONE,
+            '{"nodes": [{"id": 1, "type": "LoraLoader", "mode": 0, "properties": {}, '
+            '"widgets_values": ["{\\"lora\\": \\"x/' + DIT + '\\", \\"t\\": \\"é \\ud83d\\"}"]}]}',
+        )
+        status, output = adapted([workflows.read_manifest(self.tmp / "fixture.toml", private=True)])
+        self.assertEqual((status, output[-1]), (0, SUMMARY.format(1, 0, 0)))
+        widget = json.loads(self.files()[1])["nodes"][0]["widgets_values"][0]
+        self.assertEqual(json.loads(widget), {"lora": DIT, "t": "é \ud83d"})
+
+    def test_adapt_rewrites_a_modified_clone_note_once_from_its_stripped_text(self) -> None:
+        modified = CLONE.replace('"clone"', '"modified-clone"') + 'note = "Trimmed\\n"  # why\n'
+        workflow = json.dumps({"nodes": [node("UNETLoader", f"x/{DIT}")]})
+        self.write_raw(HEAD + modified, workflow)
+        self.assertEqual(adapted([workflows.read_manifest(self.tmp / "fixture.toml", private=True)])[0], 0)
+        self.assertIn('note = "Trimmed; model paths adapted"  # why\n', self.files()[0])
+        noted = workflows.read_manifest(self.tmp / "fixture.toml", private=True)
+        self.assertEqual(noted.workflows[0].note, "Trimmed; model paths adapted")
+        manifest = self.files()[0]
+        self.write_raw(manifest, workflow)
+        status, output = adapted([noted])
+        self.assertEqual((status, output[-1]), (0, SUMMARY.format(1, 0, 0)))
+        self.assertEqual(self.files()[0], manifest)
+
+    def test_adapt_refuses_a_workflow_whose_edit_it_cannot_place_exactly(self) -> None:
+        workflow = json.dumps({"nodes": [node("UNETLoader", f"x/{DIT}")]})
+        modified = CLONE.replace('"clone"', '"modified-clone"')
+        inline = (
+            f'workflow = [{{ file = "a.json", provenance = "clone", source = "{SOURCE}", '
+            f'license = {{ name = "MIT", url = "https://github.com/example/repo/blob/{COMMIT}/LICENSE" }} }}]\n'
+        )
+        # A JSON-string widget deeper than the editor's scanner reaches, which check still reads.
+        deep = json.dumps({"nodes": [node("LoraLoader", "[" * 900 + '"x/fixture-style-v1.safetensors"' + "]" * 900)]})
+        for body, text in (
+            (modified + 'note = """Trimmed"""\n', workflow),
+            (inline, workflow),
+            (CLONE, deep),
+        ):
+            with self.subTest(body=body, text=text[:40]):
+                workflow_set = self.write_raw(HEAD + body, text)
+                status, output = adapted([workflow_set])
+                self.assertEqual(status, 1)
+                self.assertIn("fixture/a.json: not adapted: ", output[0])
+                self.assertIn("edit the model paths by hand", output[0])
+                self.assertEqual(self.files(), (HEAD + body, text))
+        # The parse after the edit is what refuses a text edit placed wrong.
+        with self.assertRaisesRegex(LatentCrateError, "does not parse to the intended change"):
+            workflows.verified('{"a": "b"}', [(6, 9, '"c"')], {"a": "x"})
+        with self.assertRaisesRegex(LatentCrateError, "two edits overlap"):
+            workflows.spliced("abcdef", [(0, 3, "x"), (2, 4, "y")])
+
+    def test_adapt_gives_a_shipped_set_only_shipped_files_and_skips_a_disputed_destination(self) -> None:
+        workflow = json.dumps({"nodes": [node("VAELoader", "x/fixture-vae.safetensors")]})
+        self.write_raw(HEAD + CUSTOM, workflow)
+        shipped = workflows.read_manifest(self.tmp / "fixture.toml")
+        self.assertEqual(adapted([shipped]), (0, [SUMMARY.format(0, 0, 0)]))
+        self.assertEqual(
+            adapted([workflows.read_manifest(self.tmp / "fixture.toml", private=True)])[1][-1], SUMMARY.format(1, 0, 0)
+        )
+        self.assertEqual(self.files()[1], workflow.replace("x/fixture-vae", "fixture-vae"))
+        disputed = {
+            **MODEL_SETS,
+            "other": ModelSet(
+                "other",
+                "Fixture",
+                (),
+                (),
+                (ModelFile("other/repo", COMMIT, DIT, f"diffusion_models/{DIT}", 2, "b" * 64),),
+            ),
+        }
+        self.write_raw(HEAD + CUSTOM, json.dumps({"nodes": [node("UNETLoader", f"x/{DIT}")]}))
+        self.assertEqual(
+            adapted([shipped], disputed),
+            (
+                0,
+                [
+                    f"fixture/a.json: model x/{DIT}: diffusion_models/{DIT} (fixture-models, other): not applied, "
+                    "the model sets declare it differently",
+                    SUMMARY.format(0, 1, 0),
+                ],
+            ),
+        )
+
+    def test_a_models_entry_gets_a_civitai_url_only_for_a_pinned_file(self) -> None:
+        entry = {"name": "x/c.safetensors", "directory": "loras", "url": "https://example.com/old"}
+        for civitai_file, url in ((7, "https://civitai.com/api/download/models/5?fileId=7"), (None, None)):
+            with self.subTest(civitai_file=civitai_file):
+                civitai = ModelFile(None, None, None, "loras/c.safetensors", 1, "a" * 64, 5, civitai_file)
+                sets = {"c": ModelSet("c", "Fixture", (), (), (civitai,))}
+                self.write_raw(HEAD + CUSTOM, json.dumps({"nodes": [], "models": [entry]}))
+                self.assertEqual(adapted([workflows.read_manifest(self.tmp / "fixture.toml")], sets)[0], 0)
+                written = json.loads(self.files()[1])["models"][0]
+                self.assertEqual(written.get("url"), url)
+                self.assertEqual(written["name"], "c.safetensors")
 
     def test_every_shipped_set_resolves_against_the_shipped_model_and_node_sets(self) -> None:
         shipped = workflows.catalog(CONFIG)

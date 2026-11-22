@@ -17,7 +17,7 @@ url = "https://huggingface.co/PrunaAI/P-H3-Image-Comfy/blob/44a0fb73f299da1bb715
 repository = "Comfy-Org/MiniMax-H3"
 revision = "4cc1d817b6184899b41293954329f576cb5ae86b"
 source = "diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors"
-destination = "diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors"
+destination = "lc/shared/diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors"
 size = 20970379616
 sha256 = "e889202c41dafb67b10d67b97f0d8541508036a6090af23425a5c2615d03c47a"
 
@@ -25,7 +25,7 @@ sha256 = "e889202c41dafb67b10d67b97f0d8541508036a6090af23425a5c2615d03c47a"
 repository = "PrunaAI/P-H3-Image-Comfy"
 revision = "44a0fb73f299da1bb715bdb5ff59ce3fd3c6f543"
 source = "loras/p-h3-image_lora_bf16.safetensors"
-destination = "loras/p-h3-image_lora_bf16.safetensors"
+destination = "lc/minimax-h3-image/loras/p-h3-image_lora_bf16.safetensors"
 size = 1956195360
 sha256 = "0e9013ae2873e3415dcb7bb59a9677293bdbdb6f663e138a79bb9bdced00ea61"
 
@@ -33,7 +33,7 @@ sha256 = "0e9013ae2873e3415dcb7bb59a9677293bdbdb6f663e138a79bb9bdced00ea61"
 repository = "PrunaAI/P-H3-Image-Comfy"
 revision = "44a0fb73f299da1bb715bdb5ff59ce3fd3c6f543"
 source = "text_encoders/p-h3-image_text_encoder_int8_convrot.safetensors"
-destination = "text_encoders/p-h3-image_text_encoder_int8_convrot.safetensors"
+destination = "lc/minimax-h3-image/text_encoders/p-h3-image_text_encoder_int8_convrot.safetensors"
 size = 5120870504
 sha256 = "fb42c9ff0597e61729475d0b48b69b591ffe06d0b442a79dde22b14fadbe1c0f"
 
@@ -41,7 +41,7 @@ sha256 = "fb42c9ff0597e61729475d0b48b69b591ffe06d0b442a79dde22b14fadbe1c0f"
 repository = "PrunaAI/P-H3-Image-Comfy"
 revision = "44a0fb73f299da1bb715bdb5ff59ce3fd3c6f543"
 source = "text_encoders/p-h3-image_prompt_upsampler_w4a8.safetensors"
-destination = "text_encoders/p-h3-image_prompt_upsampler_w4a8.safetensors"
+destination = "lc/minimax-h3-image/text_encoders/p-h3-image_prompt_upsampler_w4a8.safetensors"
 size = 6724096116
 sha256 = "74b206c0e3133aa0d1983fd8658c1526a53863cdcca5184538388e927f4e989b"
 
@@ -49,6 +49,6 @@ sha256 = "74b206c0e3133aa0d1983fd8658c1526a53863cdcca5184538388e927f4e989b"
 repository = "PrunaAI/P-H3-Image-Comfy"
 revision = "44a0fb73f299da1bb715bdb5ff59ce3fd3c6f543"
 source = "vae/p-h3-image_vae_int8_convrot.safetensors"
-destination = "vae/p-h3-image_vae_int8_convrot.safetensors"
+destination = "lc/minimax-h3-image/vae/p-h3-image_vae_int8_convrot.safetensors"
 size = 3146996440
 sha256 = "583e0d43354b6b833aa9a0815a5fac831b1ef6d0c19a7eaa0616980a3dab5ffe"

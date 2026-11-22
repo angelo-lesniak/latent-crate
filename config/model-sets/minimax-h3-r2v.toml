@@ -1,6 +1,9 @@
 schema = 1
-description = "MiniMax H3 reference-to-video models for the official ComfyUI workflow"
-workflow_urls = ["https://github.com/Comfy-Org/workflow_templates/blob/c8e48bdcfc7241d7af588d20d4f924caf9d9d953/templates/video_minimax_h3_r2v.json"]
+description = "MiniMax H3 reference-to-video models for the official ComfyUI workflows"
+workflow_urls = [
+  "https://github.com/Comfy-Org/workflow_templates/blob/c8e48bdcfc7241d7af588d20d4f924caf9d9d953/templates/video_minimax_h3_r2v.json",
+  "https://github.com/Comfy-Org/workflow_templates/blob/c8e48bdcfc7241d7af588d20d4f924caf9d9d953/templates/video_minimax_h3_multiframe_reference.json",
+]
 
 [[license]]
 name = "MiniMax H3 Community License Agreement"
@@ -10,7 +13,7 @@ url = "https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/42ed227ee7df40d41602854a
 repository = "Comfy-Org/MiniMax-H3"
 revision = "4cc1d817b6184899b41293954329f576cb5ae86b"
 source = "diffusion_models/minimax_h3_ref2va_pruned_int8_convrot.safetensors"
-destination = "diffusion_models/minimax_h3_ref2va_pruned_int8_convrot.safetensors"
+destination = "lc/minimax-h3/diffusion_models/minimax_h3_ref2va_pruned_int8_convrot.safetensors"
 size = 20970379616
 sha256 = "9255f52b6677845ad238f20dfaafa94727053694127ab7f255c048f0f9365779"
 
@@ -18,7 +21,7 @@ sha256 = "9255f52b6677845ad238f20dfaafa94727053694127ab7f255c048f0f9365779"
 repository = "Comfy-Org/MiniMax-H3"
 revision = "4cc1d817b6184899b41293954329f576cb5ae86b"
 source = "text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors"
-destination = "text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors"
+destination = "lc/minimax-h3/text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors"
 size = 15687142551
 sha256 = "35a88d51044231fe332301d7a62aa81e3f2cba62febeb446e2c1e3e0ef76f2c6"
 
@@ -26,7 +29,7 @@ sha256 = "35a88d51044231fe332301d7a62aa81e3f2cba62febeb446e2c1e3e0ef76f2c6"
 repository = "Comfy-Org/MiniMax-H3"
 revision = "4cc1d817b6184899b41293954329f576cb5ae86b"
 source = "vae/minimax_h3_audio_vae_fp32.safetensors"
-destination = "vae/minimax_h3_audio_vae_fp32.safetensors"
+destination = "lc/minimax-h3/vae/minimax_h3_audio_vae_fp32.safetensors"
 size = 605254808
 sha256 = "8e505d95dd1561d47abd43d4238fd40d9bb1ae9e147ed0a4cba778d76ae4db48"
 
@@ -34,7 +37,7 @@ sha256 = "8e505d95dd1561d47abd43d4238fd40d9bb1ae9e147ed0a4cba778d76ae4db48"
 repository = "Comfy-Org/MiniMax-H3"
 revision = "54472221d27c695fca9621b0c3ed52f06c4af707"
 source = "vae/minimax_h3_video_vae_int8_convrot.safetensors"
-destination = "vae/minimax_h3_video_vae_int8_convrot.safetensors"
+destination = "lc/minimax-h3/vae/minimax_h3_video_vae_int8_convrot.safetensors"
 size = 2811065184
 sha256 = "52a2c8c73583c86e4f41cdcce3a6ad0ea562987bc0bf3d60a0cef5f5c8e60c0e"
 
@@ -42,6 +45,6 @@ sha256 = "52a2c8c73583c86e4f41cdcce3a6ad0ea562987bc0bf3d60a0cef5f5c8e60c0e"
 repository = "Comfy-Org/MiniMax-H3"
 revision = "4cc1d817b6184899b41293954329f576cb5ae86b"
 source = "loras/minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors"
-destination = "loras/minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors"
+destination = "lc/minimax-h3/loras/minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors"
 size = 1956193000
 sha256 = "5b9ab5ade15d0775676d01a907268a69a1468dc6033b3b0d3ded5502f3ebb84c"

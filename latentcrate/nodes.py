@@ -6,10 +6,11 @@ The CLI runs this module in-process on the host: ``nodes install`` and
 ``nodes sync`` call :func:`install` (which takes the project lock and
 refuses while ComfyUI runs), ``nodes status`` calls :func:`status`,
 ``nodes check`` calls :func:`check`, ``nodes export`` prints the text
-:func:`export` returns, and ``up`` calls :func:`require_selected_set`.
+:func:`export` returns, and ``up`` calls :func:`require_recorded_sets`.
 Each node is cloned into a staging sibling and renamed into place, so a
-node directory is either absent or complete; the set a successful install
-chose is the one line of the record file :data:`RECORD_NAME`.
+node directory is either absent or complete; every set an install
+chose is a line of the record file :data:`RECORD_NAME`, written before
+the first clone.
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ import os
 import re
 import shutil
 import subprocess
+from collections.abc import Collection
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -30,8 +32,8 @@ from .names import COMMIT_RE, SET_NAME_RE, load_catalog, read_toml
 from .names import description as read_description
 from .variants import git_environment, run_git
 
-# The one line naming the installed set, written after a successful
-# install or sync; ComfyUI loads `.py` files only, so the file is inert.
+# One line per installed set, in install order, written by install or sync
+# before the first clone; ComfyUI loads `.py` files only, so the file is inert.
 RECORD_NAME = ".latentcrate-node-set"
 # A clone is staged beside its destination under this suffix: not hidden
 # (the entrypoint refuses hidden directories) and skipped by ComfyUI and
@@ -157,45 +159,93 @@ def catalog(config_dir: Path, allowed_hosts: set[str]) -> dict[str, NodeSet]:
     return load_catalog(sets, lambda path: read_manifest(path, allowed_hosts), "custom-node set")
 
 
+def merged_nodes(node_sets: list[NodeSet], record: Path, recorded: Collection[str]) -> list[Node]:
+    """Every node of the sets once, by case-folded directory name, in the
+    first set's spelling; two sets that pin one directory to a different
+    repository (case ignored, as hosting services do) or commit are refused
+    together. A refusal involving a set in `recorded` names the line of
+    `record` to delete."""
+    by_name: dict[str, tuple[str, Node]] = {}
+    for node_set in node_sets:
+        for node in node_set.nodes:
+            first, previous = by_name.setdefault(node.name.casefold(), (node_set.name, node))
+            if previous.repository.lower() != node.repository.lower():
+                difference = "repositories"
+            elif previous.commit != node.commit:
+                difference = "commits"
+            else:
+                continue
+            message = f"custom-node sets {first} and {node_set.name} pin {node.name} to different {difference}; "
+            lines = [name for name in (first, node_set.name) if name in recorded]
+            if lines:
+                message += f"delete the line {' or '.join(lines)} from {record}, or fix the manifests"
+            else:
+                message += "use one of them or fix the manifests"
+            raise LatentCrateError(message)
+    return [node for _, node in by_name.values()]
+
+
 # --- The record and the `up` check ------------------------------------------
 
 
-def selected_set(managed_dir: Path) -> str:
-    """The set name the record file holds, or an empty string without one."""
+def recorded_sets(managed_dir: Path) -> list[str]:
+    """The set names the record file holds, one per line; none without one."""
     record = managed_dir / RECORD_NAME
     try:
-        name = read_utf8(record).strip()
+        lines = read_utf8(record).splitlines()
     except FileNotFoundError:
-        return ""
-    if not SET_NAME_RE.fullmatch(name):
-        raise LatentCrateError(
-            f"{record} does not name a custom-node set; remove it or run: bash bin/latentcrate nodes install <set>"
-        )
-    return name
+        return []
+    names = [line.strip() for line in lines if line.strip()]
+    for name in names:
+        if not SET_NAME_RE.fullmatch(name):
+            raise LatentCrateError(f"{record} holds {name!r}, which is not a custom-node set name; remove that line")
+    return list(dict.fromkeys(names))
 
 
-def missing_nodes(managed_dir: Path, node_set: NodeSet) -> list[str]:
-    """The set's nodes without a directory entry, by one stat each."""
-    return [node.name for node in node_set.nodes if not os.path.lexists(managed_dir / node.name)]
-
-
-def require_selected_set(settings: Settings) -> None:
-    """Refuse a start while a node directory of the recorded set is
-    missing, so a half-installed set never starts; no record, no check."""
+def recorded_node_sets(settings: Settings) -> list[NodeSet]:
+    """The manifests of the recorded sets, in record order."""
     managed = settings.managed_nodes_dir
-    name = selected_set(managed)
-    if not name:
-        return
+    names = recorded_sets(managed)
+    if not names:
+        return []
     sets = catalog(settings.config_dir, load_allowed_hosts(settings.config_dir))
-    if name not in sets:
+    for name in names:
+        if name not in sets:
+            raise LatentCrateError(f"{managed / RECORD_NAME} names an unknown custom-node set {name}; remove that line")
+    return [sets[name] for name in names]
+
+
+def selected_nodes(settings: Settings, selected: list[NodeSet]) -> list[Node]:
+    """The selected sets' nodes once each, merged after the recorded sets,
+    so a directory keeps the spelling it was installed under."""
+    recorded = recorded_node_sets(settings)
+    record = settings.managed_nodes_dir / RECORD_NAME
+    merged = merged_nodes([*recorded, *selected], record, [node_set.name for node_set in recorded])
+    wanted = {node.name.casefold() for node_set in selected for node in node_set.nodes}
+    return [node for node in merged if node.name.casefold() in wanted]
+
+
+def require_recorded_sets(settings: Settings) -> None:
+    """Refuse a start while the recorded sets disagree about a node or a
+    node directory of one of them is missing, by one stat each, so a
+    half-installed set never starts; no record, no check."""
+    managed = settings.managed_nodes_dir
+    node_sets = recorded_node_sets(settings)
+    names = [node_set.name for node_set in node_sets]
+    directories = {node.name.casefold(): node.name for node in merged_nodes(node_sets, managed / RECORD_NAME, names)}
+    missing = {
+        node_set.name: [
+            directories[node.name.casefold()]
+            for node in node_set.nodes
+            if not os.path.lexists(managed / directories[node.name.casefold()])
+        ]
+        for node_set in node_sets
+    }
+    incomplete = [name for name, absent in missing.items() if absent]
+    if incomplete:
         raise LatentCrateError(
-            f"{managed / RECORD_NAME} names an unknown custom-node set {name}; "
-            "remove it or run: bash bin/latentcrate nodes install <set>"
-        )
-    missing = missing_nodes(managed, sets[name])
-    if missing:
-        raise LatentCrateError(
-            f"custom-node set {name} is missing {', '.join(missing)}; run: bash bin/latentcrate nodes install {name}"
+            "; ".join(f"custom-node set {name} is missing {', '.join(missing[name])}" for name in incomplete)
+            + f"; run: bash bin/latentcrate nodes install {' '.join(incomplete)}"
         )
 
 
@@ -274,10 +324,15 @@ def clone(node: Node, destination: Path, env: dict[str, str]) -> None:
 # --- Actions -----------------------------------------------------------------
 
 
-def status(settings: Settings, node_set: NodeSet, env: dict[str, str]) -> int:
-    """Print one line per node of the set; 1 when any node is not ready."""
+def status(settings: Settings, node_sets: list[NodeSet], env: dict[str, str]) -> int:
+    """Print one line per node of the sets; 1 when any node is not ready."""
+    return print_states(settings, merged_nodes(node_sets, settings.managed_nodes_dir / RECORD_NAME, ()), env)
+
+
+def print_states(settings: Settings, node_list: list[Node], env: dict[str, str]) -> int:
+    """One line per node with its `node_state`; 1 when any node is not ready."""
     result = 0
-    for node in node_set.nodes:
+    for node in node_list:
         state = node_state(settings.managed_nodes_dir / node.name, node, env)
         print(f"{node.name}: {state} ({node.commit})")
         if state != READY:
@@ -285,19 +340,22 @@ def status(settings: Settings, node_set: NodeSet, env: dict[str, str]) -> int:
     return result
 
 
-def check(node_set: NodeSet) -> None:
-    """The set as read: reaching here means the manifest passed the allowlist."""
-    print(node_set.description)
-    for node in node_set.nodes:
-        print(f"{node.name} {node.commit} {node.repository}")
+def check(node_sets: list[NodeSet]) -> None:
+    """The sets as read: reaching here means the manifests passed the allowlist."""
+    for node_set in node_sets:
+        print(f"{node_set.name} - {node_set.description}")
+        for node in node_set.nodes:
+            print(f"{node.name} {node.commit} {node.repository}")
 
 
-def install(settings: Settings, engine: Engine, node_set: NodeSet, *, replace_clean: bool) -> None:
-    """Clone every missing node of the set at its pinned commit, each
-    staged beside its destination and renamed into place, then write the
-    record. With `replace_clean` (sync), a clean checkout at another commit
-    is replaced the same way; every other state refuses. ComfyUI must be
-    stopped, since the image is built from these sources."""
+def install(settings: Settings, engine: Engine, selected: list[NodeSet], *, replace_clean: bool) -> None:
+    """Add the selected sets to the record, then clone every missing node
+    of them at its pinned commit, each staged beside its destination and
+    renamed into place; an interruption leaves the sets recorded, so `up`
+    refuses until a second install completes them. With `replace_clean`
+    (sync), a clean checkout at another commit is replaced the same way;
+    every other state refuses. ComfyUI must be stopped, since the image is
+    built from these sources."""
     managed = settings.managed_nodes_dir
     env = engine.env
     if shutil.which("git", path=env.get("PATH")) is None:
@@ -311,10 +369,13 @@ def install(settings: Settings, engine: Engine, node_set: NodeSet, *, replace_cl
             raise LatentCrateError(f"custom-node directory must not be a symbolic link: {managed}")
         if not managed.is_dir():
             raise LatentCrateError(f"custom-node directory does not exist: {managed}; run: bash bin/latentcrate init")
+        wanted = selected_nodes(settings, selected)
+        names = dict.fromkeys([*recorded_sets(managed), *(node_set.name for node_set in selected)])
+        write_atomic(managed / RECORD_NAME, "".join(f"{name}\n" for name in names))
         for leftover in managed.glob(f"*{STAGING_SUFFIX}"):
             if leftover.is_dir() and not leftover.is_symlink():
                 shutil.rmtree(leftover)
-        for node in node_set.nodes:
+        for node in wanted:
             destination = managed / node.name
             state = node_state(destination, node, env)
             if state == READY:
@@ -337,9 +398,8 @@ def install(settings: Settings, engine: Engine, node_set: NodeSet, *, replace_cl
             else:
                 os.replace(staging, destination)
             print(f"Installed {node.name} at {node.commit}")
-        write_atomic(managed / RECORD_NAME, node_set.name + "\n")
-        if status(settings, node_set, env):
-            raise LatentCrateError("the custom-node set did not reach the requested state; see the lines above")
+        if print_states(settings, wanted, env):
+            raise LatentCrateError("the custom-node sets did not reach the requested state; see the lines above")
     print('Run "bash bin/latentcrate up" to build the node dependencies into the image.')
 
 

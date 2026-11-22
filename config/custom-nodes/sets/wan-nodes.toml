@@ -1,0 +1,7 @@
+schema = 1
+description = "Wan video nodes: the WanVideoWrapper"
+
+[[node]]
+name = "ComfyUI-WanVideoWrapper"
+repository = "https://github.com/kijai/ComfyUI-WanVideoWrapper"
+commit = "a7439db30bed0c5b5fa437d77ae8a7bb220dfd00"

@@ -1,0 +1,266 @@
+schema = 1
+description = "MiniMax H3 video add-ons: LightX2V Turbo and Pika H3 Flex LoRAs, the Fun ControlNet union patch, prompt embeddings, the TAEH3 preview decoder, LBH and LMS latent upscalers, and swap, motion-transfer, orbit, VFX, style, LMS and live-wallpaper LoRAs"
+workflow_urls = [
+  "https://github.com/Comfy-Org/workflow_templates/blob/c8e48bdcfc7241d7af588d20d4f924caf9d9d953/templates/video_minimax_h3_i2v.json",
+  "https://github.com/Comfy-Org/workflow_templates/blob/c8e48bdcfc7241d7af588d20d4f924caf9d9d953/templates/video_minimax_h3_r2v.json",
+  "https://github.com/Comfy-Org/workflow_templates/blob/c8e48bdcfc7241d7af588d20d4f924caf9d9d953/templates/video_pika_h3_flex_ref2va.json",
+  "https://github.com/Comfy-Org/workflow_templates/blob/c8e48bdcfc7241d7af588d20d4f924caf9d9d953/templates/video_pika_h3_flex_t2v.json",
+  "https://github.com/Comfy-Org/workflow_templates/blob/c8e48bdcfc7241d7af588d20d4f924caf9d9d953/templates/video_pika_h3_flex_fl2va.json",
+  "https://github.com/Comfy-Org/workflow_templates/blob/c8e48bdcfc7241d7af588d20d4f924caf9d9d953/templates/video_minimax_h3_fun_controlnet_union.json",
+]
+
+[[license]]
+name = "MiniMax H3 Community License Agreement"
+url = "https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/42ed227ee7df40d41602854ae760620d6eb651fe/LICENSE"
+
+[[license]]
+name = "BFS Character Swap Community License 1.1 (Alissonerdx character swap LoRA)"
+url = "https://huggingface.co/Alissonerdx/Minimax-H3-ComfyUI/blob/5a2770de134c2f006790dddcb9ecaad3d88836f2/LICENSE_CHARACTER_SWAP.md"
+
+[[license]]
+name = "BFS Motion Transfer Community License 1.0 (Alissonerdx motion transfer LoRAs)"
+url = "https://huggingface.co/Alissonerdx/Minimax-H3-ComfyUI/blob/5a2770de134c2f006790dddcb9ecaad3d88836f2/LICENSE_MOTION_TRANSFER.md"
+
+[[license]]
+name = "Alissonerdx asset license scope (its other LoRAs and the LMS upscaler keep their upstream terms)"
+url = "https://huggingface.co/Alissonerdx/Minimax-H3-ComfyUI/blob/5a2770de134c2f006790dddcb9ecaad3d88836f2/LICENSES.md"
+
+[[license]]
+name = "MIT License (TAEH3)"
+url = "https://huggingface.co/OzzyGT/taeh3/blob/1b25d92b4791bcadf87a690543800a52b75ee1fb/LICENSE"
+
+[[license]]
+name = "Apache License 2.0 (LBH-123-AI latent upscaler)"
+url = "https://huggingface.co/LBH-123-AI/Minimax_h3_latent_Upscaler/blob/85a0187096046badc0a71ab6bd6be182ab06c0f4/README.md"
+
+[[file]]
+repository = "lightx2v/Minimax-h3-Turbo"
+revision = "1a4a150fc6707329409eb52e5d75a0e987ac1928"
+source = "minimax_h3_fl2v_turbo_4step_v1.3_768p_comfyui_bf16.safetensors"
+destination = "lc/minimax-h3/loras/minimax_h3_fl2v_turbo_4step_v1.3_768p_comfyui_bf16.safetensors"
+size = 1956193000
+sha256 = "70103fd0d80a947ed4e7fe6f88915863d54ef22c5cab03bd5d2fd649385ffe1e"
+
+[[file]]
+repository = "Comfy-Org/MiniMax-H3"
+revision = "4cc1d817b6184899b41293954329f576cb5ae86b"
+source = "embeddings/minimaxh3_art_is_explosion.safetensors"
+destination = "lc/minimax-h3/embeddings/minimaxh3_art_is_explosion.safetensors"
+size = 512120
+sha256 = "00e8679c77ce1fc3fd3accb67bc4db56d626b6b27609797504ab00e2b997145f"
+
+[[file]]
+repository = "Comfy-Org/MiniMax-H3"
+revision = "4cc1d817b6184899b41293954329f576cb5ae86b"
+source = "embeddings/minimaxh3_blooming_flowers.safetensors"
+destination = "lc/minimax-h3/embeddings/minimaxh3_blooming_flowers.safetensors"
+size = 1259640
+sha256 = "934d1d2c50bf27cd0b3785b0f44b0b62119a90b2901f9193782d86ff7191cbe9"
+
+[[file]]
+repository = "Comfy-Org/MiniMax-H3"
+revision = "4cc1d817b6184899b41293954329f576cb5ae86b"
+source = "embeddings/minimaxh3_bullet_time.safetensors"
+destination = "lc/minimax-h3/embeddings/minimaxh3_bullet_time.safetensors"
+size = 962680
+sha256 = "e318b200d28c22fcf41d9b25ce481dd5a766f0ac50561663e33401975ea1bcae"
+
+[[file]]
+repository = "Comfy-Org/MiniMax-H3"
+revision = "4cc1d817b6184899b41293954329f576cb5ae86b"
+source = "embeddings/minimaxh3_dark_magic.safetensors"
+destination = "lc/minimax-h3/embeddings/minimaxh3_dark_magic.safetensors"
+size = 604280
+sha256 = "71df9fe76f9cbb34a7508fc49d46bf35ee51744aaa17789c6406e1bec49f5866"
+
+[[file]]
+repository = "Comfy-Org/MiniMax-H3"
+revision = "4cc1d817b6184899b41293954329f576cb5ae86b"
+source = "embeddings/minimaxh3_fire_breath.safetensors"
+destination = "lc/minimax-h3/embeddings/minimaxh3_fire_breath.safetensors"
+size = 1208440
+sha256 = "ed048cf52802774a819e916bbf6ad6eaa047027abc6cd0decc63daccbb93c9f1"
+
+[[file]]
+repository = "Comfy-Org/MiniMax-H3"
+revision = "4cc1d817b6184899b41293954329f576cb5ae86b"
+source = "embeddings/minimaxh3_four_seasons.safetensors"
+destination = "lc/minimax-h3/embeddings/minimaxh3_four_seasons.safetensors"
+size = 1454200
+sha256 = "9a432e89afc942d1ea27055372a6fb81c4dc0f4c0498a49b9f5eff1a015f1034"
+
+[[file]]
+repository = "Comfy-Org/MiniMax-H3"
+revision = "4cc1d817b6184899b41293954329f576cb5ae86b"
+source = "embeddings/minimaxh3_kiss_camera.safetensors"
+destination = "lc/minimax-h3/embeddings/minimaxh3_kiss_camera.safetensors"
+size = 993400
+sha256 = "9da82f56c26f2a81b80803a31486d31036c122112203b62d4991759a90ddf4b8"
+
+[[file]]
+repository = "Comfy-Org/MiniMax-H3"
+revision = "4cc1d817b6184899b41293954329f576cb5ae86b"
+source = "embeddings/minimaxh3_spiral_ascent.safetensors"
+destination = "lc/minimax-h3/embeddings/minimaxh3_spiral_ascent.safetensors"
+size = 1341560
+sha256 = "767b6bdccee4c41805802a07bf3c04ba9582fbb8e7bc4bd416ff8e000e3e29b9"
+
+[[file]]
+repository = "Comfy-Org/MiniMax-H3"
+revision = "4cc1d817b6184899b41293954329f576cb5ae86b"
+source = "embeddings/minimaxh3_storm_magic.safetensors"
+destination = "lc/minimax-h3/embeddings/minimaxh3_storm_magic.safetensors"
+size = 1403000
+sha256 = "5047cd4499207ef20d62872c7153a476e216e7edabd12b595802f567666d7425"
+
+[[file]]
+repository = "Comfy-Org/MiniMax-H3"
+revision = "4cc1d817b6184899b41293954329f576cb5ae86b"
+source = "embeddings/minimaxh3_truman_show.safetensors"
+destination = "lc/minimax-h3/embeddings/minimaxh3_truman_show.safetensors"
+size = 921720
+sha256 = "3830e6ab9d7b95965f5497a6691bd92e33f8bf7a62bafb7b2331b268ff98aa00"
+
+[[file]]
+repository = "OzzyGT/taeh3"
+revision = "1b25d92b4791bcadf87a690543800a52b75ee1fb"
+source = "taeh3.safetensors"
+destination = "lc/minimax-h3/vae_approx/taeh3.safetensors"
+size = 22709752
+sha256 = "4fd022bfcab08772fe0536b17ea1a3bbb5625be11e397868d1c5d891863d4c13"
+
+[[file]]
+repository = "LBH-123-AI/Minimax_h3_latent_Upscaler"
+revision = "85a0187096046badc0a71ab6bd6be182ab06c0f4"
+source = "minimax_h3_latent_upscaler_3d_conv_v1/minimax_h3_latent_upscaler_3d_conv_v1_fp16.safetensors"
+destination = "lc/minimax-h3/latent_upscale_models/minimax_h3_latent_upscaler_3d_conv_v1_fp16.safetensors"
+size = 690592672
+sha256 = "043e5a48e161610ef6c3ea974645220354d06fa618abca15f76d084812eb55c2"
+
+[[file]]
+repository = "lightx2v/Minimax-h3-Turbo"
+revision = "1a4a150fc6707329409eb52e5d75a0e987ac1928"
+source = "minimax_h3_ref2v_turbo_8step_v1.1_768p_comfyui_bf16.safetensors"
+destination = "lc/minimax-h3/loras/minimax_h3_ref2v_turbo_8step_v1.1_768p_comfyui_bf16.safetensors"
+size = 1956193000
+sha256 = "e56863a7524e0300729cbb7b64cc8b548d90698c1abbf7d83898b0122fbe1e81"
+
+[[file]]
+repository = "lightx2v/Minimax-h3-Turbo"
+revision = "1a4a150fc6707329409eb52e5d75a0e987ac1928"
+source = "minimax_h3_fl2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors"
+destination = "lc/minimax-h3/loras/minimax_h3_fl2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors"
+size = 1956193000
+sha256 = "08cfe946033af7d27719b964b6e0a0e50c32138daabbd6ce4137e23df6bf9980"
+
+[[file]]
+repository = "akatz-ai/MiniMax-H3-Character-Swap-LoRA"
+revision = "96ea3407b230b6f7df71c58c70e31df96bd7e533"
+source = "h3_character_swap_v1.5.safetensors"
+destination = "lc/minimax-h3/loras/h3_character_swap_v1.5.safetensors"
+size = 155110792
+sha256 = "8f2c3c3eba161df8d0c6099598b4730f641f5ce01e04cd16d2427cff8a35218f"
+
+[[file]]
+repository = "pablodawson/MiniMax-H3-360-Orbit-LoRA"
+revision = "5ddbc2dbbe95edbbdaf5017c3e934b1d01791697"
+source = "minimax_h3_flf2v_lora_v1.safetensors"
+destination = "lc/minimax-h3/loras/minimax_h3_flf2v_lora_v1.safetensors"
+size = 155111424
+sha256 = "14f13e3effaf3e729fdc0c97680344aa63f473be0c55963f963d718b3db2a4d4"
+
+[[file]]
+repository = "Alissonerdx/Minimax-H3-ComfyUI"
+revision = "5a2770de134c2f006790dddcb9ecaad3d88836f2"
+source = "loras/minimax_h3_character_swap_v1.1_ref2va_fro.safetensors"
+destination = "lc/minimax-h3/loras/minimax_h3_character_swap_v1.1_ref2va_fro.safetensors"
+size = 80673112
+sha256 = "ab21167bed71db99ac09527ad1f26f5f3517687ebf2e1f1bd5e91cc0bdf9b9c3"
+
+[[file]]
+repository = "Alissonerdx/Minimax-H3-ComfyUI"
+revision = "5a2770de134c2f006790dddcb9ecaad3d88836f2"
+source = "loras/minimax_h3_motion_transfer_v1.0_ref2va.safetensors"
+destination = "lc/minimax-h3/loras/minimax_h3_motion_transfer_v1.0_ref2va.safetensors"
+size = 184840504
+sha256 = "7512973749c3658e0fa2b398b5810dfc8666a32aba6262cf689d407e297076da"
+
+[[file]]
+repository = "Alissonerdx/Minimax-H3-ComfyUI"
+revision = "5a2770de134c2f006790dddcb9ecaad3d88836f2"
+source = "loras/minimax_h3_motion_transfer_tara_v1.0_ref2va.safetensors"
+destination = "lc/minimax-h3/loras/minimax_h3_motion_transfer_tara_v1.0_ref2va.safetensors"
+size = 126417912
+sha256 = "aca0a0c10387ba9715fc01378b9051d9c0733838a388cb4215d829f6c41d0f35"
+
+[[file]]
+repository = "Alissonerdx/Minimax-H3-ComfyUI"
+revision = "5a2770de134c2f006790dddcb9ecaad3d88836f2"
+source = "loras/minimax_h3_head_swap_v1.0_r32.safetensors"
+destination = "lc/minimax-h3/loras/minimax_h3_head_swap_v1.0_r32.safetensors"
+size = 310177072
+sha256 = "ea97bd1a8178460661055784d63b4cb560732196fd15d5d7f33bfd214b65ab00"
+
+[[file]]
+repository = "Alissonerdx/Minimax-H3-ComfyUI"
+revision = "5a2770de134c2f006790dddcb9ecaad3d88836f2"
+source = "loras/minimax_h3_vfx_edit_v1.0_r128.safetensors"
+destination = "lc/minimax-h3/loras/minimax_h3_vfx_edit_v1.0_r128.safetensors"
+size = 1240518744
+sha256 = "9053607b28f271a22cf3f70d7fa534b35eb88d2259dcbec03d63a97d8929c210"
+
+[[file]]
+repository = "Alissonerdx/Minimax-H3-ComfyUI"
+revision = "5a2770de134c2f006790dddcb9ecaad3d88836f2"
+source = "loras/minimax_h3_style_transfer_v1.0_r64.safetensors"
+destination = "lc/minimax-h3/loras/minimax_h3_style_transfer_v1.0_r64.safetensors"
+size = 620306000
+sha256 = "3be2d89ca3476ed952251463499896a4a323cce9d82af6d0e83609ceb4e1e25e"
+
+[[file]]
+repository = "Alissonerdx/Minimax-H3-ComfyUI"
+revision = "5a2770de134c2f006790dddcb9ecaad3d88836f2"
+source = "loras/minimax_h3_lms_v1.0_r64.safetensors"
+destination = "lc/minimax-h3/loras/minimax_h3_lms_v1.0_r64.safetensors"
+size = 1239664536
+sha256 = "16f3195bc6bffa431c0598dc2031e520ba058b4fcbc9f104db9e3fdfdeacf60c"
+
+[[file]]
+repository = "Alissonerdx/Minimax-H3-ComfyUI"
+revision = "5a2770de134c2f006790dddcb9ecaad3d88836f2"
+source = "latent_upscaler/h3_upscaler_lms_v0.1.safetensors"
+destination = "lc/minimax-h3/latent_upscale_models/h3_upscaler_lms_v0.1.safetensors"
+size = 690593048
+sha256 = "40d4228227146245ef2b65480b647c50222465ca125de5880f192e3259e40d59"
+
+[[file]]
+repository = "Alissonerdx/Minimax-H3-ComfyUI"
+revision = "5a2770de134c2f006790dddcb9ecaad3d88836f2"
+source = "loras/minimax_h3_live_wallpaper_v1.0_ref2va_r32.safetensors"
+destination = "lc/minimax-h3/loras/minimax_h3_live_wallpaper_v1.0_ref2va_r32.safetensors"
+size = 310168936
+sha256 = "3c9ff5fe4d9adc151d7b52c67fb79250c0012376061b8d44d01ba19ad824c43a"
+
+[[file]]
+repository = "Comfy-Org/MiniMax-H3"
+revision = "54472221d27c695fca9621b0c3ed52f06c4af707"
+source = "loras/pika_h3_flex_fl2va_v1_bf16.safetensors"
+destination = "lc/minimax-h3/loras/pika_h3_flex_fl2va_v1_bf16.safetensors"
+size = 1956172304
+sha256 = "cc5453aeecd6189468409003fe4cf1b57e52ff3a830a0a154b87decbe07358b7"
+
+[[file]]
+repository = "Comfy-Org/MiniMax-H3"
+revision = "54472221d27c695fca9621b0c3ed52f06c4af707"
+source = "loras/pika_h3_flex_ref2va_v1_bf16.safetensors"
+destination = "lc/minimax-h3/loras/pika_h3_flex_ref2va_v1_bf16.safetensors"
+size = 1956172304
+sha256 = "de3745ceb7d8d5c20898dd8fa3a05f1c0b00089ccd55297b2a8bab95c766b0e0"
+
+[[file]]
+repository = "Comfy-Org/MiniMax-H3"
+revision = "54472221d27c695fca9621b0c3ed52f06c4af707"
+source = "model_patches/minimax_h3_fun_controlnet_union_pruned_int8_convrot.safetensors"
+destination = "lc/minimax-h3/model_patches/minimax_h3_fun_controlnet_union_pruned_int8_convrot.safetensors"
+size = 2296635360
+sha256 = "9c645c0a308c8af361efd43b409710f6f8fec0db297c29503e141a84991fed0c"

@@ -1,0 +1,31 @@
+schema = 1
+description = "MiniMax H3-Image add-on LoRAs: pDMD 2-step and Alissonerdx character swap multiple-by-color"
+workflow_urls = ["https://github.com/Comfy-Org/workflow_templates/blob/c8e48bdcfc7241d7af588d20d4f924caf9d9d953/templates/image_minimax_h3_image_t2i.json"]
+
+[[license]]
+name = "Apache License 2.0 (pDMD 2-step LoRA)"
+url = "https://huggingface.co/akhaliq/minimax-h3-image-pdmd-2step/blob/ef1e3b9a237fc7a57ba4d07174ecca397d695d8a/README.md"
+
+[[license]]
+name = "MiniMax-H3-Image Community License Agreement"
+url = "https://huggingface.co/MiniMaxAI/MiniMax-H3-Image/blob/5f90473023975e6271b0ed1dd84c4e88e4bbc6d3/LICENSE"
+
+[[license]]
+name = "Alissonerdx asset license scope (multiple-by-color LoRA: MiniMax H3-Image base license)"
+url = "https://huggingface.co/Alissonerdx/Minimax-H3-ComfyUI/blob/5a2770de134c2f006790dddcb9ecaad3d88836f2/LICENSES.md"
+
+[[file]]
+repository = "akhaliq/minimax-h3-image-pdmd-2step"
+revision = "ef1e3b9a237fc7a57ba4d07174ecca397d695d8a"
+source = "minimax_h3_pdmd_2nfe_comfyui.safetensors"
+destination = "lc/minimax-h3-image/loras/minimax_h3_pdmd_2nfe_comfyui.safetensors"
+size = 1956194168
+sha256 = "5feaeef13df31f98f36364a95e7ce9e8ff0afd71570d1c53d7c3be599e3a0f22"
+
+[[file]]
+repository = "Alissonerdx/Minimax-H3-ComfyUI"
+revision = "5a2770de134c2f006790dddcb9ecaad3d88836f2"
+source = "loras/minimax_h3_image_character_swap_multiple_by_color_fro_v0.1.safetensors"
+destination = "lc/minimax-h3-image/loras/minimax_h3_image_character_swap_multiple_by_color_fro_v0.1.safetensors"
+size = 74922840
+sha256 = "4205ff2eca121a0ad85cd18b7e907418a5a1ecac3ae2d27a5100b8d5ffb87be3"

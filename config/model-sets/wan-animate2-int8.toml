@@ -1,0 +1,72 @@
+schema = 1
+description = "Wan Animate 2 motion transfer (INT8 ConvRot, base and distilled) with CLIP Vision H and the LightX2V Wan 2.1 I2V LoRA for the official ComfyUI workflows"
+workflow_urls = [
+  "https://github.com/Comfy-Org/workflow_templates/blob/c8e48bdcfc7241d7af588d20d4f924caf9d9d953/templates/video_wan_animate2.json",
+  "https://github.com/Comfy-Org/workflow_templates/blob/c8e48bdcfc7241d7af588d20d4f924caf9d9d953/templates/video_wan_animate2_distilled.json",
+]
+
+[[license]]
+name = "Apache License 2.0 (Wan Animate 2)"
+url = "https://github.com/Wan-Video/Wan-Animate-2/blob/3ad2fef7d61d6200c9c653e0fe47be7616b323f3/LICENSE"
+
+[[license]]
+name = "Apache License 2.0 (Wan 2.2 text encoder and VAE)"
+url = "https://github.com/Wan-Video/Wan2.2/blob/1ea34ff48f87168174e12956e200b1d908b1c5ff/LICENSE.txt"
+
+[[license]]
+name = "MIT License (CLIP Vision H, the OpenCLIP ViT-H/14 image encoder)"
+url = "https://huggingface.co/laion/CLIP-ViT-H-14-laion2B-s32B-b79K/blob/1c2b8495b28150b8a4922ee1c8edee224c284c0c/README.md"
+
+[[license]]
+name = "Apache License 2.0 (LightX2V Wan 2.1 I2V LoRA)"
+url = "https://huggingface.co/lightx2v/Wan2.1-I2V-14B-480P-StepDistill-CfgDistill-Lightx2v/blob/9bedb7ceaf40d43b47d892382612ff157ca15c52/LICENSE.txt"
+
+[[file]]
+repository = "Comfy-Org/Wan-Animate-2"
+revision = "e7181fe1896b7f2ce34120d1a3663413548240d7"
+source = "diffusion_models/wan_animate_2_int8_convrot.safetensors"
+destination = "lc/wan/diffusion_models/wan_animate_2_int8_convrot.safetensors"
+size = 16653175528
+sha256 = "0580ecdd65e47e97c30df9670d13a6c4a131d26de5a1faf2ccc78392d5167584"
+
+[[file]]
+repository = "Comfy-Org/Wan-Animate-2"
+revision = "e7181fe1896b7f2ce34120d1a3663413548240d7"
+source = "diffusion_models/wan_animate_2_distill_int8_convrot.safetensors"
+destination = "lc/wan/diffusion_models/wan_animate_2_distill_int8_convrot.safetensors"
+size = 16653175528
+sha256 = "d2e566ecac3f164cb1a6b63dc7d868d6678c9affa49fbceb3abe4f9458f89c8a"
+
+[[file]]
+repository = "Comfy-Org/Wan-Animate-2"
+revision = "e7181fe1896b7f2ce34120d1a3663413548240d7"
+source = "clip_vision/clip_vision_h.safetensors"
+destination = "lc/wan/clip_vision/clip_vision_h.safetensors"
+size = 1264219396
+sha256 = "64a7ef761bfccbadbaa3da77366aac4185a6c58fa5de5f589b42a65bcc21f161"
+
+[[file]]
+repository = "Comfy-Org/Wan-Animate-2"
+revision = "e7181fe1896b7f2ce34120d1a3663413548240d7"
+source = "loras/lightx2v_I2V_14B_480p_cfg_step_distill_rank64_bf16.safetensors"
+destination = "lc/wan/loras/lightx2v_I2V_14B_480p_cfg_step_distill_rank64_bf16.safetensors"
+size = 738005744
+sha256 = "85c4a61c30e0497aa44b91d93a893b624708461a56fe5485183b28fa07e2dfb3"
+
+[[file]]
+repository = "Comfy-Org/Wan-Animate-2"
+revision = "e7181fe1896b7f2ce34120d1a3663413548240d7"
+source = "vae/Wan2_1_VAE_bf16.safetensors"
+destination = "lc/wan/vae/Wan2_1_VAE_bf16.safetensors"
+size = 253806278
+sha256 = "1ab9a32cc2c740f6e39d80d367ce5dcc28db8c71b79b28670546b8973e9d75f9"
+
+# The Wan 2.2 sets' entry, since sets naming one destination must agree on
+# every key.
+[[file]]
+repository = "Comfy-Org/Wan-2.2"
+revision = "ee6f4a40737a995bf5818954cfce6d59443b0f04"
+source = "split_files/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors"
+destination = "lc/wan/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors"
+size = 6735906897
+sha256 = "c3355d30191f1f066b26d93fba017ae9809dce6c627dda5f6a66eaa651204f68"

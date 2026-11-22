@@ -78,7 +78,8 @@ elsewhere:
 - `docs/nodes.md`: Manager installs, node sets, local nodes, captured
   dependencies and the policy files, SageAttention.
 - `docs/workflows.md`: workflow sets, provenance, manifest keys,
-  private sets, `workflows check`.
+  private sets, `workflows check`, `workflows adapt`, and equivalent
+  model files.
 - `docs/frontends.md`: the frontend modes.
 - `docs/privacy.md`: what runs where, where each token goes, the network
   and Manager defaults and their limits, strict mode.
@@ -143,6 +144,9 @@ The loaders enforce the manifest rules:
   a clone's license permits redistribution and, for a modified clone,
   modification. The gate requires every shipped workflow set to resolve
   against the shipped model and node sets (`tests/test_workflows.py`).
+- An entry of `config/model-equivalents.toml` meets the rule in
+  [Equivalent model files](docs/workflows.md#equivalent-model-files);
+  review checks the source its `reason` cites.
 - Every manifest carries a one-line `description`, and names and
   selections follow `latentcrate/names.py`.
 

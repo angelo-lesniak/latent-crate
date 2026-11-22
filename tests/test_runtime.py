@@ -417,16 +417,16 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn(" build comfy", traces[0])
         self.assertFalse(engine.stack_record.exists())
 
-    def test_up_refuses_a_selected_set_with_a_missing_node(self) -> None:
+    def test_up_refuses_a_recorded_set_with_a_missing_node_and_names_that_set(self) -> None:
         sets = self.scratch.root / "config" / "custom-nodes" / "sets"
-        name = sorted(sets.glob("*.toml"))[0].stem
-        node = re.search(r'^name = "([^"]+)"', (sets / f"{name}.toml").read_text(), re.MULTILINE).group(1)
-        (self.managed / node).mkdir()
-        (self.managed / ".latentcrate-node-set").write_text(f"{name}\n")
+        complete, name = "latent-nodepack", "latent-nodepack-extras"
+        for node in re.findall(r'^name = "([^"]+)"', (sets / f"{complete}.toml").read_text(), re.MULTILINE):
+            (self.managed / node).mkdir()
+        (self.managed / ".latentcrate-node-set").write_text(f"{complete}\n{name}\n")
         settings = self.settings()
         engine = Engine("docker", settings)
         traces = self.traced(engine)
-        with self.assertRaisesRegex(LatentCrateError, f"custom-node set {name} is missing .*nodes install {name}"):
+        with self.assertRaisesRegex(LatentCrateError, f"^custom-node set {name} is missing .*nodes install {name}$"):
             runtime.start_stack(settings, engine, self.variant(settings), self.pinned(), timeout=5, detach=True)
         self.assertEqual(traces, [])
         self.assertFalse((self.scratch.root / "build" / "custom-node-requirements").exists())

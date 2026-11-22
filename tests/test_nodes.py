@@ -20,7 +20,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from latentcrate import LatentCrateError, engine, env, nodes
+from latentcrate import LatentCrateError, engine, env, nodes, workflows
 from tests.support import ENGINE_BIN, Scratch
 from tests.test_engine import HOLDER
 
@@ -121,18 +121,18 @@ class NodeTests(unittest.TestCase):
     def settings(self, **overrides: str) -> env.Settings:
         return env.load(self.scratch.root, self.scratch.environment(PATH=self.path, **overrides))
 
-    def install(self, node_set: nodes.NodeSet, *, replace_clean: bool = False, **overrides: str) -> str:
+    def install(self, *node_sets: nodes.NodeSet, replace_clean: bool = False, **overrides: str) -> str:
         settings = self.settings(**overrides)
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
-            nodes.install(settings, engine.Engine("docker", settings), node_set, replace_clean=replace_clean)
+            nodes.install(settings, engine.Engine("docker", settings), list(node_sets), replace_clean=replace_clean)
         return output.getvalue()
 
-    def status(self, node_set: nodes.NodeSet) -> tuple[int, str]:
+    def status(self, *node_sets: nodes.NodeSet) -> tuple[int, str]:
         settings = self.settings()
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
-            result = nodes.status(settings, node_set, settings.subprocess_env())
+            result = nodes.status(settings, list(node_sets), settings.subprocess_env())
         return result, output.getvalue()
 
     def head(self, name: str) -> str:
@@ -151,11 +151,32 @@ class NodeTests(unittest.TestCase):
 
     # --- manifests --------------------------------------------------------
 
-    def test_shipped_manifest_loads_and_schema_is_enforced(self) -> None:
+    def test_shipped_manifests_load_side_by_side_and_schema_is_enforced(self) -> None:
         shipped = self.scratch.root / "config" / "custom-nodes" / "sets" / "latent-nodepack.toml"
         node_set = nodes.read_manifest(shipped, self.hosts)
         self.assertEqual(node_set.name, "latent-nodepack")
-        self.assertEqual(len(node_set.nodes), 10)
+        self.assertEqual(len(node_set.nodes), 14)
+        sets = nodes.catalog(self.scratch.root / "config", self.hosts)
+        self.assertEqual(list(sets), ["latent-nodepack", "latent-nodepack-extras"])
+        self.assertEqual(
+            [node.name for node in sets["latent-nodepack-extras"].nodes],
+            ["RES4LYF", "Comfyui_Minimax_h3_latent_Upscaler"],
+        )
+        shipped_nodes = nodes.merged_nodes(list(sets.values()), self.managed / nodes.RECORD_NAME, ())
+        self.assertEqual(len(shipped_nodes), 16)
+        # The registry ids the packs' pyproject.toml set, as workflows save them in cnr_id.
+        for pack in (
+            "comfyui-krea2edit",
+            "comfyui-h3-motion-context",
+            "fantastic-minimax-h3-prompt-builder",
+            "comfyui-krea2-ostris-edit",
+            "RES4LYF",
+        ):
+            with self.subTest(pack=pack):
+                self.assertTrue(any(workflows.provides(node, "cnr_id", pack) for node in shipped_nodes))
+        self.assertTrue(
+            any(workflows.provides(n, "aux_id", "LBH-123-AI/Comfyui_Minimax_h3_latent_Upscaler") for n in shipped_nodes)
+        )
         # The name matches workflows saved with cnr_id was-ns, the repository those saved with was-node-suite-comfyui.
         was = next(node for node in node_set.nodes if node.name == "was-ns")
         self.assertEqual(was.repository, "https://github.com/WASasquatch/was-node-suite-comfyui")
@@ -227,7 +248,13 @@ class NodeTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(LatentCrateError, "git fetch failed in .*beta.latentcrate-clone.disabled"):
             self.install(node_set)
-        self.assertEqual(sorted(path.name for path in self.managed.iterdir()), ["Alpha"])
+        # The set was recorded before the first clone, so `up` refuses until the set is complete.
+        self.assertEqual(sorted(path.name for path in self.managed.iterdir()), [nodes.RECORD_NAME, "Alpha"])
+        with self.assertRaisesRegex(
+            LatentCrateError,
+            "^custom-node set trio is missing beta, gamma; run: bash bin/latentcrate nodes install trio$",
+        ):
+            nodes.require_recorded_sets(self.settings())
         self.assertEqual(
             self.status(node_set)[1].splitlines()[1:], [f"beta: missing ({'b' * 40})", f"gamma: missing ({gamma[0]})"]
         )
@@ -266,7 +293,7 @@ class NodeTests(unittest.TestCase):
         node_set, _, _ = self.two_nodes()
         settings = env.load(self.scratch.root, self.scratch.environment(PATH=str(ENGINE_BIN)))
         with self.assertRaisesRegex(LatentCrateError, "^git is required to install a custom-node set; install git$"):
-            nodes.install(settings, engine.Engine("docker", settings), node_set, replace_clean=False)
+            nodes.install(settings, engine.Engine("docker", settings), [node_set], replace_clean=False)
         self.assertEqual(list(self.managed.iterdir()), [])
 
     def test_a_clone_that_resolves_to_another_commit_is_refused(self) -> None:
@@ -309,7 +336,7 @@ class NodeTests(unittest.TestCase):
         self.install(node_set)
         (self.managed / "beta" / "local-change.txt").write_text("uncommitted\n")
         updated = self.manifest(
-            "pair-next",
+            "pair",
             [
                 ("Alpha", "https://github.com/example/Alpha", alpha[1]),
                 ("beta", "https://github.com/example/beta", beta[1]),
@@ -324,8 +351,75 @@ class NodeTests(unittest.TestCase):
         self.assertEqual(sorted(path.name for path in self.managed.iterdir()), [nodes.RECORD_NAME, "Alpha", "beta"])
         (self.managed / "beta" / "local-change.txt").unlink()
         self.assertIn(f"Installed beta at {beta[1]}", self.install(updated, replace_clean=True))
-        self.assertEqual((self.managed / nodes.RECORD_NAME).read_text(), "pair-next\n")
+        self.assertEqual((self.managed / nodes.RECORD_NAME).read_text(), "pair\n")
         self.assertEqual(self.status(updated)[0], 0)
+
+    def test_install_adds_to_the_record_and_installs_a_shared_node_once(self) -> None:
+        node_set, alpha, beta = self.two_nodes()
+        gamma = self.repository("example", "gamma")
+        shared = self.manifest(
+            "shared",
+            [
+                ("Alpha", "https://github.com/example/Alpha", alpha[0]),
+                ("gamma", "https://github.com/example/gamma", gamma[0]),
+            ],
+        )
+        output = self.install(node_set, shared)
+        self.assertEqual(output.count("Installed Alpha"), 1)
+        self.assertEqual((self.managed / nodes.RECORD_NAME).read_text(), "pair\nshared\n")
+        self.assertEqual(
+            self.status(node_set, shared),
+            (0, f"Alpha: ready ({alpha[0]})\nbeta: ready ({beta[0]})\ngamma: ready ({gamma[0]})\n"),
+        )
+        # Installing one set again keeps the other recorded.
+        self.install(shared)
+        self.assertEqual((self.managed / nodes.RECORD_NAME).read_text(), "pair\nshared\n")
+
+    def test_a_name_that_differs_only_in_case_with_the_same_pin_is_the_same_node(self) -> None:
+        node_set, alpha, beta = self.two_nodes()
+        # Hosting services ignore the case of a repository path, so the pins agree.
+        lower = self.manifest("lower", [("alpha", "https://github.com/EXAMPLE/alpha", alpha[0])])
+        self.install(node_set, lower)
+        self.assertEqual(sorted(path.name for path in self.managed.iterdir()), [nodes.RECORD_NAME, "Alpha", "beta"])
+        self.assertEqual(self.status(node_set, lower), (0, f"Alpha: ready ({alpha[0]})\nbeta: ready ({beta[0]})\n"))
+        nodes.require_recorded_sets(self.settings())
+        # The spelling of the recorded set wins over a later selection.
+        self.assertNotIn("Installed", self.install(lower))
+        self.assertEqual((self.managed / nodes.RECORD_NAME).read_text(), "pair\nlower\n")
+
+    def test_sets_that_disagree_about_a_node_are_refused_before_anything_changes(self) -> None:
+        node_set, alpha, _ = self.two_nodes()
+        self.repository("fork", "Alpha")
+        record = self.managed / nodes.RECORD_NAME
+        for difference, entry in (
+            ("commits", ("Alpha", "https://github.com/example/Alpha", alpha[1])),
+            ("repositories", ("Alpha", "https://github.com/fork/Alpha", alpha[0])),
+        ):
+            with self.subTest(difference=difference):
+                for path in self.managed.iterdir():
+                    shutil.rmtree(path) if path.is_dir() else path.unlink()
+                moved = self.manifest("moved", [entry])
+                message = f"^custom-node sets pair and moved pin Alpha to different {difference}; "
+                with self.assertRaisesRegex(LatentCrateError, message + "use one of them or fix the manifests$"):
+                    self.install(node_set, moved)
+                self.assertEqual(list(self.managed.iterdir()), [])
+                with self.assertRaisesRegex(LatentCrateError, message + "use one of them or fix the manifests$"):
+                    self.status(node_set, moved)
+                self.install(node_set)
+                # A set that disagrees with a recorded one is refused, with sync too, naming the line to delete.
+                for replace_clean in (False, True):
+                    with self.assertRaisesRegex(
+                        LatentCrateError, message + f"delete the line pair from {record}, or fix the manifests$"
+                    ):
+                        self.install(moved, replace_clean=replace_clean)
+                self.assertEqual(self.head("Alpha"), alpha[0])
+                self.assertEqual(record.read_text(), "pair\n")
+                # Recorded sets that disagree after a manifest edit stop `up`.
+                record.write_text("pair\nmoved\n")
+                with self.assertRaisesRegex(
+                    LatentCrateError, message + f"delete the line pair or moved from {record}, or fix the manifests$"
+                ):
+                    nodes.require_recorded_sets(self.settings())
 
     def test_install_waits_for_the_lock_holder(self) -> None:
         node_set, _, _ = self.two_nodes()
@@ -396,11 +490,11 @@ class NodeTests(unittest.TestCase):
         node_set, alpha, beta = self.two_nodes()
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
-            nodes.check(node_set)
+            nodes.check([node_set])
         self.assertEqual(
             output.getvalue().splitlines(),
             [
-                "Fixture pair",
+                "pair - Fixture pair",
                 f"Alpha {alpha[0]} https://github.com/example/Alpha",
                 f"beta {beta[0]} https://github.com/example/beta",
             ],
@@ -408,30 +502,43 @@ class NodeTests(unittest.TestCase):
         self.assertEqual(list(self.managed.iterdir()), [])
         self.assertFalse(self.log.exists())
 
-    def test_require_selected_set(self) -> None:
+    def test_require_recorded_sets(self) -> None:
         node_set, _, _ = self.two_nodes()
+        gamma = self.repository("example", "gamma")
+        other = self.manifest("other", [("gamma", "https://github.com/example/gamma", gamma[0])])
         record = self.managed / nodes.RECORD_NAME
         settings = self.settings()
-        self.assertEqual(nodes.selected_set(self.managed), "")
-        nodes.require_selected_set(settings)
+        self.assertEqual(nodes.recorded_sets(self.managed), [])
+        nodes.require_recorded_sets(settings)
         self.install(node_set)
-        self.assertEqual(nodes.selected_set(self.managed), "pair")
-        nodes.require_selected_set(settings)
+        self.install(other)
+        self.assertEqual(nodes.recorded_sets(self.managed), ["pair", "other"])
+        nodes.require_recorded_sets(settings)
         shutil.rmtree(self.managed / "beta")
-        self.assertEqual(nodes.missing_nodes(self.managed, node_set), ["beta"])
+        shutil.rmtree(self.managed / "gamma")
         with self.assertRaisesRegex(
-            LatentCrateError, "custom-node set pair is missing beta; run: bash bin/latentcrate nodes install pair"
+            LatentCrateError,
+            "^custom-node set pair is missing beta; custom-node set other is missing gamma; "
+            "run: bash bin/latentcrate nodes install pair other$",
         ):
-            nodes.require_selected_set(settings)
-        record.write_text("gone\n")
-        with self.assertRaisesRegex(LatentCrateError, f"{record} names an unknown custom-node set gone"):
-            nodes.require_selected_set(settings)
-        record.write_text("../x\n")
-        with self.assertRaisesRegex(LatentCrateError, f"{record} does not name a custom-node set"):
-            nodes.require_selected_set(settings)
+            nodes.require_recorded_sets(settings)
+        # A one-line record is a one-entry list.
+        record.write_text("other\n")
+        with self.assertRaisesRegex(
+            LatentCrateError, "^custom-node set other is missing gamma; run: bash bin/latentcrate nodes install other$"
+        ):
+            nodes.require_recorded_sets(settings)
+        record.write_text("pair\ngone\n")
+        with self.assertRaisesRegex(
+            LatentCrateError, f"{record} names an unknown custom-node set gone; remove that line"
+        ):
+            nodes.require_recorded_sets(settings)
+        record.write_text("pair\n../x\n")
+        with self.assertRaisesRegex(LatentCrateError, f"{record} holds '../x', which is not a custom-node set name"):
+            nodes.require_recorded_sets(settings)
         record.write_bytes(b"\xff")
         with self.assertRaisesRegex(LatentCrateError, f"^{record} is not UTF-8 text$"):
-            nodes.require_selected_set(settings)
+            nodes.require_recorded_sets(settings)
 
     def test_an_allowlist_that_is_not_utf8_text_is_refused_in_one_sentence(self) -> None:
         path = self.scratch.root / "config" / "custom-nodes" / "allowed-git-hosts.txt"

@@ -1,0 +1,63 @@
+schema = 1
+description = "Qwen-Image-Edit 2511 image-edit model (INT8 ConvRot) with the Qwen2.5-VL 7B text encoder, the Lightning 4-step LoRA, and the fal multiple-angles camera LoRA for the official ComfyUI image-edit and multiple-angles workflows"
+workflow_urls = [
+  "https://github.com/Comfy-Org/workflow_templates/blob/c8e48bdcfc7241d7af588d20d4f924caf9d9d953/templates/image_qwen_image_edit_2511_int8.json",
+  "https://github.com/Comfy-Org/workflow_templates/blob/c8e48bdcfc7241d7af588d20d4f924caf9d9d953/templates/template_qwen_multiangle.app.json",
+]
+
+[[license]]
+name = "Apache License 2.0 (Qwen-Image-Edit-2511)"
+url = "https://huggingface.co/Qwen/Qwen-Image-Edit-2511/blob/6f3ccc0b56e431dc6a0c2b2039706d7d26f22cb9/README.md"
+
+[[license]]
+name = "Apache License 2.0 (Qwen2.5-VL 7B text encoder)"
+url = "https://huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct/blob/cc594898137f460bfe9f0759e9844b3ce807cfb5/README.md"
+
+[[license]]
+name = "Apache License 2.0 (Qwen-Image-Edit-2511 Lightning)"
+url = "https://huggingface.co/lightx2v/Qwen-Image-Edit-2511-Lightning/blob/107d238d68b8387e32843d0b4a2e24ceb0d3ad86/README.md"
+
+[[license]]
+name = "Apache License 2.0 (fal Qwen-Image-Edit-2511 Multiple Angles LoRA)"
+url = "https://huggingface.co/fal/Qwen-Image-Edit-2511-Multiple-Angles-LoRA/blob/e3066224ab74263f4a5b6179cd1a3b0a15577e44/README.md"
+
+[[file]]
+repository = "Comfy-Org/Qwen-Image-Edit"
+revision = "f68ace85e60b4a02a323e394253731947657b7d2"
+source = "split_files/diffusion_models/qwen_image_edit_2511_int8_convrot.safetensors"
+destination = "lc/qwen-image/diffusion_models/qwen_image_edit_2511_int8_convrot.safetensors"
+size = 20499083824
+sha256 = "11b5af5ac601821d73930c84846c9a158e67177356daf927ce1c8d10f3963829"
+
+[[file]]
+repository = "Comfy-Org/Qwen-Image"
+revision = "1f12b17be14c89b026c51a91d67c32f84bb047bc"
+source = "split_files/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors"
+destination = "lc/qwen-image/text_encoders/qwen_2.5_vl_7b_fp8_scaled.safetensors"
+size = 9384670680
+sha256 = "cb5636d852a0ea6a9075ab1bef496c0db7aef13c02350571e388aea959c5c0b4"
+
+# The krea2-int8 entry, since sets naming one destination must agree on every key.
+[[file]]
+repository = "Comfy-Org/Krea-2"
+revision = "e5ea8b4dd7f38f348b138eb0fe29f92c0e367e96"
+source = "vae/qwen_image_vae.safetensors"
+destination = "lc/shared/vae/qwen_image_vae.safetensors"
+size = 253806246
+sha256 = "a70580f0213e67967ee9c95f05bb400e8fb08307e017a924bf3441223e023d1f"
+
+[[file]]
+repository = "lightx2v/Qwen-Image-Edit-2511-Lightning"
+revision = "107d238d68b8387e32843d0b4a2e24ceb0d3ad86"
+source = "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors"
+destination = "lc/qwen-image/loras/Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors"
+size = 849608296
+sha256 = "22226e8d05d354bb356627d428809f5afd7819399b077238a2b70a82883a904f"
+
+[[file]]
+repository = "fal/Qwen-Image-Edit-2511-Multiple-Angles-LoRA"
+revision = "e3066224ab74263f4a5b6179cd1a3b0a15577e44"
+source = "qwen-image-edit-2511-multiple-angles-lora.safetensors"
+destination = "lc/qwen-image/loras/qwen-image-edit-2511-multiple-angles-lora.safetensors"
+size = 295140688
+sha256 = "42426ded4e25fd22879d9e198b857556445ef4ca56e8da3246d0345155bb6765"

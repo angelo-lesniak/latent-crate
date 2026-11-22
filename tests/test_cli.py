@@ -36,13 +36,14 @@ USAGE_LINES = (
     "models check [--remote] <set> [<set> ...] | all",
     "models draft hf:<owner>/<repo>:<file> | civitai:<version>",
     "nodes list",
-    "nodes install <set>",
-    "nodes sync <set>",
-    "nodes status <set>",
-    "nodes check <set>",
+    "nodes install <set> [<set> ...] | all",
+    "nodes sync <set> [<set> ...] | all",
+    "nodes status <set> [<set> ...] | all",
+    "nodes check <set> [<set> ...] | all",
     "nodes export <custom-nodes-dir>",
     "workflows list",
     "workflows check <set> [<set> ...] | all",
+    "workflows adapt <set> [<set> ...] | all",
     "templates list",
     "templates create-model-set <template> [--name name]",
     "pins",
@@ -266,6 +267,10 @@ class CliTests(unittest.TestCase):
         result = self.scratch.run("workflows", "check", "broken", **NO_ENGINE)
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
         self.assertIn("broken/missing.json: model absent.safetensors: no model set provides it\n", result.stdout)
+        self.assertEqual(
+            self.succeed("workflows", "adapt", "broken", **NO_ENGINE),
+            "0 workflow(s) adapted, 0 model(s) not applied, 0 workflow(s) refused\n",
+        )
         # Private model sets provide models too.
         commit = "a" * 40
         (self.scratch.root / "local" / "model-sets").mkdir(parents=True)
@@ -350,6 +355,9 @@ destination = "loras/gone.safetensors"
         self.assertRegex(self.succeed("models", "list", **NO_ENGINE), r"\nminimax-h3-i2v - .+\n")
         self.assertIn("latent-nodepack - ", self.succeed("nodes", "list", **NO_ENGINE))
         self.assertRegex(self.succeed("nodes", "check", "latent-nodepack", **NO_ENGINE), r"\n\S+ [0-9a-f]{40} https://")
+        checked = self.succeed("nodes", "check", "all", **NO_ENGINE)
+        self.assertRegex(checked, r"^latent-nodepack - .+\n(.+\n)+latent-nodepack-extras - .+\nRES4LYF ")
+        self.expect_failure("all cannot be combined with named custom-node sets", "nodes", "status", "all", "x")
         empty = self.scratch.tmp / "custom_nodes"
         empty.mkdir()
         self.expect_failure(

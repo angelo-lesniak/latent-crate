@@ -1,0 +1,63 @@
+schema = 1
+description = "Wan 2.2 I2V A14B (FP8 scaled, high and low noise) with the LightX2V 4-step LoRAs for the official ComfyUI workflows"
+workflow_urls = [
+  "https://github.com/Comfy-Org/workflow_templates/blob/c8e48bdcfc7241d7af588d20d4f924caf9d9d953/templates/video_wan2_2_14B_i2v.json",
+  "https://github.com/Comfy-Org/workflow_templates/blob/c8e48bdcfc7241d7af588d20d4f924caf9d9d953/templates/video_wan2_2_14B_flf2v.json",
+  "https://github.com/Comfy-Org/workflow_templates/blob/c8e48bdcfc7241d7af588d20d4f924caf9d9d953/templates/templates-6-key-frames.json",
+]
+
+[[license]]
+name = "Apache License 2.0 (Wan 2.2)"
+url = "https://github.com/Wan-Video/Wan2.2/blob/1ea34ff48f87168174e12956e200b1d908b1c5ff/LICENSE.txt"
+
+[[license]]
+name = "Apache License 2.0 (LightX2V Wan 2.2 Lightning 4-step LoRAs)"
+url = "https://huggingface.co/lightx2v/Wan2.2-Lightning/blob/18bccf8884ec0a078eed79785eb4ef13ea16ce1e/README.md"
+
+[[file]]
+repository = "Comfy-Org/Wan-2.2"
+revision = "ee6f4a40737a995bf5818954cfce6d59443b0f04"
+source = "split_files/diffusion_models/wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors"
+destination = "lc/wan/diffusion_models/wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors"
+size = 14294742832
+sha256 = "6122e79d55e0f235698d11d657f3b196c5273c830da00b2b013c5a048d5e6a42"
+
+[[file]]
+repository = "Comfy-Org/Wan-2.2"
+revision = "ee6f4a40737a995bf5818954cfce6d59443b0f04"
+source = "split_files/diffusion_models/wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors"
+destination = "lc/wan/diffusion_models/wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors"
+size = 14294742832
+sha256 = "5471a457b6ac404202a5fbe6c11595a3d5641fc766b00f38763f72303fffc21e"
+
+[[file]]
+repository = "Comfy-Org/Wan-2.2"
+revision = "ee6f4a40737a995bf5818954cfce6d59443b0f04"
+source = "split_files/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors"
+destination = "lc/wan/text_encoders/umt5_xxl_fp8_e4m3fn_scaled.safetensors"
+size = 6735906897
+sha256 = "c3355d30191f1f066b26d93fba017ae9809dce6c627dda5f6a66eaa651204f68"
+
+[[file]]
+repository = "Comfy-Org/Wan-2.2"
+revision = "ee6f4a40737a995bf5818954cfce6d59443b0f04"
+source = "split_files/vae/wan_2.1_vae.safetensors"
+destination = "lc/wan/vae/wan_2.1_vae.safetensors"
+size = 253815318
+sha256 = "2fc39d31359a4b0a64f55876d8ff7fa8d780956ae2cb13463b0223e15148976b"
+
+[[file]]
+repository = "Comfy-Org/Wan-2.2"
+revision = "ee6f4a40737a995bf5818954cfce6d59443b0f04"
+source = "split_files/loras/wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors"
+destination = "lc/wan/loras/wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors"
+size = 1226977424
+sha256 = "d176c808d6fc461999b68e321efcb7501b20b8c3797523ed0df14f7d1deff11e"
+
+[[file]]
+repository = "Comfy-Org/Wan-2.2"
+revision = "ee6f4a40737a995bf5818954cfce6d59443b0f04"
+source = "split_files/loras/wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors"
+destination = "lc/wan/loras/wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors"
+size = 1226977424
+sha256 = "024f21de095bc8fad9809ded3e9e49a2e170dcf27075da8145ba7d60d8aab7f9"

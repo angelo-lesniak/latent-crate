@@ -274,10 +274,10 @@ def selected_model_sets(context: Context, names: list[str]) -> list[models.Model
     return select_sets(model_catalog(context.settings), names, "model set")
 
 
-def selected_node_set(context: Context, name: str) -> nodes.NodeSet:
+def selected_node_sets(context: Context, names: list[str]) -> list[nodes.NodeSet]:
     config_dir = context.settings.config_dir
     sets = nodes.catalog(config_dir, nodes.load_allowed_hosts(config_dir))
-    return select_sets(sets, [name], "custom-node set")[0]
+    return select_sets(sets, names, "custom-node set")
 
 
 def cmd_init(context: Context, _options: Options, _names: list[str]) -> None:
@@ -401,18 +401,18 @@ def cmd_nodes_list(context: Context, _options: Options, _names: list[str]) -> No
 
 
 def cmd_nodes_install(replace_clean: bool, context: Context, _options: Options, names: list[str]) -> None:
-    node_set = selected_node_set(context, names[0])
+    selected = selected_node_sets(context, names)
     engine = engines.detect(context.settings, launching=False)
-    nodes.install(context.settings, engine, node_set, replace_clean=replace_clean)
+    nodes.install(context.settings, engine, selected, replace_clean=replace_clean)
 
 
 def cmd_nodes_status(context: Context, _options: Options, names: list[str]) -> int:
     settings = context.settings
-    return nodes.status(settings, selected_node_set(context, names[0]), settings.subprocess_env())
+    return nodes.status(settings, selected_node_sets(context, names), settings.subprocess_env())
 
 
 def cmd_nodes_check(context: Context, _options: Options, names: list[str]) -> None:
-    nodes.check(selected_node_set(context, names[0]))
+    nodes.check(selected_node_sets(context, names))
 
 
 def cmd_nodes_export(context: Context, _options: Options, names: list[str]) -> None:
@@ -433,9 +433,19 @@ def cmd_workflows_list(context: Context, _options: Options, _names: list[str]) -
 def cmd_workflows_check(context: Context, _options: Options, names: list[str]) -> int:
     settings = context.settings
     selected = select_sets(workflow_catalog(settings), names, "workflow set")
+    model_sets = model_catalog(settings)
+    equivalents = workflows.load_equivalents(settings.config_dir, model_sets)
     node_sets = nodes.catalog(settings.config_dir, nodes.load_allowed_hosts(settings.config_dir))
     core_nodes = workflows.load_core_nodes(settings.config_dir)
-    return workflows.check(selected, model_catalog(settings), node_sets, core_nodes, context.pinned["COMFYUI_REF"])
+    return workflows.check(selected, model_sets, equivalents, node_sets, core_nodes, context.pinned["COMFYUI_REF"])
+
+
+def cmd_workflows_adapt(context: Context, _options: Options, names: list[str]) -> int:
+    settings = context.settings
+    selected = select_sets(workflow_catalog(settings), names, "workflow set")
+    model_sets = model_catalog(settings)
+    equivalents = workflows.load_equivalents(settings.config_dir, model_sets)
+    return workflows.adapt(selected, model_sets, equivalents, workflows.load_core_nodes(settings.config_dir))
 
 
 def cmd_templates_list(context: Context, _options: Options, _names: list[str]) -> int:
@@ -563,35 +573,35 @@ COMMANDS = (
     ),
     Command(
         "nodes install",
-        "<set>",
-        "Install a pinned custom-node set (stop ComfyUI first).",
+        SETS,
+        "Install one or more pinned custom-node sets beside the installed ones (stop ComfyUI first).",
         {},
         partial(cmd_nodes_install, False),
-        arguments=(1, 1),
+        arguments=(1, None),
     ),
     Command(
         "nodes sync",
-        "<set>",
-        "Install the set, replacing clean checkouts pinned at other commits.",
+        SETS,
+        "Install the sets, replacing clean checkouts pinned at other commits.",
         {},
         partial(cmd_nodes_install, True),
-        arguments=(1, 1),
+        arguments=(1, None),
     ),
     Command(
         "nodes status",
-        "<set>",
-        "Report how the managed third-party nodes compare to the set.",
+        SETS,
+        "Report how the managed third-party nodes compare to the sets.",
         {},
         cmd_nodes_status,
-        arguments=(1, 1),
+        arguments=(1, None),
     ),
     Command(
         "nodes check",
-        "<set>",
-        "Validate the set's manifest against the allowlist without touching the checkouts.",
+        SETS,
+        "Validate the sets' manifests against the allowlist without touching the checkouts.",
         {},
         cmd_nodes_check,
-        arguments=(1, 1),
+        arguments=(1, None),
     ),
     Command(
         "nodes export",
@@ -608,6 +618,14 @@ COMMANDS = (
         "Validate the selected sets offline and name the model and node sets their workflows need.",
         {},
         cmd_workflows_check,
+        arguments=(1, None),
+    ),
+    Command(
+        "workflows adapt",
+        SETS,
+        "Rewrite the sets' workflows to load the model files check offers; a shipped set gets shipped files only.",
+        {},
+        cmd_workflows_adapt,
         arguments=(1, None),
     ),
     Command(

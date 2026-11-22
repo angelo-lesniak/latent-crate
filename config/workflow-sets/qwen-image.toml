@@ -1,0 +1,9 @@
+schema = 1
+description = "Qwen-Image 2512 workflows: a 360 equirectangular skybox app with the 360 LoRA and a core SeedVR2 3B upscale to 4K"
+
+[[workflow]]
+file = "skybox-360.app.json"
+provenance = "modified-clone"
+source = "https://github.com/Comfy-Org/workflow_templates/blob/c8e48bdcfc7241d7af588d20d4f924caf9d9d953/templates/templates_text_prompt_to_360hdr.app.json"
+license = { name = "MIT License", url = "https://github.com/Comfy-Org/workflow_templates/blob/c8e48bdcfc7241d7af588d20d4f924caf9d9d953/LICENSE" }
+note = "numz SeedVR2 nodes replaced by the core chain of the official SeedVR2 3B INT8 template (UNETLoader, VAELoader, ResizeImageMaskNode scale by 2, SeedVR2Preprocess, VAEEncodeTiled, SeedVR2Conditioning, KSampler 1 step, VAEDecodeTiled, SeedVR2PostProcessing lab); essentials SimpleMath+, ImpactCompare and LayerUtility: If removed, the multiplier keeps the aspect; model paths adapted"
